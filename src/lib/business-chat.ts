@@ -13,6 +13,17 @@ const ai = new GoogleGenAI({
 
 const MODEL = "gemini-2.5-flash";
 
+export type StoredBusinessChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+};
+
+export type BusinessChatResult = {
+  answer: string;
+  suggestions: string[];
+};
+
 type ChatExtractedData = ExtractedDocumentData & {
   revenue?: number;
   expenses?: number;
@@ -41,10 +52,13 @@ type ChatExtractedData = ExtractedDocumentData & {
   }>;
 };
 
-export type BusinessChatResult = {
-  answer: string;
-  suggestions: string[];
-};
+const DEFAULT_SUGGESTIONS = [
+  "Why is my health score low?",
+  "Why is my business running at a loss?",
+  "What expenses should I reduce first?",
+  "How can I improve my cash flow?",
+  "Can I afford to hire another employee?",
+];
 
 function safeNumber(value: number | null | undefined) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
@@ -54,6 +68,10 @@ function safeNumber(value: number | null | undefined) {
 function formatPct(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "not available";
   return `${value.toFixed(2)}%`;
+}
+
+function normalizeRole(role: string): "user" | "assistant" {
+  return role === "user" ? "user" : "assistant";
 }
 
 function buildDocumentSummary(documents: IntelligenceDocument[]) {
@@ -118,7 +136,8 @@ function buildFinancialContext(params: {
 
     totals: {
       revenue: revenue !== null ? formatMoney(revenue, currency) : "not available",
-      expenses: expenses !== null ? formatMoney(expenses, currency) : "not available",
+      expenses:
+        expenses !== null ? formatMoney(expenses, currency) : "not available",
       profit: profit !== null ? formatMoney(profit, currency) : "not available",
       cash: cash !== null ? formatMoney(cash, currency) : "not available",
       assets:
@@ -191,6 +210,48 @@ function buildFinancialContext(params: {
     })),
 
     documents: buildDocumentSummary(documents),
+  };
+}
+
+async function loadBusinessContext(userId: string) {
+  const business = await prisma.business.findUnique({
+    where: {
+      userId,
+    },
+    select: {
+      name: true,
+      currency: true,
+    },
+  });
+
+  const rawDocuments = await prisma.document.findMany({
+    where: {
+      userId,
+      status: "PROCESSED",
+    },
+    select: {
+      id: true,
+      fileName: true,
+      category: true,
+      extractedData: true,
+      uploadedAt: true,
+    },
+    orderBy: {
+      uploadedAt: "asc",
+    },
+  });
+
+  const documents: IntelligenceDocument[] = rawDocuments.map((doc) => ({
+    id: doc.id,
+    fileName: doc.fileName,
+    category: doc.category,
+    extractedData: doc.extractedData as ExtractedDocumentData | null,
+    uploadedAt: doc.uploadedAt,
+  }));
+
+  return {
+    business,
+    documents,
   };
 }
 
@@ -268,6 +329,112 @@ ${question}
 `;
 }
 
+export async function getBusinessChatHistory(
+  userId: string,
+): Promise<StoredBusinessChatMessage[]> {
+  const rows = await prisma.businessChatMessage.findMany({
+    where: {
+      userId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 80,
+  });
+
+  return rows.reverse().map((message) => ({
+    role: normalizeRole(message.role),
+    content: message.content,
+    createdAt: message.createdAt.toISOString(),
+  }));
+}
+
+export async function clearBusinessChatHistory(userId: string) {
+  await prisma.businessChatMessage.deleteMany({
+    where: {
+      userId,
+    },
+  });
+}
+
+export async function saveBusinessChatExchange(params: {
+  userId: string;
+  question: string;
+  answer: string;
+}) {
+  await prisma.businessChatMessage.createMany({
+    data: [
+      {
+        userId: params.userId,
+        role: "user",
+        content: params.question,
+      },
+      {
+        userId: params.userId,
+        role: "assistant",
+        content: params.answer,
+      },
+    ],
+  });
+}
+
+export async function getBusinessChatSuggestions(userId: string) {
+  const { business, documents } = await loadBusinessContext(userId);
+
+  if (documents.length === 0) {
+    return [
+      "Which documents should I upload first?",
+      "What can you analyze from a financial statement?",
+      "What documents are needed to calculate cash runway?",
+    ];
+  }
+
+  const context = buildFinancialContext({
+    businessName: business?.name,
+    businessCurrency: business?.currency,
+    documents,
+  });
+
+  return buildSuggestedQuestions(context);
+}
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function generateGeminiAnswer(prompt: string) {
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      });
+
+      return response.text ?? "";
+    } catch (error) {
+      const isLastAttempt = attempt === maxAttempts;
+
+      if (isLastAttempt) {
+        throw error;
+      }
+
+      await sleep(1200 * attempt);
+    }
+  }
+
+  return "";
+}
+
 export async function answerBusinessQuestion(params: {
   userId: string;
   question: string;
@@ -277,10 +444,7 @@ export async function answerBusinessQuestion(params: {
   if (!question) {
     return {
       answer: "Please ask a finance question about your business.",
-      suggestions: [
-        "Why is my health score low?",
-        "What documents should I upload next?",
-      ],
+      suggestions: DEFAULT_SUGGESTIONS,
     };
   }
 
@@ -292,34 +456,9 @@ export async function answerBusinessQuestion(params: {
     };
   }
 
-  const business = await prisma.business.findUnique({
-    where: {
-      userId: params.userId,
-    },
-    select: {
-      name: true,
-      currency: true,
-    },
-  });
+  const { business, documents } = await loadBusinessContext(params.userId);
 
-  const rawDocuments = await prisma.document.findMany({
-    where: {
-      userId: params.userId,
-      status: "PROCESSED",
-    },
-    select: {
-      id: true,
-      fileName: true,
-      category: true,
-      extractedData: true,
-      uploadedAt: true,
-    },
-    orderBy: {
-      uploadedAt: "asc",
-    },
-  });
-
-  if (rawDocuments.length === 0) {
+  if (documents.length === 0) {
     return {
       answer:
         "I don't have enough processed financial data yet. Upload and process bank statements, invoices, bills, payroll, or financial statements first, then I can answer using your business data.",
@@ -330,36 +469,29 @@ export async function answerBusinessQuestion(params: {
     };
   }
 
-  const documents: IntelligenceDocument[] = rawDocuments.map((doc) => ({
-    id: doc.id,
-    fileName: doc.fileName,
-    category: doc.category,
-    extractedData: doc.extractedData as ExtractedDocumentData | null,
-    uploadedAt: doc.uploadedAt,
-  }));
-
   const context = buildFinancialContext({
     businessName: business?.name,
     businessCurrency: business?.currency,
     documents,
   });
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: buildPrompt(question, context),
-          },
-        ],
-      },
-    ],
-  });
+  const suggestions = buildSuggestedQuestions(context);
+
+try {
+  const response = await generateGeminiAnswer(buildPrompt(question, context));
 
   return {
-    answer: response.text || "I could not generate an answer. Please try again.",
-    suggestions: buildSuggestedQuestions(context),
+    answer:
+      response ||
+      "I could not generate an answer from the AI model. Please try again.",
+    suggestions,
+  };
+} catch (error) {
+  console.error("Gemini chat generation failed:", error);
+
+  return {
+    answer:
+      "The AI finance model is temporarily busy due to high demand. Your financial data and chat history are working correctly. Please try the same question again in a few seconds.",
+    suggestions,
   };
 }

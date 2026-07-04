@@ -5,9 +5,8 @@ import { FormEvent, useEffect, useState } from "react";
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  createdAt?: string;
 };
-
-const STORAGE_KEY = "finance-agent-business-chat-history-v1";
 
 const DEFAULT_STARTER_QUESTIONS = [
   "Why is my health score low?",
@@ -28,52 +27,61 @@ const DEFAULT_MESSAGES: ChatMessage[] = [
 export default function BusinessChatPage() {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(DEFAULT_MESSAGES);
-  const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_STARTER_QUESTIONS);
+  const [suggestions, setSuggestions] = useState<string[]>(
+    DEFAULT_STARTER_QUESTIONS,
+  );
   const [isLoading, setIsLoading] = useState(false);
-  const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
+    async function loadChatHistory() {
+      try {
+        const response = await fetch("/api/chat", {
+          method: "GET",
+          cache: "no-store",
+        });
 
-      if (saved) {
-        const parsed = JSON.parse(saved) as {
-          messages?: ChatMessage[];
-          suggestions?: string[];
-        };
+        const data = await response.json();
 
-        if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
-          setMessages(parsed.messages);
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Failed to load chat history.");
         }
 
-        if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
-          setSuggestions(parsed.suggestions);
+        if (Array.isArray(data.messages) && data.messages.length > 0) {
+          setMessages(data.messages);
+        } else {
+          setMessages(DEFAULT_MESSAGES);
         }
+
+        if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+          setSuggestions(data.suggestions);
+        } else {
+          setSuggestions(DEFAULT_STARTER_QUESTIONS);
+        }
+      } catch (error) {
+        setMessages([
+          ...DEFAULT_MESSAGES,
+          {
+            role: "assistant",
+            content:
+              error instanceof Error
+                ? error.message
+                : "Could not load saved chat history.",
+          },
+        ]);
+      } finally {
+        setIsLoadingHistory(false);
       }
-    } catch {
-      setMessages(DEFAULT_MESSAGES);
-      setSuggestions(DEFAULT_STARTER_QUESTIONS);
-    } finally {
-      setHasLoadedHistory(true);
     }
+
+    loadChatHistory();
   }, []);
-
-  useEffect(() => {
-    if (!hasLoadedHistory) return;
-
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        messages,
-        suggestions,
-      }),
-    );
-  }, [messages, suggestions, hasLoadedHistory]);
 
   async function askQuestion(nextQuestion?: string) {
     const finalQuestion = (nextQuestion ?? question).trim();
 
-    if (!finalQuestion || isLoading) return;
+    if (!finalQuestion || isLoading || isLoadingHistory) return;
 
     setQuestion("");
 
@@ -136,11 +144,39 @@ export default function BusinessChatPage() {
     askQuestion();
   }
 
-  function clearChat() {
-    setMessages(DEFAULT_MESSAGES);
-    setSuggestions(DEFAULT_STARTER_QUESTIONS);
-    setQuestion("");
-    window.localStorage.removeItem(STORAGE_KEY);
+  async function clearChat() {
+    if (isLoading || isClearing) return;
+
+    setIsClearing(true);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Failed to clear chat.");
+      }
+
+      setMessages(DEFAULT_MESSAGES);
+      setSuggestions(DEFAULT_STARTER_QUESTIONS);
+      setQuestion("");
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          content:
+            error instanceof Error
+              ? error.message
+              : "Could not clear chat history.",
+        },
+      ]);
+    } finally {
+      setIsClearing(false);
+    }
   }
 
   return (
@@ -152,7 +188,7 @@ export default function BusinessChatPage() {
         </div>
 
         <span className="badge-sample">
-          Chat history is saved on this browser
+          Chat history is saved in your database
         </span>
       </header>
 
@@ -174,26 +210,30 @@ export default function BusinessChatPage() {
           <div>
             <p className="section-title">Business chat</p>
             <p className="section-hint">
-              Ask questions about profit, expenses, cash flow, risk, and next actions.
+              Ask questions about profit, expenses, cash flow, risk, and next
+              actions.
             </p>
           </div>
 
           <button
             type="button"
             onClick={clearChat}
-            disabled={isLoading}
+            disabled={isLoading || isClearing || isLoadingHistory}
             style={{
               border: "1px solid var(--color-border)",
               background: "rgba(255,255,255,0.04)",
               color: "var(--color-text-secondary)",
               borderRadius: 12,
               padding: "9px 12px",
-              cursor: isLoading ? "not-allowed" : "pointer",
+              cursor:
+                isLoading || isClearing || isLoadingHistory
+                  ? "not-allowed"
+                  : "pointer",
               fontSize: 13,
               whiteSpace: "nowrap",
             }}
           >
-            Clear chat
+            {isClearing ? "Clearing..." : "Clear chat"}
           </button>
         </div>
 
@@ -222,14 +262,15 @@ export default function BusinessChatPage() {
                 key={starter}
                 type="button"
                 onClick={() => askQuestion(starter)}
-                disabled={isLoading}
+                disabled={isLoading || isLoadingHistory}
                 style={{
                   border: "1px solid var(--color-border)",
                   background: "rgba(255,255,255,0.04)",
                   color: "var(--color-text-secondary)",
                   borderRadius: 999,
                   padding: "9px 12px",
-                  cursor: isLoading ? "not-allowed" : "pointer",
+                  cursor:
+                    isLoading || isLoadingHistory ? "not-allowed" : "pointer",
                   fontSize: 13,
                 }}
               >
@@ -248,46 +289,69 @@ export default function BusinessChatPage() {
             paddingRight: 4,
           }}
         >
-          {messages.map((message, index) => (
+          {isLoadingHistory ? (
             <div
-              key={`${message.role}-${index}`}
               style={{
-                justifySelf: message.role === "user" ? "end" : "start",
+                justifySelf: "start",
                 maxWidth: "82%",
                 border: "1px solid var(--color-border)",
-                background:
-                  message.role === "user"
-                    ? "rgba(88,166,255,0.12)"
-                    : "rgba(255,255,255,0.04)",
+                background: "rgba(255,255,255,0.04)",
                 borderRadius: 18,
                 padding: "14px 16px",
               }}
             >
               <p
                 style={{
-                  margin: "0 0 6px",
-                  fontSize: 12,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  color: "var(--color-text-secondary)",
-                }}
-              >
-                {message.role === "user" ? "You" : "AI finance team"}
-              </p>
-
-              <p
-                style={{
                   margin: 0,
-                  color: "var(--color-text-primary)",
+                  color: "var(--color-text-secondary)",
                   fontSize: 14,
-                  lineHeight: 1.6,
-                  whiteSpace: "pre-wrap",
                 }}
               >
-                {message.content}
+                Loading saved chat history...
               </p>
             </div>
-          ))}
+          ) : (
+            messages.map((message, index) => (
+              <div
+                key={`${message.role}-${index}`}
+                style={{
+                  justifySelf: message.role === "user" ? "end" : "start",
+                  maxWidth: "82%",
+                  border: "1px solid var(--color-border)",
+                  background:
+                    message.role === "user"
+                      ? "rgba(88,166,255,0.12)"
+                      : "rgba(255,255,255,0.04)",
+                  borderRadius: 18,
+                  padding: "14px 16px",
+                }}
+              >
+                <p
+                  style={{
+                    margin: "0 0 6px",
+                    fontSize: 12,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: "var(--color-text-secondary)",
+                  }}
+                >
+                  {message.role === "user" ? "You" : "AI finance team"}
+                </p>
+
+                <p
+                  style={{
+                    margin: 0,
+                    color: "var(--color-text-primary)",
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {message.content}
+                </p>
+              </div>
+            ))
+          )}
 
           {isLoading && (
             <div
@@ -326,7 +390,7 @@ export default function BusinessChatPage() {
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
             placeholder="Ask: Why is my business running at a loss?"
-            disabled={isLoading}
+            disabled={isLoading || isLoadingHistory}
             style={{
               width: "100%",
               border: "1px solid var(--color-border)",
@@ -341,16 +405,20 @@ export default function BusinessChatPage() {
 
           <button
             type="submit"
-            disabled={isLoading || !question.trim()}
+            disabled={isLoading || isLoadingHistory || !question.trim()}
             style={{
               border: "1px solid var(--color-border)",
-              background: isLoading
-                ? "rgba(255,255,255,0.06)"
-                : "var(--color-accent)",
+              background:
+                isLoading || isLoadingHistory
+                  ? "rgba(255,255,255,0.06)"
+                  : "var(--color-accent)",
               color: "white",
               borderRadius: 14,
               padding: "0 18px",
-              cursor: isLoading || !question.trim() ? "not-allowed" : "pointer",
+              cursor:
+                isLoading || isLoadingHistory || !question.trim()
+                  ? "not-allowed"
+                  : "pointer",
               fontWeight: 700,
             }}
           >

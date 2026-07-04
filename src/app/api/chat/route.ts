@@ -1,15 +1,65 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { answerBusinessQuestion } from "@/lib/business-chat";
+import {
+  answerBusinessQuestion,
+  clearBusinessChatHistory,
+  getBusinessChatHistory,
+  getBusinessChatSuggestions,
+  saveBusinessChatExchange,
+} from "@/lib/business-chat";
+
+async function getCurrentUserId() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  return session?.user?.id ?? null;
+}
+
+export async function GET() {
+  try {
+    const userId = await getCurrentUserId();
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+        },
+        {
+          status: 401,
+        },
+      );
+    }
+
+    const [messages, suggestions] = await Promise.all([
+      getBusinessChatHistory(userId),
+      getBusinessChatSuggestions(userId),
+    ]);
+
+    return NextResponse.json({
+      messages,
+      suggestions,
+    });
+  } catch (error) {
+    console.error("Load business chat error:", error);
+
+    return NextResponse.json(
+      {
+        error: "Something went wrong while loading chat history.",
+      },
+      {
+        status: 500,
+      },
+    );
+  }
+}
 
 export async function POST(request: Request) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const userId = await getCurrentUserId();
 
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         {
           error: "Unauthorized",
@@ -37,8 +87,14 @@ export async function POST(request: Request) {
     }
 
     const result = await answerBusinessQuestion({
-      userId: session.user.id,
+      userId,
       question,
+    });
+
+    await saveBusinessChatExchange({
+      userId,
+      question,
+      answer: result.answer,
     });
 
     return NextResponse.json({
@@ -51,6 +107,40 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "Something went wrong while answering your question.",
+      },
+      {
+        status: 500,
+      },
+    );
+  }
+}
+
+export async function DELETE() {
+  try {
+    const userId = await getCurrentUserId();
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+        },
+        {
+          status: 401,
+        },
+      );
+    }
+
+    await clearBusinessChatHistory(userId);
+
+    return NextResponse.json({
+      success: true,
+    });
+  } catch (error) {
+    console.error("Clear business chat error:", error);
+
+    return NextResponse.json(
+      {
+        error: "Something went wrong while clearing chat history.",
       },
       {
         status: 500,
