@@ -13,6 +13,39 @@ const ai = new GoogleGenAI({
 
 const MODEL = "gemini-2.5-flash";
 
+type ChatExtractedData = ExtractedDocumentData & {
+  revenue?: number;
+  expenses?: number;
+  netIncome?: number;
+  profit?: number;
+  assets?: number;
+  liabilities?: number;
+  equity?: number;
+  totalAmount?: number;
+  totalAmountLabel?: string;
+  currency?: string;
+  documentDate?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  vendorOrCounterparty?: string;
+  lineItems?: Array<{
+    description?: string;
+    amount?: number;
+    category?: string;
+  }>;
+  transactions?: Array<{
+    date: string;
+    description?: string;
+    amount: number;
+    direction: "credit" | "debit" | string;
+  }>;
+};
+
+export type BusinessChatResult = {
+  answer: string;
+  suggestions: string[];
+};
+
 function safeNumber(value: number | null | undefined) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return value;
@@ -25,7 +58,7 @@ function formatPct(value: number | null) {
 
 function buildDocumentSummary(documents: IntelligenceDocument[]) {
   return documents.slice(0, 12).map((doc) => {
-    const data = doc.extractedData as ExtractedDocumentData | null;
+    const data = doc.extractedData as ChatExtractedData | null;
 
     return {
       fileName: doc.fileName,
@@ -71,6 +104,11 @@ function buildFinancialContext(params: {
   const cash = safeNumber(intelligence.totals.cash);
   const monthlyBurnRate = safeNumber(intelligence.risk.monthlyBurnRate);
 
+  const revenueCoverage =
+    intelligence.totals.expenses > 0
+      ? (intelligence.totals.revenue / intelligence.totals.expenses) * 100
+      : null;
+
   return {
     business: {
       name: businessName ?? "Business",
@@ -97,19 +135,27 @@ function buildFinancialContext(params: {
           : "not available",
     },
 
+    rawNumbers: {
+      revenue: intelligence.totals.revenue,
+      expenses: intelligence.totals.expenses,
+      profit: intelligence.totals.profit,
+      cash: intelligence.totals.cash,
+      monthlyBurnRate: intelligence.risk.monthlyBurnRate,
+      cashRunwayDays: intelligence.risk.cashRunwayDays,
+      healthScore: intelligence.risk.healthScore,
+      riskLevel: intelligence.risk.riskLevel,
+      profitMarginPct: intelligence.ratios.profitMarginPct,
+      expenseRatioPct: intelligence.ratios.expenseRatioPct,
+      revenueCoveragePct: revenueCoverage,
+    },
+
     ratios: {
       healthScore: `${intelligence.risk.healthScore}/100`,
       riskLevel: intelligence.risk.riskLevel,
       profitMargin: formatPct(intelligence.ratios.profitMarginPct),
       expenseRatio: formatPct(intelligence.ratios.expenseRatioPct),
       debtToAsset: formatPct(intelligence.ratios.debtToAssetPct),
-      revenueCoverage:
-        intelligence.totals.expenses > 0
-          ? formatPct(
-              (intelligence.totals.revenue / intelligence.totals.expenses) *
-                100,
-            )
-          : "not available",
+      revenueCoverage: formatPct(revenueCoverage),
     },
 
     cashFlow: {
@@ -148,6 +194,47 @@ function buildFinancialContext(params: {
   };
 }
 
+function buildSuggestedQuestions(context: ReturnType<typeof buildFinancialContext>) {
+  const suggestions: string[] = [];
+
+  const riskLevel = context.rawNumbers.riskLevel;
+  const profit = context.rawNumbers.profit;
+  const cash = context.rawNumbers.cash;
+  const runway = context.rawNumbers.cashRunwayDays;
+  const revenueCoverage = context.rawNumbers.revenueCoveragePct;
+  const expenseRatio = context.rawNumbers.expenseRatioPct;
+
+  if (riskLevel === "high" || riskLevel === "critical") {
+    suggestions.push("What should I fix first to reduce financial risk?");
+  }
+
+  if (profit < 0) {
+    suggestions.push("Why is my business running at a loss?");
+    suggestions.push("How much should I reduce expenses to break even?");
+  }
+
+  if (revenueCoverage !== null && revenueCoverage < 70) {
+    suggestions.push("How can I improve my revenue coverage?");
+  }
+
+  if (expenseRatio !== null && expenseRatio > 100) {
+    suggestions.push("Which costs should I control first?");
+  }
+
+  if (cash === null) {
+    suggestions.push("What data is missing to calculate cash runway?");
+  }
+
+  if (runway !== null && runway < 90) {
+    suggestions.push("How can I extend my cash runway?");
+  }
+
+  suggestions.push("What are my top 3 next actions?");
+  suggestions.push("What documents should I upload next for better analysis?");
+
+  return [...new Set(suggestions)].slice(0, 5);
+}
+
 function buildPrompt(question: string, context: ReturnType<typeof buildFinancialContext>) {
   return `
 You are an AI Executive Finance Team for a small or medium business.
@@ -167,7 +254,7 @@ Important rules:
 3. Give practical business actions.
 4. Use simple language.
 5. Use the same currency shown in the data.
-6. Be specific and mention the exact numbers when useful.
+6. Be specific and mention exact numbers when useful.
 7. Do not give legal, tax, or investment advice as certainty.
 8. Keep the answer concise but useful.
 9. If the business is loss-making, explain the main reason using revenue, expenses, margin, and coverage.
@@ -184,15 +271,25 @@ ${question}
 export async function answerBusinessQuestion(params: {
   userId: string;
   question: string;
-}) {
+}): Promise<BusinessChatResult> {
   const question = params.question.trim();
 
   if (!question) {
-    return "Please ask a finance question about your business.";
+    return {
+      answer: "Please ask a finance question about your business.",
+      suggestions: [
+        "Why is my health score low?",
+        "What documents should I upload next?",
+      ],
+    };
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    return "Gemini API key is missing. Add GEMINI_API_KEY to your environment variables first.";
+    return {
+      answer:
+        "Gemini API key is missing. Add GEMINI_API_KEY to your environment variables first.",
+      suggestions: [],
+    };
   }
 
   const business = await prisma.business.findUnique({
@@ -223,7 +320,14 @@ export async function answerBusinessQuestion(params: {
   });
 
   if (rawDocuments.length === 0) {
-    return "I don't have enough processed financial data yet. Upload and process bank statements, invoices, bills, payroll, or financial statements first, then I can answer using your business data.";
+    return {
+      answer:
+        "I don't have enough processed financial data yet. Upload and process bank statements, invoices, bills, payroll, or financial statements first, then I can answer using your business data.",
+      suggestions: [
+        "Which documents should I upload first?",
+        "What can you analyze from a financial statement?",
+      ],
+    };
   }
 
   const documents: IntelligenceDocument[] = rawDocuments.map((doc) => ({
@@ -254,5 +358,8 @@ export async function answerBusinessQuestion(params: {
     ],
   });
 
-  return response.text || "I could not generate an answer. Please try again.";
+  return {
+    answer: response.text || "I could not generate an answer. Please try again.",
+    suggestions: buildSuggestedQuestions(context),
+  };
 }

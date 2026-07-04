@@ -1,13 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
 
-const STARTER_QUESTIONS = [
+const STORAGE_KEY = "finance-agent-business-chat-history-v1";
+
+const DEFAULT_STARTER_QUESTIONS = [
   "Why is my health score low?",
   "Why is my business running at a loss?",
   "What expenses should I reduce first?",
@@ -15,16 +17,58 @@ const STARTER_QUESTIONS = [
   "Can I afford to hire another employee?",
 ];
 
+const DEFAULT_MESSAGES: ChatMessage[] = [
+  {
+    role: "assistant",
+    content:
+      "Hi, I am your AI finance team. Ask me about your revenue, expenses, profit, cash flow, risks, or what action you should take next.",
+  },
+];
+
 export default function BusinessChatPage() {
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "assistant",
-      content:
-        "Hi, I am your AI finance team. Ask me about your revenue, expenses, profit, cash flow, risks, or what action you should take next.",
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(DEFAULT_MESSAGES);
+  const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_STARTER_QUESTIONS);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+
+      if (saved) {
+        const parsed = JSON.parse(saved) as {
+          messages?: ChatMessage[];
+          suggestions?: string[];
+        };
+
+        if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+          setMessages(parsed.messages);
+        }
+
+        if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
+          setSuggestions(parsed.suggestions);
+        }
+      }
+    } catch {
+      setMessages(DEFAULT_MESSAGES);
+      setSuggestions(DEFAULT_STARTER_QUESTIONS);
+    } finally {
+      setHasLoadedHistory(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedHistory) return;
+
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        messages,
+        suggestions,
+      }),
+    );
+  }, [messages, suggestions, hasLoadedHistory]);
 
   async function askQuestion(nextQuestion?: string) {
     const finalQuestion = (nextQuestion ?? question).trim();
@@ -67,6 +111,10 @@ export default function BusinessChatPage() {
           content: data.answer ?? "I could not generate an answer.",
         },
       ]);
+
+      if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+        setSuggestions(data.suggestions);
+      }
     } catch (error) {
       setMessages((current) => [
         ...current,
@@ -88,6 +136,13 @@ export default function BusinessChatPage() {
     askQuestion();
   }
 
+  function clearChat() {
+    setMessages(DEFAULT_MESSAGES);
+    setSuggestions(DEFAULT_STARTER_QUESTIONS);
+    setQuestion("");
+    window.localStorage.removeItem(STORAGE_KEY);
+  }
+
   return (
     <>
       <header className="dashboard-header">
@@ -97,7 +152,7 @@ export default function BusinessChatPage() {
         </div>
 
         <span className="badge-sample">
-          Answers are based on processed financial documents
+          Chat history is saved on this browser
         </span>
       </header>
 
@@ -108,39 +163,80 @@ export default function BusinessChatPage() {
           gap: 18,
         }}
       >
-        <div>
-          <p className="section-title">Business chat</p>
-          <p className="section-hint">
-            Ask questions about profit, expenses, cash flow, risk, and next actions.
-          </p>
-        </div>
-
         <div
           style={{
             display: "flex",
-            flexWrap: "wrap",
-            gap: 10,
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 16,
           }}
         >
-          {STARTER_QUESTIONS.map((starter) => (
-            <button
-              key={starter}
-              type="button"
-              onClick={() => askQuestion(starter)}
-              disabled={isLoading}
-              style={{
-                border: "1px solid var(--color-border)",
-                background: "rgba(255,255,255,0.04)",
-                color: "var(--color-text-secondary)",
-                borderRadius: 999,
-                padding: "9px 12px",
-                cursor: isLoading ? "not-allowed" : "pointer",
-                fontSize: 13,
-              }}
-            >
-              {starter}
-            </button>
-          ))}
+          <div>
+            <p className="section-title">Business chat</p>
+            <p className="section-hint">
+              Ask questions about profit, expenses, cash flow, risk, and next actions.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={clearChat}
+            disabled={isLoading}
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "rgba(255,255,255,0.04)",
+              color: "var(--color-text-secondary)",
+              borderRadius: 12,
+              padding: "9px 12px",
+              cursor: isLoading ? "not-allowed" : "pointer",
+              fontSize: 13,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Clear chat
+          </button>
+        </div>
+
+        <div>
+          <p
+            style={{
+              margin: "0 0 10px",
+              color: "var(--color-text-secondary)",
+              fontSize: 12,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+          >
+            Suggested questions
+          </p>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            {suggestions.map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                onClick={() => askQuestion(starter)}
+                disabled={isLoading}
+                style={{
+                  border: "1px solid var(--color-border)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "var(--color-text-secondary)",
+                  borderRadius: 999,
+                  padding: "9px 12px",
+                  cursor: isLoading ? "not-allowed" : "pointer",
+                  fontSize: 13,
+                }}
+              >
+                {starter}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div

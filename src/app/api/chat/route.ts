@@ -36,13 +36,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const answer = await answerBusinessQuestion({
+    const result = await answerBusinessQuestion({
       userId: session.user.id,
       question,
     });
 
     return NextResponse.json({
-      answer,
+      answer: result.answer,
+      suggestions: result.suggestions,
     });
   } catch (error) {
     console.error("Business chat error:", error);
