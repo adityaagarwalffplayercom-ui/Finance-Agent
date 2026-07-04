@@ -40,6 +40,17 @@ type PreviewExtractedData = ExtractedDocumentData & {
   }>;
 };
 
+type ExtractionQuality = {
+  label: "Strong" | "Partial" | "Weak" | "Not processed";
+  score: number;
+  toneColor: string;
+  background: string;
+  border: string;
+  detected: string[];
+  missing: string[];
+  note: string;
+};
+
 const STATUS_STYLE: Record<
   string,
   {
@@ -115,8 +126,16 @@ function asExtractedData(value: unknown): PreviewExtractedData | null {
   return value as PreviewExtractedData;
 }
 
+function hasNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasText(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function formatNormalAmount(amount?: number | null, currency?: string | null) {
-  if (typeof amount !== "number" || !Number.isFinite(amount)) {
+  if (!hasNumber(amount)) {
     return "-";
   }
 
@@ -132,7 +151,7 @@ function formatNormalAmount(amount?: number | null, currency?: string | null) {
 }
 
 function formatMillionAmount(amount?: number | null, currency?: string | null) {
-  if (typeof amount !== "number" || !Number.isFinite(amount)) {
+  if (!hasNumber(amount)) {
     return "-";
   }
 
@@ -182,6 +201,17 @@ function inferLineItemCategory(description?: string, existingCategory?: string) 
   }
 
   const text = description?.toLowerCase() ?? "";
+
+  if (text.includes("exceptional")) {
+    return "Exceptional Item";
+  }
+
+  if (
+    text.includes("comprehensive income") ||
+    text.includes("comprehensive loss")
+  ) {
+    return "Other Comprehensive Income";
+  }
 
   if (
     text.includes("revenue") ||
@@ -244,18 +274,152 @@ function inferLineItemCategory(description?: string, existingCategory?: string) 
     return "Equity";
   }
 
-  if (text.includes("exceptional")) {
-    return "Exceptional Item";
+  return "Other";
+}
+
+function buildExtractionQuality(params: {
+  extracted: PreviewExtractedData | null;
+  status: string;
+  isFinancialStatement: boolean;
+}) {
+  const { extracted, status, isFinancialStatement } = params;
+
+  if (status !== "PROCESSED" || !extracted) {
+    return {
+      label: "Not processed",
+      score: 0,
+      toneColor: "#8abfff",
+      background: "rgba(88,166,255,0.10)",
+      border: "rgba(88,166,255,0.28)",
+      detected: [],
+      missing: ["AI extraction has not been completed for this document."],
+      note: "Process this document first to generate a quality check.",
+    } satisfies ExtractionQuality;
+  }
+
+  const detected: string[] = [];
+  const missing: string[] = [];
+
+  if (hasText(extracted.summary)) {
+    detected.push("AI summary");
+  } else {
+    missing.push("Summary");
+  }
+
+  if (hasText(extracted.currency)) {
+    detected.push("Currency");
+  } else {
+    missing.push("Currency");
+  }
+
+  if (hasText(extracted.documentDate)) {
+    detected.push("Document date");
+  } else {
+    missing.push("Document date");
+  }
+
+  if (hasText(extracted.periodStart) && hasText(extracted.periodEnd)) {
+    detected.push("Reporting period");
+  } else if (isFinancialStatement) {
+    missing.push("Reporting period");
+  }
+
+  if (hasNumber(extracted.revenue)) {
+    detected.push("Revenue");
+  } else if (isFinancialStatement) {
+    missing.push("Revenue");
+  }
+
+  if (hasNumber(extracted.expenses)) {
+    detected.push("Expenses");
+  } else if (isFinancialStatement) {
+    missing.push("Expenses");
+  }
+
+  if (hasNumber(extracted.profit) || hasNumber(extracted.netIncome)) {
+    detected.push("Profit / loss");
+  } else if (isFinancialStatement) {
+    missing.push("Profit / loss");
+  }
+
+  if (hasNumber(extracted.assets)) {
+    detected.push("Assets");
+  } else if (isFinancialStatement) {
+    missing.push("Assets");
+  }
+
+  if (hasNumber(extracted.liabilities)) {
+    detected.push("Liabilities");
+  } else if (isFinancialStatement) {
+    missing.push("Liabilities");
+  }
+
+  if (hasNumber(extracted.equity)) {
+    detected.push("Equity");
+  } else if (isFinancialStatement) {
+    missing.push("Equity");
+  }
+
+  if (Array.isArray(extracted.lineItems) && extracted.lineItems.length > 0) {
+    detected.push(`${extracted.lineItems.length} line items`);
+  } else {
+    missing.push("Line items");
   }
 
   if (
-    text.includes("comprehensive income") ||
-    text.includes("comprehensive loss")
+    Array.isArray(extracted.transactions) &&
+    extracted.transactions.length > 0
   ) {
-    return "Other Comprehensive Income";
+    detected.push(`${extracted.transactions.length} transactions`);
+  } else {
+    missing.push("Transactions");
   }
 
-  return "Other";
+  const requiredFieldCount = isFinancialStatement ? 10 : 7;
+  const score = Math.min(
+    100,
+    Math.round((detected.length / requiredFieldCount) * 100),
+  );
+
+  if (score >= 75) {
+    return {
+      label: "Strong",
+      score,
+      toneColor: "#7bed9f",
+      background: "rgba(46,213,115,0.10)",
+      border: "rgba(46,213,115,0.28)",
+      detected,
+      missing,
+      note:
+        "The extraction looks strong because key financial fields were detected. You should still verify important values before using them for final business decisions.",
+    } satisfies ExtractionQuality;
+  }
+
+  if (score >= 45) {
+    return {
+      label: "Partial",
+      score,
+      toneColor: "#ffd166",
+      background: "rgba(255,193,7,0.10)",
+      border: "rgba(255,193,7,0.28)",
+      detected,
+      missing,
+      note:
+        "The extraction is usable, but some important fields are missing. Uploading cleaner documents or more supporting documents can improve analysis.",
+    } satisfies ExtractionQuality;
+  }
+
+  return {
+    label: "Weak",
+    score,
+    toneColor: "#ff8a95",
+    background: "rgba(255,71,87,0.10)",
+    border: "rgba(255,71,87,0.28)",
+    detected,
+    missing,
+    note:
+      "The extraction is weak because several important fields are missing. Re-process the file or upload a clearer document before trusting the analysis.",
+  } satisfies ExtractionQuality;
 }
 
 function MetricCard({
@@ -317,6 +481,198 @@ function MetricCard({
   );
 }
 
+function ExtractionQualityCard({ quality }: { quality: ExtractionQuality }) {
+  return (
+    <section
+      className="alerts-card"
+      style={{
+        display: "grid",
+        gap: 18,
+        marginBottom: 28,
+        border: `1px solid ${quality.border}`,
+        background: quality.background,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <p className="section-title">AI extraction quality</p>
+          <p className="section-hint">
+            Rule-based verification of what the AI successfully extracted.
+          </p>
+        </div>
+
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            border: `1px solid ${quality.border}`,
+            background: "rgba(0,0,0,0.16)",
+            color: quality.toneColor,
+            borderRadius: 999,
+            padding: "9px 12px",
+            fontSize: 13,
+            fontWeight: 900,
+          }}
+        >
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 999,
+              background: quality.toneColor,
+              boxShadow: `0 0 12px ${quality.toneColor}`,
+            }}
+          />
+          {quality.label} · {quality.score}/100
+        </span>
+      </div>
+
+      <p
+        style={{
+          margin: 0,
+          color: "var(--color-text-primary)",
+          fontSize: 14,
+          lineHeight: 1.65,
+        }}
+      >
+        {quality.note}
+      </p>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 16,
+        }}
+      >
+        <div
+          style={{
+            border: "1px solid var(--color-border)",
+            background: "rgba(255,255,255,0.03)",
+            borderRadius: 16,
+            padding: 14,
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 10px",
+              color: "var(--color-text-primary)",
+              fontSize: 14,
+              fontWeight: 800,
+            }}
+          >
+            Detected
+          </p>
+
+          {quality.detected.length > 0 ? (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
+              {quality.detected.map((item) => (
+                <span
+                  key={item}
+                  style={{
+                    border: "1px solid rgba(46,213,115,0.24)",
+                    background: "rgba(46,213,115,0.08)",
+                    color: "#7bed9f",
+                    borderRadius: 999,
+                    padding: "7px 10px",
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
+                >
+                  ✓ {item}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p
+              style={{
+                margin: 0,
+                color: "var(--color-text-secondary)",
+                fontSize: 13,
+              }}
+            >
+              No extracted fields detected yet.
+            </p>
+          )}
+        </div>
+
+        <div
+          style={{
+            border: "1px solid var(--color-border)",
+            background: "rgba(255,255,255,0.03)",
+            borderRadius: 16,
+            padding: 14,
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 10px",
+              color: "var(--color-text-primary)",
+              fontSize: 14,
+              fontWeight: 800,
+            }}
+          >
+            Missing / needs verification
+          </p>
+
+          {quality.missing.length > 0 ? (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
+              {quality.missing.map((item) => (
+                <span
+                  key={item}
+                  style={{
+                    border: "1px solid rgba(255,193,7,0.24)",
+                    background: "rgba(255,193,7,0.08)",
+                    color: "#ffd166",
+                    borderRadius: 999,
+                    padding: "7px 10px",
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
+                >
+                  ! {item}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p
+              style={{
+                margin: 0,
+                color: "#7bed9f",
+                fontSize: 13,
+                fontWeight: 800,
+              }}
+            >
+              No major missing fields detected.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default async function DocumentDetailsPage({ params }: PageProps) {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -354,6 +710,12 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
   const extracted = asExtractedData(document.extractedData);
   const currency = extracted?.currency ?? "INR";
   const isFinancialStatement = document.category === "FINANCIAL_STATEMENT";
+
+  const quality = buildExtractionQuality({
+    extracted,
+    status: document.status,
+    isFinancialStatement,
+  });
 
   const money = (amount?: number | null) =>
     formatDocumentAmount(amount, currency, document.category);
@@ -541,6 +903,8 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
           </div>
         )}
       </section>
+
+      <ExtractionQualityCard quality={quality} />
 
       <section
         style={{
