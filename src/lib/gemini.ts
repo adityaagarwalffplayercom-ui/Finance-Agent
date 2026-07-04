@@ -4,7 +4,7 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
 const EXTRACTION_SCHEMA = {
   type: "object",
@@ -478,6 +478,94 @@ type ExtractionContent =
       text: string;
     };
 
+type GenerateContentRequest = Parameters<typeof ai.models.generateContent>[0];
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function errorToText(error: unknown) {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function isQuotaError(error: unknown) {
+  const text = errorToText(error).toLowerCase();
+
+  return (
+    text.includes("429") ||
+    text.includes("resource_exhausted") ||
+    text.includes("quota") ||
+    text.includes("rate limit")
+  );
+}
+
+function getRetryDelayMs(error: unknown, attempt: number) {
+  const text = errorToText(error);
+
+  const retryInMatch = text.match(/retry in\s+([\d.]+)s/i);
+  const retryDelayMatch = text.match(/"retryDelay"\s*:\s*"([\d.]+)s"/i);
+
+  const secondsText = retryInMatch?.[1] ?? retryDelayMatch?.[1];
+
+  if (secondsText) {
+    const seconds = Number(secondsText);
+
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.ceil(seconds * 1000) + 1500;
+    }
+  }
+
+  return Math.min(45_000, 4_000 * attempt);
+}
+
+async function generateContentWithRetry(request: GenerateContentRequest) {
+  const maxAttempts = 4;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await ai.models.generateContent(request);
+    } catch (error) {
+      const quotaError = isQuotaError(error);
+      const isLastAttempt = attempt === maxAttempts;
+
+      if (!quotaError || isLastAttempt) {
+        if (quotaError) {
+          throw new Error(
+            [
+              "Gemini quota limit reached. Wait for quota reset or use a billing-enabled Gemini API key, then click Retry analysis.",
+              "",
+              `Model: ${MODEL}`,
+              `Original error: ${errorToText(error)}`,
+            ].join("\n"),
+          );
+        }
+
+        throw error;
+      }
+
+      const delayMs = getRetryDelayMs(error, attempt);
+
+      console.warn(
+        `Gemini quota/rate limit hit. Retrying attempt ${
+          attempt + 1
+        }/${maxAttempts} after ${Math.round(delayMs / 1000)}s...`,
+      );
+
+      await sleep(delayMs);
+    }
+  }
+
+  throw new Error("Gemini extraction failed after retries.");
+}
+
 function safeJsonParse(text: string): ExtractedDocumentData {
   try {
     return JSON.parse(text) as ExtractedDocumentData;
@@ -515,7 +603,7 @@ export async function extractDocumentData(params: {
           text: `Document contents:\n\n${content.text}`,
         };
 
-  const response = await ai.models.generateContent({
+  const response = await generateContentWithRetry({
     model: MODEL,
     contents: [
       {
