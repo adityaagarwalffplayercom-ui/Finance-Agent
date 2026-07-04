@@ -7,19 +7,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ---------------------------------------------------------------------------
+// Better Auth core models
+// ---------------------------------------------------------------------------
+
 model User {
-  id            String                @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
-  email         String                @unique
-  emailVerified Boolean               @default(false)
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   image         String?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  accounts      Account[]
-  business      Business?
-  chatMessages  BusinessChatMessage[]
-  documents     Document[]
-  sessions      Session[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions     Session[]
+  accounts     Account[]
+  business     Business?
+  documents    Document[]
+  chatMessages BusinessChatMessage[]
 
   @@map("user")
 }
@@ -32,17 +37,21 @@ model Session {
   userAgent String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("session")
 }
 
 model Account {
-  id                    String    @id @default(cuid())
-  accountId             String
-  providerId            String
-  userId                String
+  id         String @id @default(cuid())
+  accountId  String
+  providerId String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   password              String?
   accessToken           String?
   refreshToken          String?
@@ -52,7 +61,6 @@ model Account {
   scope                 String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("account")
 }
@@ -68,51 +76,30 @@ model Verification {
   @@map("verification")
 }
 
+// ---------------------------------------------------------------------------
+// Business profile
+// ---------------------------------------------------------------------------
+
 model Business {
   id            String   @id @default(cuid())
   name          String
   industry      String?
   businessType  String?
   financialYear String?
-  currency      String   @default("USD")
+  currency      String   @default("INR")
   country       String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("business")
 }
 
-model Document {
-  id              String           @id @default(cuid())
-  fileName        String
-  mimeType        String
-  fileSize        Int
-  category        DocumentCategory
-  status          DocumentStatus   @default(UPLOADED)
-  content         Bytes
-  extractedData   Json?
-  extractedAt     DateTime?
-  processingError String?
-  uploadedAt      DateTime         @default(now())
-  userId          String
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("document")
-}
-
-model BusinessChatMessage {
-  id        String   @id @default(cuid())
-  role      String
-  content   String
-  createdAt DateTime @default(now())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@map("business_chat_message")
-}
+// ---------------------------------------------------------------------------
+// Document system
+// ---------------------------------------------------------------------------
 
 enum DocumentCategory {
   BANK_STATEMENT
@@ -129,4 +116,52 @@ enum DocumentStatus {
   PROCESSING
   PROCESSED
   FAILED
+}
+
+enum DocumentReviewStatus {
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model Document {
+  id       String           @id @default(cuid())
+  fileName String
+  mimeType String
+  fileSize Int
+  category DocumentCategory
+  status   DocumentStatus   @default(UPLOADED)
+  content  Bytes
+
+  extractedData   Json?
+  extractedAt     DateTime?
+  processingError String?
+
+  reviewStatus DocumentReviewStatus @default(NEEDS_REVIEW)
+  reviewedAt   DateTime?
+  reviewNote   String?
+
+  uploadedAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("document")
+}
+
+// ---------------------------------------------------------------------------
+// AI Business Chat history
+// ---------------------------------------------------------------------------
+
+model BusinessChatMessage {
+  id        String   @id @default(cuid())
+  role      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("business_chat_message")
 }

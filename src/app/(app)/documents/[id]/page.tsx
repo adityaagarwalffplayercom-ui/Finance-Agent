@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { categoryLabel, formatFileSize } from "@/lib/document-categories";
 import type { ExtractedDocumentData } from "@/lib/gemini";
+import { ReviewActions } from "./ReviewActions";
 
 type PageProps = {
   params: Promise<{
@@ -126,11 +127,11 @@ function asExtractedData(value: unknown): PreviewExtractedData | null {
   return value as PreviewExtractedData;
 }
 
-function hasNumber(value: unknown) {
+function hasNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function hasText(value: unknown) {
+function hasText(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
@@ -300,23 +301,14 @@ function buildExtractionQuality(params: {
   const detected: string[] = [];
   const missing: string[] = [];
 
-  if (hasText(extracted.summary)) {
-    detected.push("AI summary");
-  } else {
-    missing.push("Summary");
-  }
+  if (hasText(extracted.summary)) detected.push("AI summary");
+  else missing.push("Summary");
 
-  if (hasText(extracted.currency)) {
-    detected.push("Currency");
-  } else {
-    missing.push("Currency");
-  }
+  if (hasText(extracted.currency)) detected.push("Currency");
+  else missing.push("Currency");
 
-  if (hasText(extracted.documentDate)) {
-    detected.push("Document date");
-  } else {
-    missing.push("Document date");
-  }
+  if (hasText(extracted.documentDate)) detected.push("Document date");
+  else missing.push("Document date");
 
   if (hasText(extracted.periodStart) && hasText(extracted.periodEnd)) {
     detected.push("Reporting period");
@@ -324,17 +316,11 @@ function buildExtractionQuality(params: {
     missing.push("Reporting period");
   }
 
-  if (hasNumber(extracted.revenue)) {
-    detected.push("Revenue");
-  } else if (isFinancialStatement) {
-    missing.push("Revenue");
-  }
+  if (hasNumber(extracted.revenue)) detected.push("Revenue");
+  else if (isFinancialStatement) missing.push("Revenue");
 
-  if (hasNumber(extracted.expenses)) {
-    detected.push("Expenses");
-  } else if (isFinancialStatement) {
-    missing.push("Expenses");
-  }
+  if (hasNumber(extracted.expenses)) detected.push("Expenses");
+  else if (isFinancialStatement) missing.push("Expenses");
 
   if (hasNumber(extracted.profit) || hasNumber(extracted.netIncome)) {
     detected.push("Profit / loss");
@@ -342,23 +328,14 @@ function buildExtractionQuality(params: {
     missing.push("Profit / loss");
   }
 
-  if (hasNumber(extracted.assets)) {
-    detected.push("Assets");
-  } else if (isFinancialStatement) {
-    missing.push("Assets");
-  }
+  if (hasNumber(extracted.assets)) detected.push("Assets");
+  else if (isFinancialStatement) missing.push("Assets");
 
-  if (hasNumber(extracted.liabilities)) {
-    detected.push("Liabilities");
-  } else if (isFinancialStatement) {
-    missing.push("Liabilities");
-  }
+  if (hasNumber(extracted.liabilities)) detected.push("Liabilities");
+  else if (isFinancialStatement) missing.push("Liabilities");
 
-  if (hasNumber(extracted.equity)) {
-    detected.push("Equity");
-  } else if (isFinancialStatement) {
-    missing.push("Equity");
-  }
+  if (hasNumber(extracted.equity)) detected.push("Equity");
+  else if (isFinancialStatement) missing.push("Equity");
 
   if (Array.isArray(extracted.lineItems) && extracted.lineItems.length > 0) {
     detected.push(`${extracted.lineItems.length} line items`);
@@ -391,7 +368,7 @@ function buildExtractionQuality(params: {
       detected,
       missing,
       note:
-        "The extraction looks strong because key financial fields were detected. You should still verify important values before using them for final business decisions.",
+        "The extraction looks strong because key financial fields were detected. Still verify important values before using them for business decisions.",
     } satisfies ExtractionQuality;
   }
 
@@ -405,7 +382,7 @@ function buildExtractionQuality(params: {
       detected,
       missing,
       note:
-        "The extraction is usable, but some important fields are missing. Uploading cleaner documents or more supporting documents can improve analysis.",
+        "The extraction is usable, but some important fields are missing. Upload cleaner documents or supporting documents for better analysis.",
     } satisfies ExtractionQuality;
   }
 
@@ -574,13 +551,7 @@ function ExtractionQualityCard({ quality }: { quality: ExtractionQuality }) {
           </p>
 
           {quality.detected.length > 0 ? (
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-              }}
-            >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {quality.detected.map((item) => (
                 <span
                   key={item}
@@ -631,13 +602,7 @@ function ExtractionQualityCard({ quality }: { quality: ExtractionQuality }) {
           </p>
 
           {quality.missing.length > 0 ? (
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-              }}
-            >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {quality.missing.map((item) => (
                 <span
                   key={item}
@@ -699,6 +664,9 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
       uploadedAt: true,
       extractedAt: true,
       processingError: true,
+      reviewStatus: true,
+      reviewedAt: true,
+      reviewNote: true,
       extractedData: true,
     },
   });
@@ -903,6 +871,14 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
           </div>
         )}
       </section>
+
+      <ReviewActions
+        documentId={document.id}
+        reviewStatus={document.reviewStatus}
+        processingStatus={document.status}
+        reviewNote={document.reviewNote}
+        reviewedAt={document.reviewedAt?.toISOString() ?? null}
+      />
 
       <ExtractionQualityCard quality={quality} />
 
