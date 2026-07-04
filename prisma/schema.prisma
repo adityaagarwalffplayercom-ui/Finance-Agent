@@ -117,7 +117,6 @@ enum DocumentStatus {
   PROCESSED
   FAILED
 }
-
 enum DocumentReviewStatus {
   NEEDS_REVIEW
   APPROVED
@@ -138,8 +137,8 @@ model Document {
   processingError String?
 
   reviewStatus DocumentReviewStatus @default(NEEDS_REVIEW)
-  reviewedAt   DateTime?
-  reviewNote   String?
+  reviewedAt    DateTime?
+  reviewNote    String?
 
   uploadedAt DateTime @default(now())
 
