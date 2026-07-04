@@ -74,6 +74,79 @@ function normalizeRole(role: string): "user" | "assistant" {
   return role === "user" ? "user" : "assistant";
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function generateGeminiAnswer(prompt: string) {
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      });
+
+      return response.text ?? "";
+    } catch (error) {
+      const isLastAttempt = attempt === maxAttempts;
+
+      if (isLastAttempt) {
+        throw error;
+      }
+
+      await sleep(1200 * attempt);
+    }
+  }
+
+  return "";
+}
+
+function fixHistoryOrder<
+  T extends {
+    role: string;
+    createdAt: Date;
+  },
+>(rows: T[]) {
+  const ordered = [...rows].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+
+  const fixed: T[] = [];
+
+  for (let index = 0; index < ordered.length; index += 1) {
+    const current = ordered[index];
+    const next = ordered[index + 1];
+
+    const sameTimestamp =
+      next && current.createdAt.getTime() === next.createdAt.getTime();
+
+    if (
+      sameTimestamp &&
+      current.role === "assistant" &&
+      next.role === "user"
+    ) {
+      fixed.push(next);
+      fixed.push(current);
+      index += 1;
+    } else {
+      fixed.push(current);
+    }
+  }
+
+  return fixed;
+}
+
 function buildDocumentSummary(documents: IntelligenceDocument[]) {
   return documents.slice(0, 12).map((doc) => {
     const data = doc.extractedData as ChatExtractedData | null;
@@ -135,7 +208,8 @@ function buildFinancialContext(params: {
     },
 
     totals: {
-      revenue: revenue !== null ? formatMoney(revenue, currency) : "not available",
+      revenue:
+        revenue !== null ? formatMoney(revenue, currency) : "not available",
       expenses:
         expenses !== null ? formatMoney(expenses, currency) : "not available",
       profit: profit !== null ? formatMoney(profit, currency) : "not available",
@@ -269,16 +343,16 @@ function buildSuggestedQuestions(context: ReturnType<typeof buildFinancialContex
     suggestions.push("What should I fix first to reduce financial risk?");
   }
 
-  if (profit < 0) {
+  if (typeof profit === "number" && profit < 0) {
     suggestions.push("Why is my business running at a loss?");
     suggestions.push("How much should I reduce expenses to break even?");
   }
 
-  if (revenueCoverage !== null && revenueCoverage < 70) {
+  if (typeof revenueCoverage === "number" && revenueCoverage < 70) {
     suggestions.push("How can I improve my revenue coverage?");
   }
 
-  if (expenseRatio !== null && expenseRatio > 100) {
+  if (typeof expenseRatio === "number" && expenseRatio > 100) {
     suggestions.push("Which costs should I control first?");
   }
 
@@ -286,7 +360,7 @@ function buildSuggestedQuestions(context: ReturnType<typeof buildFinancialContex
     suggestions.push("What data is missing to calculate cash runway?");
   }
 
-  if (runway !== null && runway < 90) {
+  if (typeof runway === "number" && runway < 90) {
     suggestions.push("How can I extend my cash runway?");
   }
 
@@ -342,7 +416,9 @@ export async function getBusinessChatHistory(
     take: 80,
   });
 
-  return rows.reverse().map((message) => ({
+  const fixedRows = fixHistoryOrder(rows);
+
+  return fixedRows.map((message) => ({
     role: normalizeRole(message.role),
     content: message.content,
     createdAt: message.createdAt.toISOString(),
@@ -362,20 +438,28 @@ export async function saveBusinessChatExchange(params: {
   question: string;
   answer: string;
 }) {
-  await prisma.businessChatMessage.createMany({
-    data: [
-      {
+  const questionTime = new Date();
+  const answerTime = new Date(questionTime.getTime() + 1);
+
+  await prisma.$transaction([
+    prisma.businessChatMessage.create({
+      data: {
         userId: params.userId,
         role: "user",
         content: params.question,
+        createdAt: questionTime,
       },
-      {
+    }),
+
+    prisma.businessChatMessage.create({
+      data: {
         userId: params.userId,
         role: "assistant",
         content: params.answer,
+        createdAt: answerTime,
       },
-    ],
-  });
+    }),
+  ]);
 }
 
 export async function getBusinessChatSuggestions(userId: string) {
@@ -396,43 +480,6 @@ export async function getBusinessChatSuggestions(userId: string) {
   });
 
   return buildSuggestedQuestions(context);
-}
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function generateGeminiAnswer(prompt: string) {
-  const maxAttempts = 3;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      const response = await ai.models.generateContent({
-        model: MODEL,
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      });
-
-      return response.text ?? "";
-    } catch (error) {
-      const isLastAttempt = attempt === maxAttempts;
-
-      if (isLastAttempt) {
-        throw error;
-      }
-
-      await sleep(1200 * attempt);
-    }
-  }
-
-  return "";
 }
 
 export async function answerBusinessQuestion(params: {
@@ -476,22 +523,24 @@ export async function answerBusinessQuestion(params: {
   });
 
   const suggestions = buildSuggestedQuestions(context);
+  const prompt = buildPrompt(question, context);
 
-try {
-  const response = await generateGeminiAnswer(buildPrompt(question, context));
+  try {
+    const answer = await generateGeminiAnswer(prompt);
 
-  return {
-    answer:
-      response ||
-      "I could not generate an answer from the AI model. Please try again.",
-    suggestions,
-  };
-} catch (error) {
-  console.error("Gemini chat generation failed:", error);
+    return {
+      answer:
+        answer ||
+        "I could not generate an answer from the AI model. Please try again.",
+      suggestions,
+    };
+  } catch (error) {
+    console.error("Gemini chat generation failed:", error);
 
-  return {
-    answer:
-      "The AI finance model is temporarily busy due to high demand. Your financial data and chat history are working correctly. Please try the same question again in a few seconds.",
-    suggestions,
-  };
+    return {
+      answer:
+        "The AI finance model is temporarily busy due to high demand. Your financial data and chat history are working correctly. Please try the same question again in a few seconds.",
+      suggestions,
+    };
+  }
 }

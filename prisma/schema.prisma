@@ -7,10 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ---------------------------------------------------------------------------
-// Better Auth core models.
-// ---------------------------------------------------------------------------
-
 model User {
   id            String                @id @default(cuid())
   name          String
@@ -19,12 +15,11 @@ model User {
   image         String?
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
-
-  sessions      Session[]
   accounts      Account[]
   business      Business?
-  documents     Document[]
   chatMessages  BusinessChatMessage[]
+  documents     Document[]
+  sessions      Session[]
 
   @@map("user")
 }
@@ -37,21 +32,17 @@ model Session {
   userAgent String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("session")
 }
 
 model Account {
-  id        String @id @default(cuid())
-  accountId String
-  providerId String
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
   password              String?
   accessToken           String?
   refreshToken          String?
@@ -61,6 +52,7 @@ model Account {
   scope                 String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("account")
 }
@@ -76,10 +68,6 @@ model Verification {
   @@map("verification")
 }
 
-// ---------------------------------------------------------------------------
-// Product-specific business profile.
-// ---------------------------------------------------------------------------
-
 model Business {
   id            String   @id @default(cuid())
   name          String
@@ -90,16 +78,41 @@ model Business {
   country       String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("business")
 }
 
-// ---------------------------------------------------------------------------
-// Documents uploaded by the user.
-// ---------------------------------------------------------------------------
+model Document {
+  id              String           @id @default(cuid())
+  fileName        String
+  mimeType        String
+  fileSize        Int
+  category        DocumentCategory
+  status          DocumentStatus   @default(UPLOADED)
+  content         Bytes
+  extractedData   Json?
+  extractedAt     DateTime?
+  processingError String?
+  uploadedAt      DateTime         @default(now())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("document")
+}
+
+model BusinessChatMessage {
+  id        String   @id @default(cuid())
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("business_chat_message")
+}
 
 enum DocumentCategory {
   BANK_STATEMENT
@@ -116,42 +129,4 @@ enum DocumentStatus {
   PROCESSING
   PROCESSED
   FAILED
-}
-
-model Document {
-  id        String           @id @default(cuid())
-  fileName  String
-  mimeType  String
-  fileSize  Int
-  category  DocumentCategory
-  status    DocumentStatus   @default(UPLOADED)
-  content   Bytes
-
-  extractedData   Json?
-  extractedAt     DateTime?
-  processingError String?
-  uploadedAt      DateTime @default(now())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("document")
-}
-
-// ---------------------------------------------------------------------------
-// AI Business Chat history.
-// Stores user and assistant messages per user.
-// ---------------------------------------------------------------------------
-
-model BusinessChatMessage {
-  id        String   @id @default(cuid())
-  role      String
-  content   String   @db.Text
-  createdAt DateTime @default(now())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@map("business_chat_message")
 }
