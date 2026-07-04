@@ -5,6 +5,9 @@
   "engines": {
     "node": "20.x"
   },
+  "prisma": {
+  "schema": "prisma/schema.prisma"
+},
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate --schema=prisma/schema.prisma && next build",
