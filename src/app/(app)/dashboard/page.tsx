@@ -130,6 +130,121 @@ function getToneStyle(tone: "good" | "warning" | "danger" | "neutral") {
   };
 }
 
+function DemoFlowSection() {
+  const demoSteps = [
+    {
+      step: "01",
+      title: "Upload documents",
+      text: "Upload financial statements, bank statements, invoices, bills, or payroll files.",
+      href: "/documents",
+    },
+    {
+      step: "02",
+      title: "Review AI extraction",
+      text: "Check extracted numbers and approve only trusted financial data.",
+      href: "/documents",
+    },
+    {
+      step: "03",
+      title: "Dashboard updates",
+      text: "Approved data powers revenue, expenses, profit, cash, health score, and alerts.",
+      href: "/dashboard",
+    },
+    {
+      step: "04",
+      title: "Ask AI finance team",
+      text: "Use Overall Team or specialist agents to get decisions, risks, and next actions.",
+      href: "/chat",
+    },
+  ];
+
+  return (
+    <section
+      className="alerts-card"
+      style={{
+        marginBottom: 24,
+        display: "grid",
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 18,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <p className="section-title">Demo flow</p>
+          <p className="section-hint">
+            Explain the platform in this order during presentation.
+          </p>
+        </div>
+
+        <span className="badge-sample">Upload → Review → Dashboard → AI Team</span>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 12,
+        }}
+      >
+        {demoSteps.map((item) => (
+          <Link
+            key={item.step}
+            href={item.href}
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "rgba(255,255,255,0.03)",
+              borderRadius: 18,
+              padding: 16,
+              textDecoration: "none",
+              display: "grid",
+              gap: 8,
+              minHeight: 150,
+            }}
+          >
+            <span
+              style={{
+                color: "var(--color-amber)",
+                fontSize: 12,
+                fontWeight: 950,
+                letterSpacing: "0.12em",
+              }}
+            >
+              STEP {item.step}
+            </span>
+
+            <span
+              style={{
+                color: "var(--color-text-primary)",
+                fontSize: 15,
+                fontWeight: 900,
+              }}
+            >
+              {item.title}
+            </span>
+
+            <span
+              style={{
+                color: "var(--color-text-secondary)",
+                fontSize: 13,
+                lineHeight: 1.5,
+              }}
+            >
+              {item.text}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default async function DashboardPage() {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -165,6 +280,8 @@ export default async function DashboardPage() {
         approve AI extractions before trusting them in the dashboard, AI team,
         and finance chat.
       </p>
+
+      <DemoFlowSection />
 
       <section
         className="alerts-card"
@@ -430,6 +547,26 @@ export default async function DashboardPage() {
           }}
         >
           <Link
+            href="/chat"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "none",
+              background: "var(--color-amber)",
+              color: "var(--color-base)",
+              borderRadius: 12,
+              padding: "10px 14px",
+              textDecoration: "none",
+              fontSize: 13,
+              fontWeight: 900,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Ask Overall Team
+          </Link>
+
+          <Link
             href="/chat?agent=cfo"
             style={{
               display: "inline-flex",
@@ -467,26 +604,6 @@ export default async function DashboardPage() {
             }}
           >
             Ask Risk Agent
-          </Link>
-
-          <Link
-            href="/chat"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              border: "none",
-              background: "var(--color-amber)",
-              color: "var(--color-base)",
-              borderRadius: 12,
-              padding: "10px 14px",
-              textDecoration: "none",
-              fontSize: 13,
-              fontWeight: 900,
-              whiteSpace: "nowrap",
-            }}
-          >
-            Open chat
           </Link>
         </div>
       </section>
@@ -575,10 +692,10 @@ export default async function DashboardPage() {
         }}
       >
         <div>
-          <p className="section-title">Suggested demo questions</p>
+          <p className="section-title">Suggested questions</p>
           <p className="section-hint">
-            Use these during your hackathon presentation to show that the
-            dashboard connects with the AI finance team.
+            Use these questions to show that the dashboard connects with the AI
+            finance team.
           </p>
         </div>
 
@@ -590,6 +707,11 @@ export default async function DashboardPage() {
           }}
         >
           {[
+            {
+              href: "/chat",
+              title: "Give me an overall summary of my business.",
+              desc: "Overall finance team combines all agent views.",
+            },
             {
               href: "/chat?agent=cfo",
               title: "Why is my profit margin low?",
