@@ -17,12 +17,6 @@ async function getCurrentUserId() {
   return session?.user?.id ?? null;
 }
 
-function getAgentIdFromUrl(request: Request) {
-  const url = new URL(request.url);
-
-  return url.searchParams.get("agent") ?? "team";
-}
-
 export async function GET(request: Request) {
   try {
     const userId = await getCurrentUserId();
@@ -38,7 +32,8 @@ export async function GET(request: Request) {
       );
     }
 
-    const agentId = getAgentIdFromUrl(request);
+    const { searchParams } = new URL(request.url);
+    const agentId = searchParams.get("agent");
 
     const [messages, suggestions] = await Promise.all([
       getBusinessChatHistory(userId),
@@ -82,7 +77,7 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const question = typeof body?.question === "string" ? body.question.trim() : "";
-    const agentId = typeof body?.agentId === "string" ? body.agentId : "team";
+    const agentId = typeof body?.agentId === "string" ? body.agentId : "cfo";
 
     if (!question) {
       return NextResponse.json(
@@ -103,15 +98,14 @@ export async function POST(request: Request) {
 
     await saveBusinessChatExchange({
       userId,
-      question: `[${result.agentName}] ${question}`,
+      question,
       answer: result.answer,
     });
 
     return NextResponse.json({
       answer: result.answer,
       suggestions: result.suggestions,
-      agentId: result.agentId,
-      agentName: result.agentName,
+      agentId,
     });
   } catch (error) {
     console.error("Business chat error:", error);
