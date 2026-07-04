@@ -21,29 +21,48 @@ type ExtractedLineItem = {
 type ExtractedData = {
   summary?: string;
   description?: string;
+
   documentDate?: string;
   date?: string;
   periodStart?: string;
   startDate?: string;
   periodEnd?: string;
   endDate?: string;
+
   currency?: string;
+
+  reportedUnit?: string;
+  scaleMultiplier?: number;
+  unitDetectionEvidence?: string;
+
   totalAmount?: number;
   amount?: number;
+  totalAmountLabel?: string;
+
   revenue?: number;
   totalRevenue?: number;
   sales?: number;
+
   expenses?: number;
   totalExpenses?: number;
+
   profit?: number;
   netProfit?: number;
   loss?: number;
   netLoss?: number;
+  netIncome?: number;
+
   cash?: number;
   closingBalance?: number;
   openingBalance?: number;
   balance?: number;
+
+  assets?: number;
+  liabilities?: number;
+  equity?: number;
+
   lineItems?: ExtractedLineItem[];
+
   [key: string]: unknown;
 };
 
@@ -172,21 +191,6 @@ function getLineItems(data: ExtractedData | null) {
   );
 }
 
-function getAmountMultiplier(category: string) {
-  // Most financial statements show values in thousands.
-  // Example: 22,700 means 22,700,000, so display it as ₹22.7M.
-  if (category === "FINANCIAL_STATEMENT") {
-    return 1000;
-  }
-
-  return 1;
-}
-
-function scaleAmount(value: number | undefined, multiplier: number) {
-  if (typeof value !== "number" || Number.isNaN(value)) return undefined;
-  return value * multiplier;
-}
-
 async function getSessionUserId() {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -271,21 +275,27 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
   const data = document.extractedData as ExtractedData | null;
   const currency = getString(data, ["currency"]) ?? "INR";
 
-  const amountMultiplier = getAmountMultiplier(document.category);
-
   const totalAmount = getNumber(data, ["totalAmount", "amount"]);
   const revenue = getNumber(data, ["revenue", "totalRevenue", "sales"]);
   const expenses = getNumber(data, ["expenses", "totalExpenses"]);
+
   const profit = getNumber(data, ["profit", "netProfit"]);
   const loss = getNumber(data, ["loss", "netLoss"]);
-  const cash = getNumber(data, ["cash", "closingBalance", "balance"]);
+  const netIncome = getNumber(data, ["netIncome"]);
 
-  const scaledTotalAmount = scaleAmount(totalAmount, amountMultiplier);
-  const scaledRevenue = scaleAmount(revenue, amountMultiplier);
-  const scaledExpenses = scaleAmount(expenses, amountMultiplier);
-  const scaledProfit = scaleAmount(profit, amountMultiplier);
-  const scaledLoss = scaleAmount(loss, amountMultiplier);
-  const scaledCash = scaleAmount(cash, amountMultiplier);
+  const profitOrLoss =
+    typeof netIncome === "number"
+      ? netIncome
+      : typeof profit === "number"
+        ? profit
+        : typeof loss === "number"
+          ? -Math.abs(loss)
+          : undefined;
+
+  const cash = getNumber(data, ["cash", "closingBalance", "balance"]);
+  const assets = getNumber(data, ["assets"]);
+  const liabilities = getNumber(data, ["liabilities"]);
+  const equity = getNumber(data, ["equity"]);
 
   const summary =
     getString(data, ["summary", "description"]) ??
@@ -294,6 +304,11 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
   const documentDate = getString(data, ["documentDate", "date"]);
   const periodStart = getString(data, ["periodStart", "startDate"]);
   const periodEnd = getString(data, ["periodEnd", "endDate"]);
+
+  const reportedUnit = getString(data, ["reportedUnit"]) ?? "unknown";
+  const scaleMultiplier = getNumber(data, ["scaleMultiplier"]);
+  const unitDetectionEvidence = getString(data, ["unitDetectionEvidence"]);
+
   const lineItems = getLineItems(data);
 
   const fallbackLineItemDate =
@@ -534,9 +549,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
       >
         <div className="stat-card">
           <p className="stat-label">Total amount</p>
-          <p className="stat-value">
-            {formatMoney(scaledTotalAmount, currency)}
-          </p>
+          <p className="stat-value">{formatMoney(totalAmount, currency)}</p>
           <p className="stat-delta stat-delta-neutral">
             Main extracted amount
           </p>
@@ -544,29 +557,23 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
 
         <div className="stat-card">
           <p className="stat-label">Revenue</p>
-          <p className="stat-value">{formatMoney(scaledRevenue, currency)}</p>
+          <p className="stat-value">{formatMoney(revenue, currency)}</p>
           <p className="stat-delta stat-delta-positive">
-            Extracted from AI data
+            Actual saved value
           </p>
         </div>
 
         <div className="stat-card">
           <p className="stat-label">Expenses</p>
-          <p className="stat-value">{formatMoney(scaledExpenses, currency)}</p>
+          <p className="stat-value">{formatMoney(expenses, currency)}</p>
           <p className="stat-delta stat-delta-warning">
-            Extracted from AI data
+            Actual saved value
           </p>
         </div>
 
         <div className="stat-card">
           <p className="stat-label">Profit / Loss</p>
-          <p className="stat-value">
-            {scaledProfit !== undefined
-              ? formatMoney(scaledProfit, currency)
-              : scaledLoss !== undefined
-                ? formatMoney(-Math.abs(scaledLoss), currency)
-                : "-"}
-          </p>
+          <p className="stat-value">{formatMoney(profitOrLoss, currency)}</p>
           <p className="stat-delta stat-delta-neutral">
             Used for dashboard health
           </p>
@@ -606,7 +613,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
             <div>
               <p className="section-title">Document metadata</p>
               <p className="section-hint">
-                File and accounting period details.
+                File, accounting period, and unit detection details.
               </p>
             </div>
           </div>
@@ -632,13 +639,18 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
                   : "-",
               ],
               ["Currency", currency],
-              ["Cash / balance", formatMoney(scaledCash, currency)],
+              ["Reported unit", reportedUnit],
               [
-                "Amount scale",
-                amountMultiplier === 1000
-                  ? "Values displayed after ×1000 financial statement scaling"
-                  : "Actual extracted values",
+                "Scale multiplier",
+                typeof scaleMultiplier === "number"
+                  ? scaleMultiplier.toLocaleString("en-IN")
+                  : "-",
               ],
+              ["Unit evidence", unitDetectionEvidence ?? "-"],
+              ["Cash / balance", formatMoney(cash, currency)],
+              ["Assets", formatMoney(assets, currency)],
+              ["Liabilities", formatMoney(liabilities, currency)],
+              ["Equity", formatMoney(equity, currency)],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -686,7 +698,8 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
           <div>
             <p className="section-title">Extracted line items</p>
             <p className="section-hint">
-              Detailed items found by AI, if available.
+              These amounts are shown from saved AI extraction. No UI multiplier
+              is applied here.
             </p>
           </div>
 
@@ -743,62 +756,55 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
               </thead>
 
               <tbody>
-                {lineItems.map((item, index) => {
-                  const scaledLineAmount =
-                    typeof item.amount === "number"
-                      ? item.amount * amountMultiplier
-                      : undefined;
+                {lineItems.map((item, index) => (
+                  <tr key={`${item.description ?? "item"}-${index}`}>
+                    <td
+                      style={{
+                        padding: "13px 10px 13px 0",
+                        color: "var(--color-text-primary)",
+                        fontSize: 14,
+                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      {item.description ?? "-"}
+                    </td>
 
-                  return (
-                    <tr key={`${item.description ?? "item"}-${index}`}>
-                      <td
-                        style={{
-                          padding: "13px 10px 13px 0",
-                          color: "var(--color-text-primary)",
-                          fontSize: 14,
-                          borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        }}
-                      >
-                        {item.description ?? "-"}
-                      </td>
+                    <td
+                      style={{
+                        padding: "13px 10px",
+                        color: "var(--color-text-secondary)",
+                        fontSize: 13,
+                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      {item.category ?? fallbackLineItemCategory}
+                    </td>
 
-                      <td
-                        style={{
-                          padding: "13px 10px",
-                          color: "var(--color-text-secondary)",
-                          fontSize: 13,
-                          borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        }}
-                      >
-                        {item.category ?? fallbackLineItemCategory}
-                      </td>
+                    <td
+                      style={{
+                        padding: "13px 10px",
+                        color: "var(--color-text-secondary)",
+                        fontSize: 13,
+                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      {formatDate(item.date ?? fallbackLineItemDate)}
+                    </td>
 
-                      <td
-                        style={{
-                          padding: "13px 10px",
-                          color: "var(--color-text-secondary)",
-                          fontSize: 13,
-                          borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        }}
-                      >
-                        {formatDate(item.date ?? fallbackLineItemDate)}
-                      </td>
-
-                      <td
-                        style={{
-                          padding: "13px 0 13px 10px",
-                          color: "var(--color-text-primary)",
-                          fontSize: 14,
-                          fontWeight: 800,
-                          textAlign: "right",
-                          borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        }}
-                      >
-                        {formatMoney(scaledLineAmount, currency)}
-                      </td>
-                    </tr>
-                  );
-                })}
+                    <td
+                      style={{
+                        padding: "13px 0 13px 10px",
+                        color: "var(--color-text-primary)",
+                        fontSize: 14,
+                        fontWeight: 800,
+                        textAlign: "right",
+                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      {formatMoney(item.amount, currency)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -810,8 +816,8 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
           <div>
             <p className="section-title">Raw AI extraction</p>
             <p className="section-hint">
-              Developer view for checking Gemini output. Raw values are shown
-              exactly as AI saved them.
+              Developer view for checking Gemini output. These are the exact
+              values saved in the database.
             </p>
           </div>
         </div>
