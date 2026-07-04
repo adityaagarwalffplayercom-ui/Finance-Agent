@@ -56,13 +56,26 @@ export default function SignUpPage() {
         12000,
       );
 
-      if (result.error) {
-        setError(
-          result.error.message ??
-            "Account creation failed. Please check your details and try again.",
-        );
-        return;
-      }
+     if (result.error) {
+  console.error("Signup Better Auth error:", result.error);
+
+  const errorDetails = [
+    result.error.message,
+    result.error.statusText,
+    result.error.code,
+    result.error.status ? `Status: ${result.error.status}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  setError(
+    errorDetails ||
+      JSON.stringify(result.error) ||
+      "Account creation failed. Please check your details and try again.",
+  );
+
+  return;
+}
 
       router.push("/dashboard");
       router.refresh();
