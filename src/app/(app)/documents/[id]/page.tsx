@@ -1059,7 +1059,12 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
                         fontWeight: 700,
                       }}
                     >
-                      {inferLineItemCategory(item.description, item.category)}
+                      {inferLineItemCategory(
+  item.description,
+  "category" in item && typeof item.category === "string"
+    ? item.category
+    : undefined,
+)}
                     </td>
                     <td
                       style={{

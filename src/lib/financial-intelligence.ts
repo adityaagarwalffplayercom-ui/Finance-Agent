@@ -708,7 +708,7 @@ export function buildFinancialIntelligence(
     expenses,
     profit,
     profitMarginPct,
-    riskLevel: risk.riskLevel,
+    riskLevel: risk.riskLevel as "critical" | "high" | "medium" | "low",
     currency,
   });
 
@@ -747,7 +747,7 @@ export function buildFinancialIntelligence(
     risk: {
       healthScore: risk.healthScore,
       riskScore: risk.riskScore,
-      riskLevel: risk.riskLevel,
+      riskLevel: risk.riskLevel as "critical" | "high" | "medium" | "low",
       cashRunwayDays: risk.cashRunwayDays,
       monthlyBurnRate,
     },
