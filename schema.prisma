@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Better Auth core models. Names, fields and relations follow Better Auth's
+// canonical Prisma schema exactly, so the Prisma adapter works with zero
+// extra configuration. If you ever change auth config, you can re-generate
+// and diff against this file with: npx @better-auth/cli generate
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions  Session[]
+  accounts  Account[]
+  business  Business?
+  documents Document[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id         String @id @default(cuid())
+  accountId  String
+  providerId String
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Populated for the email/password provider; holds the salted hash.
+  password String?
+
+  accessToken            String?
+  refreshToken           String?
+  idToken                String?
+  accessTokenExpiresAt   DateTime?
+  refreshTokenExpiresAt  DateTime?
+  scope                  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Product-specific extension — one business per user for now.
+// ---------------------------------------------------------------------------
+
+model Business {
+  id            String   @id @default(cuid())
+  name          String
+  industry      String?
+  businessType  String?
+  financialYear String?
+  currency      String   @default("USD")
+  country       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("business")
+}
+
+// ---------------------------------------------------------------------------
+// Step 3 — document upload. Files are stored as bytes directly in Postgres
+// for this pass (see README "Known gaps" — move to object storage such as
+// S3/R2/Vercel Blob before this needs to scale past a modest number of
+// modest-sized files per business).
+//
+// Step 4 — AI extraction. extractedData holds the structured JSON a
+// document was parsed into (see src/lib/gemini.ts for the shape); it's left
+// as a loose Json field rather than its own relational tables because the
+// shape genuinely varies by DocumentCategory (transactions for a bank
+// statement vs. line items for an invoice) and nothing downstream needs to
+// query inside it relationally yet — the dashboard aggregates it in
+// application code. Revisit if that changes.
+// ---------------------------------------------------------------------------
+
+enum DocumentCategory {
+  BANK_STATEMENT
+  SALES_INVOICE
+  PURCHASE_INVOICE
+  PAYROLL
+  UTILITY_BILL
+  FINANCIAL_STATEMENT
+  OTHER
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model Document {
+  id       String           @id @default(cuid())
+  fileName String
+  mimeType String
+  fileSize Int
+  category DocumentCategory
+  status   DocumentStatus   @default(UPLOADED)
+  content  Bytes
+
+  // Populated once a document has been through the Step 4 extraction
+  // pipeline (src/app/api/documents/[id]/process/route.ts).
+  extractedData   Json?
+  extractedAt     DateTime?
+  processingError String?
+
+  uploadedAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("document")
+}
