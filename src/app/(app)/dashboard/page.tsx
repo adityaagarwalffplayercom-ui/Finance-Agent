@@ -8,6 +8,7 @@ import { CashFlowChart } from "./components/CashFlowChart";
 import { AlertsPanel } from "./components/AlertsPanel";
 import { ExecutivePanel } from "./components/ExecutivePanel";
 import { MetricsPanel } from "./components/MetricsPanel";
+import { AiTeamSection } from "./components/AiTeamSection";
 
 export default async function DashboardPage() {
   const session = await auth.api.getSession({
@@ -22,19 +23,37 @@ export default async function DashboardPage() {
         hasData: false,
         processedCount: 0,
         healthScore: 50,
-        healthLabel: "Not enough data yet",
-        revenue: { value: "-", delta: "" },
-        expenses: { value: "-", delta: "" },
-        profit: { value: "-", delta: "" },
-        cash: { value: "-", delta: "" },
+        healthLabel: "Not enough trusted data yet",
+        revenue: {
+          value: "-",
+          delta: "",
+        },
+        expenses: {
+          value: "-",
+          delta: "",
+        },
+        profit: {
+          value: "-",
+          delta: "",
+        },
+        cash: {
+          value: "-",
+          delta: "",
+        },
         cashFlowTrend: [] as number[],
-        cashFlowCaption: "Not enough data yet",
+        cashFlowCaption: "Not enough trusted data yet",
         alerts: [],
         executiveSummary:
-          "Not enough financial data is available yet. Upload and process documents to generate executive-level insights.",
+          "Not enough approved financial data is available yet. Upload, process, and approve documents to generate executive-level insights.",
         recommendations: [],
         metrics: [],
       };
+
+  const profitTone =
+    profile.profit.value.trim().startsWith("-") ||
+    profile.profit.delta.toLowerCase().includes("loss")
+      ? "warning"
+      : "positive";
 
   return (
     <>
@@ -46,12 +65,60 @@ export default async function DashboardPage() {
 
         <span className="badge-sample">
           {profile.hasData
-            ? `Live data - based on ${profile.processedCount} processed document${
+            ? `Trusted data · ${profile.processedCount} approved document${
                 profile.processedCount === 1 ? "" : "s"
               }`
-            : "No documents processed yet - process an uploaded document to see your real numbers"}
+            : "No trusted documents yet"}
         </span>
       </header>
+
+      <p className="page-intro">
+        {profile.hasData
+          ? "Your dashboard is based only on approved AI extractions. Pending and rejected documents are excluded from financial analysis."
+          : "Upload documents, process them with AI, then approve the extraction to build a trusted financial dashboard."}
+      </p>
+
+      <section
+        className="alerts-card"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 18,
+          flexWrap: "wrap",
+          marginBottom: 24,
+        }}
+      >
+        <div>
+          <p className="section-title">Ask your AI finance team</p>
+          <p className="section-hint">
+            Turn trusted numbers into decisions. Ask about losses, expenses,
+            cash flow, risks, hiring, or missing documents.
+          </p>
+        </div>
+
+        <Link
+          href="/chat"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "none",
+            background: "var(--color-amber)",
+            color: "var(--color-base)",
+            borderRadius: 8,
+            padding: "11px 16px",
+            textDecoration: "none",
+            fontSize: 14,
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+          }}
+        >
+          Ask AI
+        </Link>
+      </section>
+
+      {session?.user?.id && <AiTeamSection userId={session.user.id} />}
 
       <section className="dashboard-top-grid">
         <HealthGauge score={profile.healthScore} label={profile.healthLabel} />
@@ -75,7 +142,7 @@ export default async function DashboardPage() {
             label="Profit"
             value={profile.profit.value}
             delta={profile.profit.delta}
-            tone={profile.profit.value.includes("-") ? "warning" : "positive"}
+            tone={profitTone}
           />
 
           <StatCard
@@ -88,70 +155,24 @@ export default async function DashboardPage() {
       </section>
 
       <section
-        className="alerts-card"
         style={{
-          marginTop: 28,
-          marginBottom: 28,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 20,
-          flexWrap: "wrap",
+          marginBottom: 24,
         }}
       >
-        <div style={{ maxWidth: 720 }}>
-          <p className="section-title">Ask your AI finance team</p>
-          <p
-            className="section-hint"
-            style={{
-              marginTop: 6,
-              lineHeight: 1.6,
-            }}
-          >
-            Turn these numbers into decisions. Ask why your health score is low,
-            what expenses to reduce, how to improve cash flow, or what documents
-            are missing.
-          </p>
-        </div>
-
-        <Link
-          href="/chat"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "1px solid var(--color-border)",
-            background: "var(--color-accent)",
-            color: "white",
-            borderRadius: 14,
-            padding: "12px 18px",
-            textDecoration: "none",
-            fontWeight: 700,
-            whiteSpace: "nowrap",
-          }}
-        >
-          Ask AI
-        </Link>
+        <ExecutivePanel
+          summary={profile.executiveSummary}
+          recommendations={profile.recommendations}
+        />
       </section>
 
-      <MetricsPanel metrics={profile.metrics} />
-
-      <section
-        className="dashboard-bottom-grid"
-        style={{
-          marginTop: 28,
-          marginBottom: 28,
-          gap: 24,
-          alignItems: "stretch",
-        }}
-      >
+      <section className="dashboard-bottom-grid">
         {profile.cashFlowTrend.length >= 2 ? (
           <CashFlowChart
             points={profile.cashFlowTrend}
             caption={profile.cashFlowCaption}
           />
         ) : (
-          <section className="cashflow-card">
+          <div className="cashflow-card">
             <div className="cashflow-header">
               <p className="section-title">Cash flow trend</p>
               <p className="section-hint">{profile.cashFlowCaption}</p>
@@ -160,26 +181,27 @@ export default async function DashboardPage() {
             <p
               style={{
                 color: "var(--color-text-secondary)",
-                fontSize: 13,
-                lineHeight: 1.5,
+                fontSize: 14,
+                lineHeight: 1.6,
                 margin: 0,
               }}
             >
-              Upload documents across multiple months to generate a proper cash
+              Approve documents across multiple months to generate a proper cash
               flow trend.
             </p>
-          </section>
+          </div>
         )}
 
         <AlertsPanel alerts={profile.alerts} />
       </section>
 
-      <div style={{ marginTop: 28 }}>
-        <ExecutivePanel
-          summary={profile.executiveSummary}
-          recommendations={profile.recommendations}
-        />
-      </div>
+      <section
+        style={{
+          marginTop: 24,
+        }}
+      >
+        <MetricsPanel metrics={profile.metrics} />
+      </section>
     </>
   );
 }
