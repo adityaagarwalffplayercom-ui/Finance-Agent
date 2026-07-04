@@ -2,7 +2,13 @@ import type { FinancialMetric } from "@/lib/financial-profile";
 
 export function MetricsPanel({ metrics }: { metrics: FinancialMetric[] }) {
   return (
-    <section className="alerts-card" style={{ marginTop: 24 }}>
+    <section
+      className="alerts-card"
+      style={{
+        marginTop: 28,
+        marginBottom: 28,
+      }}
+    >
       <div style={{ marginBottom: 18 }}>
         <p className="section-title">Financial metrics</p>
         <p className="section-hint">
@@ -14,7 +20,7 @@ export function MetricsPanel({ metrics }: { metrics: FinancialMetric[] }) {
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 14,
+          gap: 16,
         }}
       >
         {metrics.map((metric) => (
@@ -25,6 +31,7 @@ export function MetricsPanel({ metrics }: { metrics: FinancialMetric[] }) {
               borderRadius: 16,
               padding: 16,
               background: "rgba(255,255,255,0.03)",
+              minHeight: 150,
             }}
           >
             <p
@@ -41,7 +48,7 @@ export function MetricsPanel({ metrics }: { metrics: FinancialMetric[] }) {
 
             <p
               style={{
-                margin: "0 0 8px",
+                margin: "0 0 10px",
                 color: "var(--color-text-primary)",
                 fontSize: 24,
                 fontWeight: 700,
@@ -55,7 +62,7 @@ export function MetricsPanel({ metrics }: { metrics: FinancialMetric[] }) {
                 margin: 0,
                 color: "var(--color-text-secondary)",
                 fontSize: 13,
-                lineHeight: 1.4,
+                lineHeight: 1.45,
               }}
             >
               {metric.description}

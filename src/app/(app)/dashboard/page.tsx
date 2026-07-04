@@ -88,7 +88,15 @@ export default async function DashboardPage() {
 
       <MetricsPanel metrics={profile.metrics} />
 
-      <section className="dashboard-bottom-grid">
+      <section
+        className="dashboard-bottom-grid"
+        style={{
+          marginTop: 28,
+          marginBottom: 28,
+          gap: 24,
+          alignItems: "stretch",
+        }}
+      >
         {profile.cashFlowTrend.length >= 2 ? (
           <CashFlowChart
             points={profile.cashFlowTrend}
@@ -117,10 +125,12 @@ export default async function DashboardPage() {
         <AlertsPanel alerts={profile.alerts} />
       </section>
 
-      <ExecutivePanel
-        summary={profile.executiveSummary}
-        recommendations={profile.recommendations}
-      />
+      <div style={{ marginTop: 28 }}>
+        <ExecutivePanel
+          summary={profile.executiveSummary}
+          recommendations={profile.recommendations}
+        />
+      </div>
     </>
   );
 }
