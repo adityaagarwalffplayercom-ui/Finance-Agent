@@ -17,6 +17,13 @@ export type StatBlock = {
   delta: string;
 };
 
+export type ExecutiveRecommendation = {
+  id: string;
+  priority: "high" | "medium" | "low";
+  title: string;
+  action: string;
+};
+
 export type FinancialProfile = {
   hasData: boolean;
   processedCount: number;
@@ -29,6 +36,8 @@ export type FinancialProfile = {
   cashFlowTrend: number[];
   cashFlowCaption: string;
   alerts: Alert[];
+  executiveSummary: string;
+  recommendations: ExecutiveRecommendation[];
 };
 
 function emptyProfile(): FinancialProfile {
@@ -37,10 +46,10 @@ function emptyProfile(): FinancialProfile {
     processedCount: 0,
     healthScore: 50,
     healthLabel: "Not enough data yet",
-    revenue: { value: "—", delta: "No revenue documents processed yet" },
-    expenses: { value: "—", delta: "No expense documents processed yet" },
-    profit: { value: "—", delta: "Upload and process documents to see this" },
-    cash: { value: "—", delta: "Upload a bank statement to see this" },
+    revenue: { value: "-", delta: "No revenue documents processed yet" },
+    expenses: { value: "-", delta: "No expense documents processed yet" },
+    profit: { value: "-", delta: "Upload and process documents to see this" },
+    cash: { value: "-", delta: "Upload a bank statement to see this" },
     cashFlowTrend: [],
     cashFlowCaption: "Not enough data yet",
     alerts: [
@@ -50,6 +59,17 @@ function emptyProfile(): FinancialProfile {
         message: "Process your uploaded documents to start building a real financial picture.",
       },
     ],
+    executiveSummary:
+      "Not enough financial data is available yet. Upload and process documents to generate executive-level insights.",
+    recommendations: [
+      {
+        id: "upload-documents",
+        priority: "high",
+        title: "Upload financial documents",
+        action:
+          "Upload bank statements, invoices, bills, payroll, or financial statements so the AI can build your financial profile.",
+      },
+    ],
   };
 }
 
@@ -57,7 +77,7 @@ function riskLabel(riskLevel: "low" | "medium" | "high" | "critical") {
   if (riskLevel === "low") return "Healthy";
   if (riskLevel === "medium") return "Needs monitoring";
   if (riskLevel === "high") return "High financial risk";
-  return "Critical risk — act soon";
+  return "Critical risk - act soon";
 }
 
 function growthDelta(label: string, growthPct: number | null) {
@@ -87,19 +107,6 @@ function buildDashboardAlerts(
     });
   }
 
-  for (const recommendation of intelligence.recommendations.slice(0, 3)) {
-    alerts.push({
-      id: `recommendation-${recommendation.id}`,
-      severity:
-        recommendation.priority === "high"
-          ? "warning"
-          : recommendation.priority === "medium"
-            ? "info"
-            : "info",
-      message: `${recommendation.title}: ${recommendation.action}`,
-    });
-  }
-
   if (alerts.length === 0) {
     alerts.push({
       id: "all-clear",
@@ -111,7 +118,18 @@ function buildDashboardAlerts(
   const severityOrder = { critical: 0, warning: 1, info: 2 };
   alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
-  return alerts.slice(0, 6);
+  return alerts.slice(0, 5);
+}
+
+function buildExecutiveRecommendations(
+  intelligence: ReturnType<typeof buildFinancialIntelligence>,
+): ExecutiveRecommendation[] {
+  return intelligence.recommendations.slice(0, 5).map((recommendation) => ({
+    id: recommendation.id,
+    priority: recommendation.priority,
+    title: recommendation.title,
+    action: recommendation.action,
+  }));
 }
 
 export async function getFinancialProfile(userId: string): Promise<FinancialProfile> {
@@ -195,7 +213,7 @@ export async function getFinancialProfile(userId: string): Promise<FinancialProf
       value:
         intelligence.totals.cash !== null
           ? formatMoney(intelligence.totals.cash, currency)
-          : "—",
+          : "-",
       delta:
         intelligence.risk.cashRunwayDays !== null
           ? `Runway about ${intelligence.risk.cashRunwayDays} days`
@@ -210,5 +228,9 @@ export async function getFinancialProfile(userId: string): Promise<FinancialProf
         : "Process documents across more than one month to see a trend",
 
     alerts: buildDashboardAlerts(intelligence),
+
+    executiveSummary: intelligence.executiveSummary,
+
+    recommendations: buildExecutiveRecommendations(intelligence),
   };
 }

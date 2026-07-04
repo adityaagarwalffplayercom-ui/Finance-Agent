@@ -5,10 +5,15 @@ import { HealthGauge } from "./components/HealthGauge";
 import { StatCard } from "./components/StatCard";
 import { CashFlowChart } from "./components/CashFlowChart";
 import { AlertsPanel } from "./components/AlertsPanel";
+import { ExecutivePanel } from "./components/ExecutivePanel";
 
 export default async function DashboardPage() {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
   const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+
   const profile = session?.user
     ? await getFinancialProfile(session.user.id)
     : {
@@ -23,7 +28,11 @@ export default async function DashboardPage() {
         cashFlowTrend: [] as number[],
         cashFlowCaption: "Not enough data yet",
         alerts: [],
+        executiveSummary:
+          "Not enough financial data is available yet. Upload and process documents to generate executive-level insights.",
+        recommendations: [],
       };
+
   return (
     <>
       <header className="dashboard-header">
@@ -31,6 +40,7 @@ export default async function DashboardPage() {
           <p className="eyebrow">Business overview</p>
           <h1>Good to see you, {firstName}.</h1>
         </div>
+
         <span className="badge-sample">
           {profile.hasData
             ? `Live data — based on ${profile.processedCount} processed document${
@@ -39,26 +49,74 @@ export default async function DashboardPage() {
             : "No documents processed yet — process an uploaded document to see your real numbers"}
         </span>
       </header>
+
       <section className="dashboard-top-grid">
         <HealthGauge score={profile.healthScore} label={profile.healthLabel} />
+
         <div className="stat-grid">
-          <StatCard label="Revenue" value={profile.revenue.value} delta={profile.revenue.delta} tone="positive" />
-          <StatCard label="Expenses" value={profile.expenses.value} delta={profile.expenses.delta} tone="warning" />
-          <StatCard label="Profit" value={profile.profit.value} delta={profile.profit.delta} tone="warning" />
-          <StatCard label="Cash on hand" value={profile.cash.value} delta={profile.cash.delta} tone="warning" />
+          <StatCard
+            label="Revenue"
+            value={profile.revenue.value}
+            delta={profile.revenue.delta}
+            tone="positive"
+          />
+
+          <StatCard
+            label="Expenses"
+            value={profile.expenses.value}
+            delta={profile.expenses.delta}
+            tone="warning"
+          />
+
+          <StatCard
+            label="Profit"
+            value={profile.profit.value}
+            delta={profile.profit.delta}
+            tone={profile.profit.value.includes("-") ? "warning" : "positive"}
+          />
+
+          <StatCard
+            label="Cash on hand"
+            value={profile.cash.value}
+            delta={profile.cash.delta}
+            tone="neutral"
+          />
         </div>
       </section>
+
       <section className="dashboard-bottom-grid">
         {profile.cashFlowTrend.length >= 2 ? (
-          <CashFlowChart points={profile.cashFlowTrend} caption={profile.cashFlowCaption} />
+          <CashFlowChart
+            points={profile.cashFlowTrend}
+            caption={profile.cashFlowCaption}
+          />
         ) : (
-          <div className="cashflow-card">
-            <p className="section-title">Cash flow trend</p>
-            <p className="section-hint">{profile.cashFlowCaption}</p>
-          </div>
+          <section className="cashflow-card">
+            <div className="cashflow-header">
+              <p className="section-title">Cash flow trend</p>
+              <p className="section-hint">{profile.cashFlowCaption}</p>
+            </div>
+
+            <p
+              style={{
+                color: "var(--color-text-secondary)",
+                fontSize: 13,
+                lineHeight: 1.5,
+                margin: 0,
+              }}
+            >
+              Upload documents across multiple months to generate a proper cash flow trend.
+            </p>
+          </section>
         )}
+
         <AlertsPanel alerts={profile.alerts} />
       </section>
+
+      <ExecutivePanel
+        summary={profile.executiveSummary}
+        recommendations={profile.recommendations}
+      />
     </>
   );
 }
