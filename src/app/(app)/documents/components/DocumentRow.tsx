@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DocumentListItem } from "@/lib/documents";
@@ -240,6 +241,28 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
             justifyContent: "flex-end",
           }}
         >
+          <Link
+            href={`/documents/${doc.id}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              border: "1px solid var(--color-border)",
+              background: "rgba(255,255,255,0.04)",
+              color: "var(--color-text-primary)",
+              borderRadius: 14,
+              padding: "11px 14px",
+              fontSize: 13,
+              fontWeight: 800,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span aria-hidden="true">👁</span>
+            View details
+          </Link>
+
           {canProcess && (
             <button
               type="button"
@@ -381,7 +404,8 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
           }
         }
 
-        button:hover:not(:disabled) {
+        button:hover:not(:disabled),
+        a:hover {
           transform: translateY(-1px);
         }
       `}</style>
