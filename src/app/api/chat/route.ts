@@ -17,7 +17,13 @@ async function getCurrentUserId() {
   return session?.user?.id ?? null;
 }
 
-export async function GET() {
+function getAgentIdFromUrl(request: Request) {
+  const url = new URL(request.url);
+
+  return url.searchParams.get("agent") ?? "team";
+}
+
+export async function GET(request: Request) {
   try {
     const userId = await getCurrentUserId();
 
@@ -32,14 +38,17 @@ export async function GET() {
       );
     }
 
+    const agentId = getAgentIdFromUrl(request);
+
     const [messages, suggestions] = await Promise.all([
       getBusinessChatHistory(userId),
-      getBusinessChatSuggestions(userId),
+      getBusinessChatSuggestions(userId, agentId),
     ]);
 
     return NextResponse.json({
       messages,
       suggestions,
+      agentId,
     });
   } catch (error) {
     console.error("Load business chat error:", error);
@@ -72,8 +81,8 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    const question =
-      typeof body?.question === "string" ? body.question.trim() : "";
+    const question = typeof body?.question === "string" ? body.question.trim() : "";
+    const agentId = typeof body?.agentId === "string" ? body.agentId : "team";
 
     if (!question) {
       return NextResponse.json(
@@ -89,17 +98,20 @@ export async function POST(request: Request) {
     const result = await answerBusinessQuestion({
       userId,
       question,
+      agentId,
     });
 
     await saveBusinessChatExchange({
       userId,
-      question,
+      question: `[${result.agentName}] ${question}`,
       answer: result.answer,
     });
 
     return NextResponse.json({
       answer: result.answer,
       suggestions: result.suggestions,
+      agentId: result.agentId,
+      agentName: result.agentName,
     });
   } catch (error) {
     console.error("Business chat error:", error);

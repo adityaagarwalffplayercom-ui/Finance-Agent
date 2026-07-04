@@ -48,42 +48,58 @@ export type FinancialProfile = {
   metrics: FinancialMetric[];
 };
 
+type FinancialIntelligence = ReturnType<typeof buildFinancialIntelligence>;
+
 function emptyProfile(): FinancialProfile {
   return {
     hasData: false,
     processedCount: 0,
     healthScore: 50,
-    healthLabel: "Not enough data yet",
-    revenue: { value: "-", delta: "No revenue documents processed yet" },
-    expenses: { value: "-", delta: "No expense documents processed yet" },
-    profit: { value: "-", delta: "Upload and process documents to see this" },
-    cash: { value: "-", delta: "Upload a bank statement to see this" },
+    healthLabel: "Not enough trusted data yet",
+    revenue: {
+      value: "-",
+      delta: "No approved revenue documents yet",
+    },
+    expenses: {
+      value: "-",
+      delta: "No approved expense documents yet",
+    },
+    profit: {
+      value: "-",
+      delta: "Approve reviewed documents to see this",
+    },
+    cash: {
+      value: "-",
+      delta: "Approve a processed bank statement to see this",
+    },
     cashFlowTrend: [],
-    cashFlowCaption: "Not enough data yet",
+    cashFlowCaption: "Not enough approved data yet",
     alerts: [
       {
         id: "empty",
         severity: "info",
-        message: "Process your uploaded documents to start building a real financial picture.",
+        message:
+          "Approve reviewed AI extractions to start building a trusted financial picture.",
       },
     ],
     executiveSummary:
-      "Not enough financial data is available yet. Upload and process documents to generate executive-level insights.",
+      "Not enough approved financial data is available yet. Upload, process, and approve documents to generate executive-level insights.",
     recommendations: [
       {
-        id: "upload-documents",
+        id: "approve-documents",
         priority: "high",
-        title: "Upload financial documents",
+        title: "Approve reviewed financial documents",
         action:
-          "Upload bank statements, invoices, bills, payroll, or financial statements so the AI can build your financial profile.",
+          "Open processed documents, verify the AI extraction, and approve the documents that should be trusted for dashboard and AI analysis.",
       },
     ],
     metrics: [
       {
         id: "not-enough-data",
-        label: "Data status",
-        value: "Pending",
-        description: "Upload and process documents to calculate financial metrics.",
+        label: "Trusted data status",
+        value: "Pending approval",
+        description:
+          "Upload, process, and approve documents to calculate trusted financial metrics.",
       },
     ],
   };
@@ -93,21 +109,26 @@ function riskLabel(riskLevel: "low" | "medium" | "high" | "critical") {
   if (riskLevel === "low") return "Healthy";
   if (riskLevel === "medium") return "Needs monitoring";
   if (riskLevel === "high") return "High financial risk";
+
   return "Critical risk - act soon";
 }
 
 function formatPct(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "-";
+
   return `${value.toFixed(2)}%`;
 }
 
 function formatDays(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "-";
+
   return `${value} days`;
 }
 
 function growthDelta(label: string, growthPct: number | null) {
-  if (growthPct === null) return `From processed ${label} documents`;
+  if (growthPct === null) {
+    return `From approved ${label} documents`;
+  }
 
   if (growthPct > 0) {
     return `Up ${growthPct.toFixed(2)}% vs previous period`;
@@ -120,9 +141,7 @@ function growthDelta(label: string, growthPct: number | null) {
   return "No change vs previous period";
 }
 
-function buildDashboardAlerts(
-  intelligence: ReturnType<typeof buildFinancialIntelligence>,
-): Alert[] {
+function buildDashboardAlerts(intelligence: FinancialIntelligence): Alert[] {
   const alerts: Alert[] = [];
 
   for (const alert of intelligence.alerts) {
@@ -137,18 +156,23 @@ function buildDashboardAlerts(
     alerts.push({
       id: "all-clear",
       severity: "info",
-      message: "Everything looks steady based on what's been processed so far.",
+      message: "Everything looks steady based on approved documents so far.",
     });
   }
 
-  const severityOrder = { critical: 0, warning: 1, info: 2 };
+  const severityOrder = {
+    critical: 0,
+    warning: 1,
+    info: 2,
+  };
+
   alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
   return alerts.slice(0, 5);
 }
 
 function buildExecutiveRecommendations(
-  intelligence: ReturnType<typeof buildFinancialIntelligence>,
+  intelligence: FinancialIntelligence,
 ): ExecutiveRecommendation[] {
   return intelligence.recommendations.slice(0, 5).map((recommendation) => ({
     id: recommendation.id,
@@ -158,9 +182,7 @@ function buildExecutiveRecommendations(
   }));
 }
 
-function buildFinancialMetrics(
-  intelligence: ReturnType<typeof buildFinancialIntelligence>,
-): FinancialMetric[] {
+function buildFinancialMetrics(intelligence: FinancialIntelligence) {
   const revenue = intelligence.totals.revenue;
   const expenses = intelligence.totals.expenses;
   const currency = intelligence.currency;
@@ -191,7 +213,8 @@ function buildFinancialMetrics(
       id: "risk-level",
       label: "Risk level",
       value: intelligence.risk.riskLevel.toUpperCase(),
-      description: "Overall financial risk based on revenue, expenses, and cash signals.",
+      description:
+        "Overall financial risk based on revenue, expenses, and cash signals.",
     },
     {
       id: "monthly-burn-rate",
@@ -211,16 +234,23 @@ function buildFinancialMetrics(
   ];
 }
 
-export async function getFinancialProfile(userId: string): Promise<FinancialProfile> {
+export async function getFinancialProfile(
+  userId: string,
+): Promise<FinancialProfile> {
   const business = await prisma.business.findUnique({
-    where: { userId },
-    select: { currency: true },
+    where: {
+      userId,
+    },
+    select: {
+      currency: true,
+    },
   });
 
   const rawDocuments = await prisma.document.findMany({
     where: {
       userId,
       status: "PROCESSED",
+      reviewStatus: "APPROVED",
     },
     select: {
       id: true,
@@ -266,20 +296,16 @@ export async function getFinancialProfile(userId: string): Promise<FinancialProf
   return {
     hasData: true,
     processedCount: documents.length,
-
     healthScore: intelligence.risk.healthScore,
     healthLabel: riskLabel(intelligence.risk.riskLevel),
-
     revenue: {
       value: formatMoney(intelligence.totals.revenue, currency),
       delta: growthDelta("revenue", intelligence.trends.revenueGrowthPct),
     },
-
     expenses: {
       value: formatMoney(intelligence.totals.expenses, currency),
       delta: growthDelta("expense", intelligence.trends.expenseGrowthPct),
     },
-
     profit: {
       value: formatMoney(intelligence.totals.profit, currency),
       delta:
@@ -287,7 +313,6 @@ export async function getFinancialProfile(userId: string): Promise<FinancialProf
           ? `Margin ${intelligence.ratios.profitMarginPct?.toFixed(2) ?? "0.00"}%`
           : "Running a loss so far",
     },
-
     cash: {
       value:
         intelligence.totals.cash !== null
@@ -296,22 +321,16 @@ export async function getFinancialProfile(userId: string): Promise<FinancialProf
       delta:
         intelligence.risk.cashRunwayDays !== null
           ? `Runway about ${intelligence.risk.cashRunwayDays} days`
-          : "Upload a bank statement to see this",
+          : "Approve a bank statement to see this",
     },
-
     cashFlowTrend,
-
     cashFlowCaption:
       intelligence.trends.monthly.length >= 2
-        ? "Net monthly activity from your processed documents"
-        : "Process documents across more than one month to see a trend",
-
+        ? "Net monthly activity from approved documents"
+        : "Approve documents across more than one month to see a trend",
     alerts: buildDashboardAlerts(intelligence),
-
     executiveSummary: intelligence.executiveSummary,
-
     recommendations: buildExecutiveRecommendations(intelligence),
-
     metrics: buildFinancialMetrics(intelligence),
   };
 }

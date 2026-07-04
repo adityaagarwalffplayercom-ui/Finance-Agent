@@ -22,6 +22,11 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
+    label: "AI Team",
+    href: "/ai-team",
+    enabled: true,
+  },
+  {
     label: "AI Business Chat",
     href: "/chat",
     enabled: true,
@@ -34,44 +39,49 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
   async function handleSignOut() {
     await authClient.signOut();
+
     router.push("/login");
     router.refresh();
   }
 
   return (
     <aside className="sidebar">
-      <Brand />
+      <div>
+        <Brand />
 
-      <nav className="sidebar-nav" aria-label="Main navigation">
-        {NAV_ITEMS.map((item) => {
-          if (!item.enabled) {
+        <nav className="sidebar-nav" aria-label="Main navigation">
+          {NAV_ITEMS.map((item) => {
+            if (!item.enabled) {
+              return (
+                <span
+                  key={item.label}
+                  className="sidebar-link sidebar-link-disabled"
+                >
+                  {item.label}
+                  <span className="soon-tag">Soon</span>
+                </span>
+              );
+            }
+
+            const isActive =
+              pathname === item.href || pathname?.startsWith(`${item.href}/`);
+
             return (
-              <span
-                key={item.label}
-                className="sidebar-link sidebar-link-disabled"
+              <Link
+                key={item.href}
+                href={item.href}
+                className={
+                  isActive
+                    ? "sidebar-link sidebar-link-active"
+                    : "sidebar-link"
+                }
               >
                 {item.label}
-                <span className="soon-tag">Soon</span>
-              </span>
+              </Link>
             );
-          }
-
-          const isActive =
-            pathname === item.href || pathname?.startsWith(`${item.href}/`);
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`sidebar-link ${
-                isActive ? "sidebar-link-active" : ""
-              }`}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+          })}
+        </nav>
+      </div>
 
       <div className="sidebar-footer">
         <div>

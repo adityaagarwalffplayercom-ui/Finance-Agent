@@ -1,12 +1,15 @@
 import { prisma } from "./prisma";
 
-// Deliberately excludes `content` — the list view never needs the file
-// bytes, only metadata (and now, once processed, the extracted data —
-// that's small JSON, not the raw file, so it's cheap to include here).
+// Deliberately excludes `content`.
+// The list view only needs metadata, extracted JSON, and review status.
 export async function getDocumentsForUser(userId: string) {
   return prisma.document.findMany({
-    where: { userId },
-    orderBy: { uploadedAt: "desc" },
+    where: {
+      userId,
+    },
+    orderBy: {
+      uploadedAt: "desc",
+    },
     select: {
       id: true,
       fileName: true,
@@ -18,8 +21,13 @@ export async function getDocumentsForUser(userId: string) {
       extractedData: true,
       extractedAt: true,
       processingError: true,
+      reviewStatus: true,
+      reviewedAt: true,
+      reviewNote: true,
     },
   });
 }
 
-export type DocumentListItem = Awaited<ReturnType<typeof getDocumentsForUser>>[number];
+export type DocumentListItem = Awaited<
+  ReturnType<typeof getDocumentsForUser>
+>[number];
