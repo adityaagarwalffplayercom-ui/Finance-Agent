@@ -8,43 +8,61 @@ import { Brand } from "@/components/Brand";
 
 export default function LoginPage() {
   const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+
+    if (isSubmitting) return;
+
     setError(null);
     setIsSubmitting(true);
 
-    const { error: signInError } = await authClient.signIn.email({
-      email,
-      password,
-    });
+    try {
+      const result = await authClient.signIn.email({
+        email,
+        password,
+      });
 
-    setIsSubmitting(false);
+      if (result.error) {
+        setError(result.error.message ?? "Something went wrong. Try again.");
+        return;
+      }
 
-    if (signInError) {
-      setError(signInError.message ?? "Couldn't sign you in. Check your details and try again.");
-      return;
+      router.push("/dashboard");
+      router.refresh();
+    } catch (error) {
+      console.error("Sign in failed:", error);
+
+      setError(
+        error instanceof Error ? error.message : "Something went wrong. Try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (
     <main className="auth-page">
-      <div className="auth-glow" aria-hidden="true" />
-      <div className="auth-card">
-        <Brand />
-        <h1 className="auth-title">Welcome back</h1>
-        <p className="auth-subtitle">Your finance team kept watch while you were away.</p>
+      <div className="auth-glow" />
 
-        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+      <section className="auth-card">
+        <Brand />
+
+        <h1 className="auth-title">Welcome back</h1>
+
+        <p className="auth-subtitle">
+          Sign in to review your dashboard and finance documents.
+        </p>
+
+        <form className="auth-form" onSubmit={handleSubmit}>
           <label className="field">
-            <span>Work email</span>
+            Work email
             <input
               type="email"
               value={email}
@@ -55,7 +73,7 @@ export default function LoginPage() {
           </label>
 
           <label className="field">
-            <span>Password</span>
+            Password
             <input
               type="password"
               value={password}
@@ -65,11 +83,7 @@ export default function LoginPage() {
             />
           </label>
 
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
+          {error && <p className="form-error">{error}</p>}
 
           <button type="submit" className="btn-primary" disabled={isSubmitting}>
             {isSubmitting ? "Signing in…" : "Sign in"}
@@ -79,7 +93,7 @@ export default function LoginPage() {
         <p className="auth-footer">
           New here? <Link href="/signup">Create an account</Link>
         </p>
-      </div>
+      </section>
     </main>
   );
 }
