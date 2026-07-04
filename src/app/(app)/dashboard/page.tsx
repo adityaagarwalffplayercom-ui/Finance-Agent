@@ -6,6 +6,7 @@ import { StatCard } from "./components/StatCard";
 import { CashFlowChart } from "./components/CashFlowChart";
 import { AlertsPanel } from "./components/AlertsPanel";
 import { ExecutivePanel } from "./components/ExecutivePanel";
+import { MetricsPanel } from "./components/MetricsPanel";
 
 export default async function DashboardPage() {
   const session = await auth.api.getSession({
@@ -21,16 +22,17 @@ export default async function DashboardPage() {
         processedCount: 0,
         healthScore: 50,
         healthLabel: "Not enough data yet",
-        revenue: { value: "—", delta: "" },
-        expenses: { value: "—", delta: "" },
-        profit: { value: "—", delta: "" },
-        cash: { value: "—", delta: "" },
+        revenue: { value: "-", delta: "" },
+        expenses: { value: "-", delta: "" },
+        profit: { value: "-", delta: "" },
+        cash: { value: "-", delta: "" },
         cashFlowTrend: [] as number[],
         cashFlowCaption: "Not enough data yet",
         alerts: [],
         executiveSummary:
           "Not enough financial data is available yet. Upload and process documents to generate executive-level insights.",
         recommendations: [],
+        metrics: [],
       };
 
   return (
@@ -43,10 +45,10 @@ export default async function DashboardPage() {
 
         <span className="badge-sample">
           {profile.hasData
-            ? `Live data — based on ${profile.processedCount} processed document${
+            ? `Live data - based on ${profile.processedCount} processed document${
                 profile.processedCount === 1 ? "" : "s"
               }`
-            : "No documents processed yet — process an uploaded document to see your real numbers"}
+            : "No documents processed yet - process an uploaded document to see your real numbers"}
         </span>
       </header>
 
@@ -83,6 +85,8 @@ export default async function DashboardPage() {
           />
         </div>
       </section>
+
+      <MetricsPanel metrics={profile.metrics} />
 
       <section className="dashboard-bottom-grid">
         {profile.cashFlowTrend.length >= 2 ? (

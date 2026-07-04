@@ -24,6 +24,13 @@ export type ExecutiveRecommendation = {
   action: string;
 };
 
+export type FinancialMetric = {
+  id: string;
+  label: string;
+  value: string;
+  description: string;
+};
+
 export type FinancialProfile = {
   hasData: boolean;
   processedCount: number;
@@ -38,6 +45,7 @@ export type FinancialProfile = {
   alerts: Alert[];
   executiveSummary: string;
   recommendations: ExecutiveRecommendation[];
+  metrics: FinancialMetric[];
 };
 
 function emptyProfile(): FinancialProfile {
@@ -70,6 +78,14 @@ function emptyProfile(): FinancialProfile {
           "Upload bank statements, invoices, bills, payroll, or financial statements so the AI can build your financial profile.",
       },
     ],
+    metrics: [
+      {
+        id: "not-enough-data",
+        label: "Data status",
+        value: "Pending",
+        description: "Upload and process documents to calculate financial metrics.",
+      },
+    ],
   };
 }
 
@@ -78,6 +94,16 @@ function riskLabel(riskLevel: "low" | "medium" | "high" | "critical") {
   if (riskLevel === "medium") return "Needs monitoring";
   if (riskLevel === "high") return "High financial risk";
   return "Critical risk - act soon";
+}
+
+function formatPct(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "-";
+  return `${value.toFixed(2)}%`;
+}
+
+function formatDays(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "-";
+  return `${value} days`;
 }
 
 function growthDelta(label: string, growthPct: number | null) {
@@ -130,6 +156,59 @@ function buildExecutiveRecommendations(
     title: recommendation.title,
     action: recommendation.action,
   }));
+}
+
+function buildFinancialMetrics(
+  intelligence: ReturnType<typeof buildFinancialIntelligence>,
+): FinancialMetric[] {
+  const revenue = intelligence.totals.revenue;
+  const expenses = intelligence.totals.expenses;
+  const currency = intelligence.currency;
+
+  const revenueCoveragePct =
+    expenses > 0 ? Number(((revenue / expenses) * 100).toFixed(2)) : null;
+
+  return [
+    {
+      id: "profit-margin",
+      label: "Profit margin",
+      value: formatPct(intelligence.ratios.profitMarginPct),
+      description: "How much profit remains after expenses compared with revenue.",
+    },
+    {
+      id: "expense-ratio",
+      label: "Expense ratio",
+      value: formatPct(intelligence.ratios.expenseRatioPct),
+      description: "How much of revenue is consumed by expenses.",
+    },
+    {
+      id: "revenue-coverage",
+      label: "Revenue coverage",
+      value: formatPct(revenueCoveragePct),
+      description: "How much of your expenses are covered by revenue.",
+    },
+    {
+      id: "risk-level",
+      label: "Risk level",
+      value: intelligence.risk.riskLevel.toUpperCase(),
+      description: "Overall financial risk based on revenue, expenses, and cash signals.",
+    },
+    {
+      id: "monthly-burn-rate",
+      label: "Monthly burn",
+      value:
+        intelligence.risk.monthlyBurnRate !== null
+          ? formatMoney(intelligence.risk.monthlyBurnRate, currency)
+          : "-",
+      description: "Average monthly negative cash movement from recent months.",
+    },
+    {
+      id: "cash-runway",
+      label: "Cash runway",
+      value: formatDays(intelligence.risk.cashRunwayDays),
+      description: "Estimated days before cash runs out at the current burn rate.",
+    },
+  ];
 }
 
 export async function getFinancialProfile(userId: string): Promise<FinancialProfile> {
@@ -232,5 +311,7 @@ export async function getFinancialProfile(userId: string): Promise<FinancialProf
     executiveSummary: intelligence.executiveSummary,
 
     recommendations: buildExecutiveRecommendations(intelligence),
+
+    metrics: buildFinancialMetrics(intelligence),
   };
 }
