@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { getFinancialProfile } from "@/lib/financial-profile";
@@ -86,6 +87,53 @@ export default async function DashboardPage() {
         </div>
       </section>
 
+      <section
+        className="alerts-card"
+        style={{
+          marginTop: 28,
+          marginBottom: 28,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 20,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ maxWidth: 720 }}>
+          <p className="section-title">Ask your AI finance team</p>
+          <p
+            className="section-hint"
+            style={{
+              marginTop: 6,
+              lineHeight: 1.6,
+            }}
+          >
+            Turn these numbers into decisions. Ask why your health score is low,
+            what expenses to reduce, how to improve cash flow, or what documents
+            are missing.
+          </p>
+        </div>
+
+        <Link
+          href="/chat"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1px solid var(--color-border)",
+            background: "var(--color-accent)",
+            color: "white",
+            borderRadius: 14,
+            padding: "12px 18px",
+            textDecoration: "none",
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+          }}
+        >
+          Ask AI
+        </Link>
+      </section>
+
       <MetricsPanel metrics={profile.metrics} />
 
       <section
@@ -117,7 +165,8 @@ export default async function DashboardPage() {
                 margin: 0,
               }}
             >
-              Upload documents across multiple months to generate a proper cash flow trend.
+              Upload documents across multiple months to generate a proper cash
+              flow trend.
             </p>
           </section>
         )}
