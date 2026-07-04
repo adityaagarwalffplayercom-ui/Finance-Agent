@@ -6,47 +6,96 @@ import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { Brand } from "@/components/Brand";
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          "Signup request timed out. This usually means DATABASE_URL, BETTER_AUTH_SECRET, or auth URL is wrong in Vercel.",
+        ),
+      );
+    }, ms);
+
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
 export default function SignUpPage() {
   const router = useRouter();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+
+    if (isSubmitting) return;
+
     setError(null);
     setIsSubmitting(true);
 
-    const { error: signUpError } = await authClient.signUp.email({
-      name,
-      email,
-      password,
-    });
+    try {
+      const result = await withTimeout(
+        authClient.signUp.email({
+          name,
+          email,
+          password,
+        }),
+        12000,
+      );
 
-    setIsSubmitting(false);
+      if (result.error) {
+        setError(
+          result.error.message ??
+            "Account creation failed. Please check your details and try again.",
+        );
+        return;
+      }
 
-    if (signUpError) {
-      setError(signUpError.message ?? "Something went wrong. Try again.");
-      return;
+      router.push("/dashboard");
+      router.refresh();
+    } catch (error) {
+      console.error("Sign up failed:", error);
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Account creation failed. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (
-    <main className="auth-page">
-      <div className="auth-glow" aria-hidden="true" />
-      <div className="auth-card">
+    <main className="auth-shell">
+      <section className="auth-card">
         <Brand />
-        <h1 className="auth-title">Open your ledger</h1>
-        <p className="auth-subtitle">Set up the account your business runs on.</p>
 
-        <form className="auth-form" onSubmit={handleSubmit} noValidate>
-          <label className="field">
-            <span>Full name</span>
+        <div className="auth-copy">
+          <p className="eyebrow">Open your ledger</p>
+          <h1>Set up the account your business runs on.</h1>
+          <p>
+            Create your account, upload financial documents, approve trusted
+            data, and activate your AI finance team.
+          </p>
+        </div>
+
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label>
+            Full name
             <input
               type="text"
               value={name}
@@ -56,8 +105,8 @@ export default function SignUpPage() {
             />
           </label>
 
-          <label className="field">
-            <span>Work email</span>
+          <label>
+            Work email
             <input
               type="email"
               value={email}
@@ -67,8 +116,8 @@ export default function SignUpPage() {
             />
           </label>
 
-          <label className="field">
-            <span>Password</span>
+          <label>
+            Password
             <input
               type="password"
               value={password}
@@ -79,21 +128,17 @@ export default function SignUpPage() {
             />
           </label>
 
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
+          {error && <p className="form-error">{error}</p>}
 
-          <button type="submit" className="btn-primary" disabled={isSubmitting}>
-            {isSubmitting ? "Creating account…" : "Create account"}
+          <button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Creating account..." : "Create account"}
           </button>
         </form>
 
-        <p className="auth-footer">
+        <p className="auth-switch">
           Already have an account? <Link href="/login">Sign in</Link>
         </p>
-      </div>
+      </section>
     </main>
   );
 }
