@@ -11,9 +11,21 @@ type SidebarProps = {
 };
 
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/dashboard", enabled: true },
-  { label: "Documents", href: "/documents", enabled: true },
-  { label: "Ask your team", href: "#", enabled: false },
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    enabled: true,
+  },
+  {
+    label: "Documents",
+    href: "/documents",
+    enabled: true,
+  },
+  {
+    label: "AI Business Chat",
+    href: "/chat",
+    enabled: true,
+  },
 ];
 
 export function Sidebar({ userName, userEmail }: SidebarProps) {
@@ -30,24 +42,30 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
     <aside className="sidebar">
       <Brand />
 
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" aria-label="Main navigation">
         {NAV_ITEMS.map((item) => {
           if (!item.enabled) {
             return (
-              <span key={item.label} className="sidebar-link sidebar-link-disabled">
+              <span
+                key={item.label}
+                className="sidebar-link sidebar-link-disabled"
+              >
                 {item.label}
                 <span className="soon-tag">Soon</span>
               </span>
             );
           }
 
-          const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+          const isActive =
+            pathname === item.href || pathname?.startsWith(`${item.href}/`);
 
           return (
             <Link
-              key={item.label}
+              key={item.href}
               href={item.href}
-              className={isActive ? "sidebar-link sidebar-link-active" : "sidebar-link"}
+              className={`sidebar-link ${
+                isActive ? "sidebar-link-active" : ""
+              }`}
             >
               {item.label}
             </Link>
@@ -60,6 +78,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           <p className="sidebar-user-name">{userName}</p>
           <p className="sidebar-user-email">{userEmail}</p>
         </div>
+
         <button type="button" className="btn-ghost" onClick={handleSignOut}>
           Sign out
         </button>
