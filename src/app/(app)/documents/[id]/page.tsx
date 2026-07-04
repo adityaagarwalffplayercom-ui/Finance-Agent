@@ -20,18 +20,29 @@ type ExtractedLineItem = {
 
 type ExtractedData = {
   summary?: string;
+  description?: string;
   documentDate?: string;
+  date?: string;
   periodStart?: string;
+  startDate?: string;
   periodEnd?: string;
+  endDate?: string;
   currency?: string;
   totalAmount?: number;
+  amount?: number;
   revenue?: number;
+  totalRevenue?: number;
+  sales?: number;
   expenses?: number;
+  totalExpenses?: number;
   profit?: number;
+  netProfit?: number;
   loss?: number;
+  netLoss?: number;
   cash?: number;
   closingBalance?: number;
   openingBalance?: number;
+  balance?: number;
   lineItems?: ExtractedLineItem[];
   [key: string]: unknown;
 };
@@ -53,15 +64,36 @@ function formatDate(date: Date | string | null | undefined) {
 function formatMoney(value: unknown, currency = "INR") {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
 
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return value.toLocaleString("en-IN");
+  const absoluteValue = Math.abs(value);
+
+  let compactValue = value;
+  let suffix = "";
+
+  if (absoluteValue >= 1_000_000_000) {
+    compactValue = value / 1_000_000_000;
+    suffix = "B";
+  } else if (absoluteValue >= 1_000_000) {
+    compactValue = value / 1_000_000;
+    suffix = "M";
+  } else if (absoluteValue >= 1_000) {
+    compactValue = value / 1_000;
+    suffix = "K";
   }
+
+  const currencySymbols: Record<string, string> = {
+    INR: "₹",
+    USD: "$",
+    EUR: "€",
+    GBP: "£",
+  };
+
+  const symbol = currencySymbols[currency] ?? `${currency} `;
+
+  const formattedNumber = new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: compactValue % 1 === 0 ? 0 : 2,
+  }).format(compactValue);
+
+  return `${symbol}${formattedNumber}${suffix}`;
 }
 
 function formatBytes(bytes: number) {
@@ -107,7 +139,10 @@ function getNumber(data: ExtractedData | null, keys: string[]) {
 
   for (const key of keys) {
     const value = data[key];
-    if (typeof value === "number" && !Number.isNaN(value)) return value;
+
+    if (typeof value === "number" && !Number.isNaN(value)) {
+      return value;
+    }
   }
 
   return undefined;
@@ -118,7 +153,10 @@ function getString(data: ExtractedData | null, keys: string[]) {
 
   for (const key of keys) {
     const value = data[key];
-    if (typeof value === "string" && value.trim()) return value;
+
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
   }
 
   return undefined;
@@ -132,6 +170,21 @@ function getLineItems(data: ExtractedData | null) {
       item &&
       (typeof item.description === "string" || typeof item.amount === "number"),
   );
+}
+
+function getAmountMultiplier(category: string) {
+  // Most financial statements show values in thousands.
+  // Example: 22,700 means 22,700,000, so display it as ₹22.7M.
+  if (category === "FINANCIAL_STATEMENT") {
+    return 1000;
+  }
+
+  return 1;
+}
+
+function scaleAmount(value: number | undefined, multiplier: number) {
+  if (typeof value !== "number" || Number.isNaN(value)) return undefined;
+  return value * multiplier;
 }
 
 async function getSessionUserId() {
@@ -218,12 +271,21 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
   const data = document.extractedData as ExtractedData | null;
   const currency = getString(data, ["currency"]) ?? "INR";
 
+  const amountMultiplier = getAmountMultiplier(document.category);
+
   const totalAmount = getNumber(data, ["totalAmount", "amount"]);
   const revenue = getNumber(data, ["revenue", "totalRevenue", "sales"]);
   const expenses = getNumber(data, ["expenses", "totalExpenses"]);
   const profit = getNumber(data, ["profit", "netProfit"]);
   const loss = getNumber(data, ["loss", "netLoss"]);
   const cash = getNumber(data, ["cash", "closingBalance", "balance"]);
+
+  const scaledTotalAmount = scaleAmount(totalAmount, amountMultiplier);
+  const scaledRevenue = scaleAmount(revenue, amountMultiplier);
+  const scaledExpenses = scaleAmount(expenses, amountMultiplier);
+  const scaledProfit = scaleAmount(profit, amountMultiplier);
+  const scaledLoss = scaleAmount(loss, amountMultiplier);
+  const scaledCash = scaleAmount(cash, amountMultiplier);
 
   const summary =
     getString(data, ["summary", "description"]) ??
@@ -233,6 +295,15 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
   const periodStart = getString(data, ["periodStart", "startDate"]);
   const periodEnd = getString(data, ["periodEnd", "endDate"]);
   const lineItems = getLineItems(data);
+
+  const fallbackLineItemDate =
+    documentDate ??
+    periodEnd ??
+    periodStart ??
+    document.extractedAt ??
+    document.uploadedAt;
+
+  const fallbackLineItemCategory = prettyCategory(document.category);
 
   const isProcessed = document.status === "PROCESSED";
   const isApproved = document.reviewStatus === "APPROVED";
@@ -463,7 +534,9 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
       >
         <div className="stat-card">
           <p className="stat-label">Total amount</p>
-          <p className="stat-value">{formatMoney(totalAmount, currency)}</p>
+          <p className="stat-value">
+            {formatMoney(scaledTotalAmount, currency)}
+          </p>
           <p className="stat-delta stat-delta-neutral">
             Main extracted amount
           </p>
@@ -471,7 +544,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
 
         <div className="stat-card">
           <p className="stat-label">Revenue</p>
-          <p className="stat-value">{formatMoney(revenue, currency)}</p>
+          <p className="stat-value">{formatMoney(scaledRevenue, currency)}</p>
           <p className="stat-delta stat-delta-positive">
             Extracted from AI data
           </p>
@@ -479,7 +552,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
 
         <div className="stat-card">
           <p className="stat-label">Expenses</p>
-          <p className="stat-value">{formatMoney(expenses, currency)}</p>
+          <p className="stat-value">{formatMoney(scaledExpenses, currency)}</p>
           <p className="stat-delta stat-delta-warning">
             Extracted from AI data
           </p>
@@ -488,10 +561,10 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
         <div className="stat-card">
           <p className="stat-label">Profit / Loss</p>
           <p className="stat-value">
-            {profit !== undefined
-              ? formatMoney(profit, currency)
-              : loss !== undefined
-                ? formatMoney(-Math.abs(loss), currency)
+            {scaledProfit !== undefined
+              ? formatMoney(scaledProfit, currency)
+              : scaledLoss !== undefined
+                ? formatMoney(-Math.abs(scaledLoss), currency)
                 : "-"}
           </p>
           <p className="stat-delta stat-delta-neutral">
@@ -559,7 +632,13 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
                   : "-",
               ],
               ["Currency", currency],
-              ["Cash / balance", formatMoney(cash, currency)],
+              ["Cash / balance", formatMoney(scaledCash, currency)],
+              [
+                "Amount scale",
+                amountMultiplier === 1000
+                  ? "Values displayed after ×1000 financial statement scaling"
+                  : "Actual extracted values",
+              ],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -664,69 +743,64 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
               </thead>
 
               <tbody>
-                {lineItems.slice(0, 30).map((item, index) => (
-                  <tr key={`${item.description ?? "item"}-${index}`}>
-                    <td
-                      style={{
-                        padding: "13px 10px 13px 0",
-                        color: "var(--color-text-primary)",
-                        fontSize: 14,
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      {item.description ?? "-"}
-                    </td>
+                {lineItems.map((item, index) => {
+                  const scaledLineAmount =
+                    typeof item.amount === "number"
+                      ? item.amount * amountMultiplier
+                      : undefined;
 
-                    <td
-                      style={{
-                        padding: "13px 10px",
-                        color: "var(--color-text-secondary)",
-                        fontSize: 13,
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      {item.category ?? "-"}
-                    </td>
+                  return (
+                    <tr key={`${item.description ?? "item"}-${index}`}>
+                      <td
+                        style={{
+                          padding: "13px 10px 13px 0",
+                          color: "var(--color-text-primary)",
+                          fontSize: 14,
+                          borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        {item.description ?? "-"}
+                      </td>
 
-                    <td
-                      style={{
-                        padding: "13px 10px",
-                        color: "var(--color-text-secondary)",
-                        fontSize: 13,
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      {formatDate(item.date)}
-                    </td>
+                      <td
+                        style={{
+                          padding: "13px 10px",
+                          color: "var(--color-text-secondary)",
+                          fontSize: 13,
+                          borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        {item.category ?? fallbackLineItemCategory}
+                      </td>
 
-                    <td
-                      style={{
-                        padding: "13px 0 13px 10px",
-                        color: "var(--color-text-primary)",
-                        fontSize: 14,
-                        fontWeight: 800,
-                        textAlign: "right",
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      {formatMoney(item.amount, currency)}
-                    </td>
-                  </tr>
-                ))}
+                      <td
+                        style={{
+                          padding: "13px 10px",
+                          color: "var(--color-text-secondary)",
+                          fontSize: 13,
+                          borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        {formatDate(item.date ?? fallbackLineItemDate)}
+                      </td>
+
+                      <td
+                        style={{
+                          padding: "13px 0 13px 10px",
+                          color: "var(--color-text-primary)",
+                          fontSize: 14,
+                          fontWeight: 800,
+                          textAlign: "right",
+                          borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        {formatMoney(scaledLineAmount, currency)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-
-            {lineItems.length > 30 && (
-              <p
-                style={{
-                  margin: "14px 0 0",
-                  color: "var(--color-text-secondary)",
-                  fontSize: 13,
-                }}
-              >
-                Showing first 30 items only.
-              </p>
-            )}
           </div>
         )}
       </section>
@@ -736,7 +810,8 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
           <div>
             <p className="section-title">Raw AI extraction</p>
             <p className="section-hint">
-              Developer view for checking Gemini output.
+              Developer view for checking Gemini output. Raw values are shown
+              exactly as AI saved them.
             </p>
           </div>
         </div>
