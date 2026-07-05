@@ -11,31 +11,12 @@ type SidebarProps = {
 };
 
 const NAV_ITEMS = [
-  {
-    label: "Dashboard",
-    href: "/dashboard",
-    enabled: true,
-  },
-  {
-    label: "Documents",
-    href: "/documents",
-    enabled: true,
-  },
-  {
-    label: "AI Team",
-    href: "/ai-team",
-    enabled: true,
-  },
-  {
-    label: "AI Business Chat",
-    href: "/chat",
-    enabled: true,
-  },
-  {
-    label: "Activity",
-    href: "/activity",
-    enabled: true,
-  },
+  { label: "Dashboard", href: "/dashboard", enabled: true },
+  { label: "Documents", href: "/documents", enabled: true },
+  { label: "AI Team", href: "/ai-team", enabled: true },
+  { label: "AI Business Chat", href: "/chat", enabled: true },
+  { label: "Reports", href: "/reports/cfo", enabled: true },
+  { label: "Activity", href: "/activity", enabled: true },
 ];
 
 export function Sidebar({ userName, userEmail }: SidebarProps) {

@@ -424,10 +424,12 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
   ]);
 
   const assets = getNumberValue(extracted, ["assets", "totalAssets"]);
+
   const liabilities = getNumberValue(extracted, [
     "liabilities",
     "totalLiabilities",
   ]);
+
   const equity = getNumberValue(extracted, ["equity", "totalEquity"]);
 
   return (
@@ -512,21 +514,26 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
         }}
       >
         <div
-          className="section-heading"
           style={{
+            display: "flex",
+            justifyContent: "space-between",
             alignItems: "flex-start",
+            gap: 24,
+            flexWrap: "wrap",
           }}
         >
           <div
             style={{
               display: "grid",
-              gap: 6,
+              gap: 12,
+              maxWidth: 760,
             }}
           >
             <p
               className="section-title"
               style={{
                 margin: 0,
+                lineHeight: 1.25,
               }}
             >
               Extraction overview
@@ -536,7 +543,8 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
               className="section-hint"
               style={{
                 margin: 0,
-                lineHeight: 1.55,
+                lineHeight: 1.65,
+                maxWidth: 720,
               }}
             >
               These are the main numbers the AI detected from this document.
@@ -548,6 +556,10 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
             target="_blank"
             rel="noreferrer"
             className="btn-ghost"
+            style={{
+              flex: "0 0 auto",
+              marginTop: 2,
+            }}
           >
             Open original file
           </a>
