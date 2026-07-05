@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { DemoSampleDataButton } from "../dashboard/components/DemoSampleDataButton";
 
 type StepStatus = "done" | "active" | "locked";
 
@@ -250,6 +249,255 @@ function ReadinessMetric({
   );
 }
 
+function ReadyFeature({
+  icon,
+  title,
+  hint,
+}: {
+  icon: string;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(255,255,255,0.08)",
+        background: "rgba(0,0,0,0.12)",
+        borderRadius: 18,
+        padding: 14,
+        display: "flex",
+        gap: 12,
+        alignItems: "flex-start",
+      }}
+    >
+      <span
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 14,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(46,213,115,0.10)",
+          border: "1px solid rgba(46,213,115,0.24)",
+          fontSize: 17,
+          flex: "0 0 auto",
+        }}
+      >
+        {icon}
+      </span>
+
+      <span
+        style={{
+          display: "grid",
+          gap: 4,
+        }}
+      >
+        <strong
+          style={{
+            color: "var(--color-text-primary)",
+            fontSize: 13,
+            lineHeight: 1.25,
+          }}
+        >
+          {title}
+        </strong>
+
+        <span
+          style={{
+            color: "var(--color-text-secondary)",
+            fontSize: 12,
+            lineHeight: 1.45,
+          }}
+        >
+          {hint}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function WorkspaceReadyCard() {
+  return (
+    <section
+      style={{
+        border: "1px solid rgba(46,213,115,0.24)",
+        background:
+          "radial-gradient(circle at top left, rgba(46,213,115,0.16), transparent 34%), radial-gradient(circle at bottom right, rgba(245,158,11,0.12), transparent 32%), linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025))",
+        borderRadius: 30,
+        padding: 24,
+        display: "grid",
+        gap: 20,
+        position: "relative",
+        overflow: "hidden",
+        boxShadow:
+          "0 26px 90px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          right: -70,
+          top: -70,
+          width: 180,
+          height: 180,
+          borderRadius: "50%",
+          background: "rgba(46,213,115,0.10)",
+        }}
+      />
+
+      <div
+        style={{
+          position: "relative",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)",
+          gap: 20,
+          alignItems: "center",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gap: 14,
+            minWidth: 0,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 20,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background:
+                  "linear-gradient(135deg, rgba(46,213,115,0.22), rgba(255,255,255,0.05))",
+                border: "1px solid rgba(46,213,115,0.34)",
+                fontSize: 24,
+                boxShadow: "0 18px 42px rgba(46,213,115,0.10)",
+              }}
+            >
+              ✅
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(46,213,115,0.30)",
+                background: "rgba(46,213,115,0.10)",
+                color: "#7bed9f",
+                borderRadius: 999,
+                padding: "8px 11px",
+                fontSize: 12,
+                fontWeight: 950,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Workspace ready
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                color: "var(--color-text-primary)",
+                fontSize: 30,
+                lineHeight: 1.08,
+                fontWeight: 950,
+              }}
+            >
+              Your finance workspace is live
+            </h2>
+
+            <p
+              style={{
+                margin: 0,
+                color: "var(--color-text-secondary)",
+                fontSize: 14,
+                lineHeight: 1.65,
+                maxWidth: 720,
+              }}
+            >
+              Business profile and approved documents are connected. You can now
+              use the executive dashboard, ask the AI finance team questions,
+              and export a CFO-style report.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <Link
+              href="/dashboard"
+              className="btn-ghost"
+              style={{
+                border: "1px solid rgba(46,213,115,0.32)",
+                background: "rgba(46,213,115,0.10)",
+                color: "#7bed9f",
+              }}
+            >
+              Open dashboard
+            </Link>
+
+            <Link href="/chat" className="btn-ghost">
+              Ask AI team
+            </Link>
+
+            <Link href="/reports/cfo" className="btn-ghost">
+              Export CFO report
+            </Link>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <ReadyFeature
+            icon="📊"
+            title="Dashboard connected"
+            hint="Approved documents are powering live financial insights."
+          />
+
+          <ReadyFeature
+            icon="🤖"
+            title="AI finance team ready"
+            hint="Chat answers now use your business profile and trusted data."
+          />
+
+          <ReadyFeature
+            icon="📄"
+            title="CFO report enabled"
+            hint="Generate a printable report for review or presentation."
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default async function OnboardingPage() {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -264,7 +512,6 @@ export default async function OnboardingPage() {
     totalDocuments,
     approvedDocuments,
     needsReviewDocuments,
-    failedDocuments,
   ] = await Promise.all([
     prisma.business.findUnique({
       where: {
@@ -298,12 +545,6 @@ export default async function OnboardingPage() {
         reviewStatus: "NEEDS_REVIEW",
       },
     }),
-    prisma.document.count({
-      where: {
-        userId: session.user.id,
-        status: "FAILED",
-      },
-    }),
   ]);
 
   const hasBusinessProfile = Boolean(business?.name?.trim());
@@ -319,16 +560,27 @@ export default async function OnboardingPage() {
       ? "done"
       : "active";
 
-  const reviewStepStatus: StepStatus = !hasBusinessProfile || !hasUploadedDocuments
-    ? "locked"
-    : hasApprovedDocuments
-      ? "done"
-      : "active";
+  const reviewStepStatus: StepStatus =
+    !hasBusinessProfile || !hasUploadedDocuments
+      ? "locked"
+      : hasApprovedDocuments
+        ? "done"
+        : "active";
 
   const dashboardStepStatus: StepStatus = isDashboardReady ? "done" : "locked";
 
   return (
     <>
+      <style>
+        {`
+          @media (max-width: 980px) {
+            .setup-ready-grid {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}
+      </style>
+
       <header
         style={{
           marginBottom: 24,
@@ -384,9 +636,9 @@ export default async function OnboardingPage() {
                 lineHeight: 1.65,
               }}
             >
-              Complete these steps once. After business profile and approved
-              financial documents are ready, the dashboard, AI chat, and CFO
-              report become fully personalized.
+              Complete these steps once. After your business profile and
+              approved financial documents are ready, the dashboard, AI chat,
+              and CFO report become fully personalized.
             </p>
           </div>
 
@@ -422,7 +674,11 @@ export default async function OnboardingPage() {
           <ReadinessMetric
             label="Business profile"
             value={hasBusinessProfile ? "Ready" : "Missing"}
-            hint={hasBusinessProfile ? "Company context connected" : "Add business details"}
+            hint={
+              hasBusinessProfile
+                ? "Company context connected"
+                : "Add business details"
+            }
             tone={hasBusinessProfile ? "green" : "yellow"}
           />
 
@@ -472,7 +728,9 @@ export default async function OnboardingPage() {
           hint="Upload bank statements, invoices, payroll, bills, or financial statements."
           status={uploadStepStatus}
           href="/documents"
-          actionLabel={hasUploadedDocuments ? "View documents" : "Upload documents"}
+          actionLabel={
+            hasUploadedDocuments ? "View documents" : "Upload documents"
+          }
         />
 
         <StepCard
@@ -494,72 +752,7 @@ export default async function OnboardingPage() {
         />
       </section>
 
-      <section
-        className="section-card"
-        style={{
-          display: "grid",
-          gap: 16,
-          border: "1px solid rgba(245,158,11,0.22)",
-          background:
-            "linear-gradient(135deg, rgba(245,158,11,0.08), rgba(255,255,255,0.025))",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 16,
-            alignItems: "flex-start",
-            flexWrap: "wrap",
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gap: 6,
-              maxWidth: 760,
-            }}
-          >
-            <p
-              className="section-title"
-              style={{
-                margin: 0,
-              }}
-            >
-              Demo mode for hackathon
-            </p>
-
-            <p
-              className="section-hint"
-              style={{
-                margin: 0,
-                lineHeight: 1.55,
-              }}
-            >
-              Use sample data when Gemini quota is low or when you need an
-              instant demo. It creates approved sample documents and does not
-              delete your real uploads.
-            </p>
-          </div>
-
-          <DemoSampleDataButton />
-        </div>
-
-        {failedDocuments > 0 && (
-          <p
-            style={{
-              margin: 0,
-              color: "#ff8a95",
-              fontSize: 13,
-              lineHeight: 1.55,
-              fontWeight: 750,
-            }}
-          >
-            {failedDocuments} document(s) failed processing. Open Documents to
-            retry or remove them.
-          </p>
-        )}
-      </section>
+      {isDashboardReady && <WorkspaceReadyCard />}
     </>
   );
 }

@@ -2,478 +2,474 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import {
-  getAiTeam,
-  type AiAgent,
-  type AiAgentStatus,
-} from "@/lib/ai-team";
+import { prisma } from "@/lib/prisma";
+import { getFinancialProfile } from "@/lib/financial-profile";
 
-const STATUS_STYLE: Record<
-  AiAgentStatus,
-  {
-    label: string;
-    color: string;
-    background: string;
-    border: string;
-  }
-> = {
-  active: {
-    label: "Active",
-    color: "#7bed9f",
-    background: "rgba(46,213,115,0.10)",
-    border: "rgba(46,213,115,0.28)",
-  },
-  waiting: {
-    label: "Waiting",
-    color: "#8abfff",
-    background: "rgba(88,166,255,0.10)",
-    border: "rgba(88,166,255,0.28)",
-  },
-  warning: {
-    label: "Attention",
-    color: "#ffd166",
-    background: "rgba(255,193,7,0.10)",
-    border: "rgba(255,193,7,0.28)",
-  },
-  critical: {
-    label: "Critical",
-    color: "#ff8a95",
-    background: "rgba(255,71,87,0.10)",
-    border: "rgba(255,71,87,0.28)",
-  },
+type Tone = "sage" | "amber" | "gold" | "danger" | "neutral";
+
+type AgentCardData = {
+  id: string;
+  icon: string;
+  name: string;
+  role: string;
+  insight: string;
+  tone: Tone;
 };
 
-function StatusBadge({ status }: { status: AiAgentStatus }) {
-  const style = STATUS_STYLE[status];
-
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        border: `1px solid ${style.border}`,
-        background: style.background,
-        color: style.color,
-        borderRadius: 999,
-        padding: "7px 10px",
-        fontSize: 12,
-        fontWeight: 850,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {style.label}
-    </span>
-  );
+function getToneStyle(tone: Tone) {
+  return {
+    sage: {
+      color: "var(--color-sage)",
+      border: "rgba(46,213,115,0.28)",
+      background: "rgba(46,213,115,0.085)",
+      glow: "rgba(46,213,115,0.12)",
+    },
+    amber: {
+      color: "var(--color-amber)",
+      border: "rgba(245,158,11,0.30)",
+      background: "rgba(245,158,11,0.095)",
+      glow: "rgba(245,158,11,0.13)",
+    },
+    gold: {
+      color: "var(--color-gold)",
+      border: "rgba(255,209,102,0.30)",
+      background: "rgba(255,209,102,0.085)",
+      glow: "rgba(255,209,102,0.12)",
+    },
+    danger: {
+      color: "var(--color-danger)",
+      border: "rgba(255,138,149,0.30)",
+      background: "rgba(255,138,149,0.085)",
+      glow: "rgba(255,138,149,0.10)",
+    },
+    neutral: {
+      color: "var(--color-text-secondary)",
+      border: "var(--color-border)",
+      background: "rgba(255,255,255,0.045)",
+      glow: "rgba(255,255,255,0.06)",
+    },
+  }[tone];
 }
 
-function getAgentIcon(agentId: string) {
-  if (agentId === "cfo") return "📊";
-  if (agentId === "accountant") return "📚";
-  if (agentId === "analyst") return "📈";
-  if (agentId === "cashflow") return "💧";
-  if (agentId === "consultant") return "🧠";
-  if (agentId === "risk") return "🛡️";
-  return "🤖";
+function displayValue(value?: string | null) {
+  return value && value.trim().length > 0 ? value.trim() : "Not set";
 }
 
-function getAgentQuestion(agentId: string) {
-  if (agentId === "cfo") return "Give me a CFO summary of my business.";
-  if (agentId === "accountant") return "Which documents are missing?";
-  if (agentId === "analyst") return "Analyze my profit margin.";
-  if (agentId === "cashflow") return "Can you calculate my cash runway?";
-  if (agentId === "consultant") return "Give me a 7-day action plan.";
-  if (agentId === "risk") return "What is my biggest financial risk?";
-  return "Give me an overall summary of my business.";
+function formatBusinessLine({
+  name,
+  industry,
+  country,
+}: {
+  name?: string | null;
+  industry?: string | null;
+  country?: string | null;
+}) {
+  const businessName = displayValue(name);
+  const businessIndustry = displayValue(industry);
+  const businessCountry = displayValue(country);
+
+  if (
+    businessName === "Not set" &&
+    businessIndustry === "Not set" &&
+    businessCountry === "Not set"
+  ) {
+    return "Connect business profile";
+  }
+
+  return `${businessName} · ${businessIndustry} · ${businessCountry}`;
 }
 
-function getAgentHref(agentId: string) {
-  return `/chat?agent=${agentId}`;
-}
-
-function MiniStat({
+function StatCard({
   label,
   value,
   hint,
-  tone = "neutral",
+  tone,
 }: {
   label: string;
   value: string | number;
   hint: string;
-  tone?: "neutral" | "good" | "warning" | "danger";
+  tone: Tone;
 }) {
-  const toneStyle =
-    tone === "good"
-      ? {
-          border: "rgba(46,213,115,0.22)",
-          background: "rgba(46,213,115,0.07)",
-        }
-      : tone === "warning"
-        ? {
-            border: "rgba(255,193,7,0.22)",
-            background: "rgba(255,193,7,0.07)",
-          }
-        : tone === "danger"
-          ? {
-              border: "rgba(255,71,87,0.22)",
-              background: "rgba(255,71,87,0.07)",
-            }
-          : {
-              border: "var(--color-border)",
-              background: "rgba(255,255,255,0.035)",
-            };
+  const toneStyle = getToneStyle(tone);
 
   return (
-    <div
+    <article
       style={{
         border: `1px solid ${toneStyle.border}`,
-        background: toneStyle.background,
-        borderRadius: 18,
-        padding: 16,
+        background: `linear-gradient(135deg, ${toneStyle.background}, rgba(255,255,255,0.024))`,
+        borderRadius: 22,
+        padding: 18,
         display: "grid",
-        gap: 7,
+        gap: 10,
+        minHeight: 132,
+        minWidth: 0,
+        boxShadow: `0 18px 48px ${toneStyle.glow}, inset 0 1px 0 rgba(255,255,255,0.05)`,
       }}
     >
       <p
         style={{
           margin: 0,
           color: "var(--color-text-secondary)",
-          fontSize: 12,
-          fontWeight: 800,
+          fontSize: 11,
+          fontWeight: 950,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
+          lineHeight: 1.2,
         }}
       >
         {label}
       </p>
 
-      <p
+      <strong
         style={{
-          margin: 0,
           color: "var(--color-text-primary)",
-          fontSize: 26,
+          fontSize: 34,
+          lineHeight: 1,
           fontWeight: 950,
-          letterSpacing: "-0.04em",
+          letterSpacing: "-0.05em",
+          overflowWrap: "anywhere",
         }}
       >
         {value}
-      </p>
+      </strong>
 
       <p
         style={{
           margin: 0,
-          color: "var(--color-text-secondary)",
-          fontSize: 13,
+          color: toneStyle.color,
+          fontSize: 12,
           lineHeight: 1.45,
+          fontWeight: 750,
+          overflowWrap: "anywhere",
         }}
       >
         {hint}
       </p>
-    </div>
+    </article>
   );
 }
 
-function AgentCard({ agent }: { agent: AiAgent }) {
-  const style = STATUS_STYLE[agent.status];
+function WorkflowCard({
+  icon,
+  title,
+  hint,
+}: {
+  icon: string;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <article
+      style={{
+        border: "1px solid rgba(245,158,11,0.14)",
+        background:
+          "linear-gradient(135deg, rgba(245,158,11,0.060), rgba(255,255,255,0.024))",
+        borderRadius: 20,
+        padding: 16,
+        display: "flex",
+        gap: 12,
+        alignItems: "flex-start",
+        minWidth: 0,
+        minHeight: 116,
+        overflow: "hidden",
+      }}
+    >
+      <span
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 15,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(245,158,11,0.11)",
+          border: "1px solid rgba(245,158,11,0.24)",
+          fontSize: 17,
+          flex: "0 0 auto",
+        }}
+      >
+        {icon}
+      </span>
+
+      <span
+        style={{
+          display: "grid",
+          gap: 6,
+          minWidth: 0,
+        }}
+      >
+        <strong
+          style={{
+            color: "var(--color-text-primary)",
+            fontSize: 14,
+            lineHeight: 1.25,
+            overflowWrap: "anywhere",
+          }}
+        >
+          {title}
+        </strong>
+
+        <span
+          style={{
+            color: "var(--color-text-secondary)",
+            fontSize: 12,
+            lineHeight: 1.55,
+            overflowWrap: "anywhere",
+          }}
+        >
+          {hint}
+        </span>
+      </span>
+    </article>
+  );
+}
+
+function AgentCard({ agent }: { agent: AgentCardData }) {
+  const toneStyle = getToneStyle(agent.tone);
 
   return (
     <article
       style={{
-        border: "1px solid var(--color-border)",
+        border: `1px solid ${toneStyle.border}`,
         background:
-          "linear-gradient(135deg, rgba(255,255,255,0.052), rgba(255,255,255,0.022))",
+          "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.024))",
         borderRadius: 24,
-        padding: 20,
-        display: "grid",
-        gap: 18,
-        position: "relative",
+        padding: 18,
+        minHeight: 330,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        gap: 16,
+        minWidth: 0,
+        boxShadow:
+          "0 18px 60px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.052)",
         overflow: "hidden",
       }}
     >
       <div
         style={{
-          position: "absolute",
-          width: 170,
-          height: 170,
-          borderRadius: "50%",
-          background: style.background,
-          filter: "blur(42px)",
-          top: -70,
-          right: -70,
-          pointerEvents: "none",
-        }}
-      />
-
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 14,
-          alignItems: "flex-start",
+          display: "grid",
+          gap: 16,
+          minWidth: 0,
+          flex: 1,
         }}
       >
         <div
           style={{
             display: "flex",
+            justifyContent: "space-between",
             gap: 12,
             alignItems: "flex-start",
+            minWidth: 0,
           }}
         >
           <div
             style={{
-              width: 46,
-              height: 46,
-              borderRadius: 16,
-              border: "1px solid var(--color-border)",
-              background: "rgba(255,255,255,0.045)",
-              display: "grid",
-              placeItems: "center",
-              fontSize: 22,
-              flexShrink: 0,
+              display: "flex",
+              gap: 12,
+              minWidth: 0,
+              flex: 1,
             }}
           >
-            {getAgentIcon(agent.id)}
-          </div>
-
-          <div>
-            <h2
+            <span
               style={{
-                margin: "0 0 5px",
-                color: "var(--color-text-primary)",
+                width: 44,
+                height: 44,
+                borderRadius: 16,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: toneStyle.background,
+                border: `1px solid ${toneStyle.border}`,
                 fontSize: 19,
-                fontWeight: 950,
-                letterSpacing: "-0.03em",
+                flex: "0 0 auto",
+                boxShadow: `0 14px 34px ${toneStyle.glow}`,
               }}
             >
-              {agent.name}
-            </h2>
+              {agent.icon}
+            </span>
 
-            <p
+            <div
               style={{
-                margin: 0,
-                color: "var(--color-text-secondary)",
-                fontSize: 13,
-                lineHeight: 1.45,
+                display: "grid",
+                gap: 6,
+                minWidth: 0,
               }}
             >
-              {agent.title}
-            </p>
+              <h2
+                style={{
+                  margin: 0,
+                  color: "var(--color-text-primary)",
+                  fontSize: 20,
+                  lineHeight: 1.15,
+                  fontWeight: 950,
+                  letterSpacing: "-0.04em",
+                  overflowWrap: "break-word",
+                }}
+              >
+                {agent.name}
+              </h2>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--color-text-secondary)",
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  fontWeight: 700,
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {agent.role}
+              </p>
+            </div>
           </div>
+
+          <span
+            style={{
+              border: "1px solid rgba(46,213,115,0.28)",
+              background: "rgba(46,213,115,0.10)",
+              color: "var(--color-sage)",
+              borderRadius: 999,
+              padding: "7px 10px",
+              fontSize: 11,
+              fontWeight: 950,
+              lineHeight: 1,
+              whiteSpace: "nowrap",
+              flex: "0 0 auto",
+            }}
+          >
+            Active
+          </span>
         </div>
-
-        <StatusBadge status={agent.status} />
-      </div>
-
-      <p
-        style={{
-          position: "relative",
-          zIndex: 1,
-          margin: 0,
-          color: "var(--color-text-secondary)",
-          fontSize: 14,
-          lineHeight: 1.65,
-        }}
-      >
-        {agent.summary}
-      </p>
-
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          border: `1px solid ${style.border}`,
-          background: style.background,
-          borderRadius: 18,
-          padding: 14,
-          display: "grid",
-          gap: 8,
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            color: style.color,
-            fontSize: 12,
-            fontWeight: 900,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
-          Current signal
-        </p>
 
         <p
           style={{
             margin: 0,
             color: "var(--color-text-primary)",
             fontSize: 14,
-            lineHeight: 1.55,
-            fontWeight: 700,
+            lineHeight: 1.72,
+            fontWeight: 760,
+            minWidth: 0,
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
           }}
         >
-          {agent.currentFindings[0] ?? "Waiting for approved financial data."}
+          {agent.insight}
         </p>
       </div>
 
       <div
         style={{
-          position: "relative",
-          zIndex: 1,
-          display: "grid",
-          gap: 10,
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            color: "var(--color-text-primary)",
-            fontSize: 13,
-            fontWeight: 900,
-          }}
-        >
-          What this agent checks
-        </p>
-
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-          }}
-        >
-          {agent.focusAreas.slice(0, 5).map((focus) => (
-            <span
-              key={focus}
-              style={{
-                border: "1px solid var(--color-border)",
-                background: "rgba(255,255,255,0.035)",
-                color: "var(--color-text-secondary)",
-                borderRadius: 999,
-                padding: "7px 10px",
-                fontSize: 12,
-                fontWeight: 750,
-              }}
-            >
-              {focus}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          display: "grid",
-          gap: 10,
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            color: "var(--color-text-primary)",
-            fontSize: 13,
-            fontWeight: 900,
-          }}
-        >
-          Recommended actions
-        </p>
-
-        <ul
-          style={{
-            margin: 0,
-            paddingLeft: 18,
-            display: "grid",
-            gap: 8,
-            color: "var(--color-text-secondary)",
-            fontSize: 13,
-            lineHeight: 1.5,
-          }}
-        >
-          {agent.recommendedActions.slice(0, 3).map((action) => (
-            <li key={action}>{action}</li>
-          ))}
-        </ul>
-      </div>
-
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
+          marginTop: "auto",
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-          borderTop: "1px solid rgba(255,255,255,0.07)",
-          paddingTop: 14,
+          justifyContent: "flex-start",
         }}
       >
-        <span
-          style={{
-            color: "var(--color-text-secondary)",
-            fontSize: 12,
-            lineHeight: 1.45,
-            maxWidth: 300,
-          }}
-        >
-          {agent.confidenceLabel}
-        </span>
-
         <Link
-          href={getAgentHref(agent.id)}
+          href={`/chat?agent=${agent.id}`}
+          className="btn-ghost"
           style={{
-            display: "inline-flex",
-            alignItems: "center",
+            width: "fit-content",
+            minWidth: 150,
+            maxWidth: "100%",
             justifyContent: "center",
-            border: "none",
-            background: "var(--color-amber)",
-            color: "var(--color-base)",
-            borderRadius: 12,
-            padding: "10px 13px",
-            textDecoration: "none",
-            fontSize: 13,
-            fontWeight: 900,
-            whiteSpace: "nowrap",
+            border: `1px solid ${toneStyle.border}`,
+            background: toneStyle.background,
+            color: toneStyle.color,
           }}
         >
           Ask agent →
         </Link>
       </div>
-
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          border: "1px solid var(--color-border)",
-          background: "rgba(0,0,0,0.12)",
-          borderRadius: 14,
-          padding: 12,
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            color: "var(--color-text-secondary)",
-            fontSize: 12,
-            lineHeight: 1.5,
-          }}
-        >
-          Demo question:{" "}
-          <span
-            style={{
-              color: "var(--color-text-primary)",
-              fontWeight: 800,
-            }}
-          >
-            {getAgentQuestion(agent.id)}
-          </span>
-        </p>
-      </div>
     </article>
   );
+}
+
+function buildAgents({
+  healthScore,
+  approvedDocuments,
+  pendingReview,
+  revenue,
+  profit,
+  cash,
+}: {
+  healthScore: number;
+  approvedDocuments: number;
+  pendingReview: number;
+  revenue: string;
+  profit: string;
+  cash: string;
+}): AgentCardData[] {
+  return [
+    {
+      id: "cfo",
+      icon: "📊",
+      name: "CFO Agent",
+      role: "Executive finance decision maker",
+      insight:
+        approvedDocuments > 0
+          ? `Health score is ${healthScore}/100. Ask for growth priorities, expense control, runway, and strategic next steps.`
+          : "Upload and approve documents so the CFO Agent can analyze health score, profitability, and business risk.",
+      tone: "sage",
+    },
+    {
+      id: "accountant",
+      icon: "🧾",
+      name: "Accountant Agent",
+      role: "Books and document control",
+      insight:
+        pendingReview > 0
+          ? `${pendingReview} processed document(s) still need review before they can be trusted by dashboard and AI.`
+          : `${approvedDocuments} approved document(s) are currently being used as trusted financial data.`,
+      tone: pendingReview > 0 ? "gold" : "sage",
+    },
+    {
+      id: "analyst",
+      icon: "📈",
+      name: "Financial Analyst Agent",
+      role: "Margins, ratios, and trend analysis",
+      insight:
+        profit !== "Not available"
+          ? `Profit signal is ${profit}. Ask this agent to explain margins, expense ratio, revenue coverage, and trend quality.`
+          : "Profit margin is not available yet. Approve income and expense documents for better ratio analysis.",
+      tone: "amber",
+    },
+    {
+      id: "cashflow",
+      icon: "💧",
+      name: "Cash Flow Agent",
+      role: "Cash runway and liquidity monitor",
+      insight:
+        cash !== "Not available"
+          ? `Latest cash signal is ${cash}. Ask about runway, burn rate, and cash flow gaps.`
+          : "Cash is not visible yet. Upload bank statements to unlock cash runway and monthly burn insights.",
+      tone: "sage",
+    },
+    {
+      id: "consultant",
+      icon: "🧠",
+      name: "Business Consultant Agent",
+      role: "Growth and cost-control advisor",
+      insight:
+        approvedDocuments > 0
+          ? "The business has enough trusted data to plan profitability, cost control, and growth actions."
+          : "Approve financial documents so this agent can recommend realistic business improvements.",
+      tone: "amber",
+    },
+    {
+      id: "risk",
+      icon: "🛡️",
+      name: "Risk & Compliance Agent",
+      role: "Financial risk guardrail",
+      insight:
+        revenue !== "Not available"
+          ? "Revenue data is available. Ask this agent to check concentration risk, document gaps, and financial red flags."
+          : "Revenue data is missing. Upload or approve a sales invoice, bank statement, or financial statement containing revenue.",
+      tone: revenue !== "Not available" ? "sage" : "gold",
+    },
+  ];
 }
 
 export default async function AiTeamPage() {
@@ -485,356 +481,364 @@ export default async function AiTeamPage() {
     redirect("/login");
   }
 
-  const team = await getAiTeam(session.user.id);
+  const [business, approvedDocuments, pendingReview, rejectedDocuments, profile] =
+    await Promise.all([
+      prisma.business.findUnique({
+        where: {
+          userId: session.user.id,
+        },
+        select: {
+          name: true,
+          industry: true,
+          businessType: true,
+          country: true,
+          currency: true,
+          financialYear: true,
+        },
+      }),
+      prisma.document.count({
+        where: {
+          userId: session.user.id,
+          status: "PROCESSED",
+          reviewStatus: "APPROVED",
+        },
+      }),
+      prisma.document.count({
+        where: {
+          userId: session.user.id,
+          status: "PROCESSED",
+          reviewStatus: "NEEDS_REVIEW",
+        },
+      }),
+      prisma.document.count({
+        where: {
+          userId: session.user.id,
+          reviewStatus: "REJECTED",
+        },
+      }),
+      getFinancialProfile(session.user.id),
+    ]);
 
-  const activeAgents = team.agents.filter(
-    (agent) => agent.status === "active",
-  ).length;
+  const revenue =
+    profile.revenue.value === "—" ? "Not available" : profile.revenue.value;
 
-  const attentionAgents = team.agents.filter(
-    (agent) => agent.status === "warning" || agent.status === "critical",
-  ).length;
+  const profit =
+    profile.profit.value === "—" ? "Not available" : profile.profit.value;
 
-  const waitingAgents = team.agents.filter(
-    (agent) => agent.status === "waiting",
-  ).length;
+  const cash = profile.cash.value === "—" ? "Not available" : profile.cash.value;
+
+  const businessLine = formatBusinessLine({
+    name: business?.name,
+    industry: business?.industry,
+    country: business?.country,
+  });
+
+  const agents = buildAgents({
+    healthScore: profile.healthScore,
+    approvedDocuments,
+    pendingReview,
+    revenue,
+    profit,
+    cash,
+  });
 
   return (
     <>
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">AI executive finance team</p>
-          <h1>{team.businessName}</h1>
-        </div>
+      <style>
+        {`
+          @media (max-width: 1280px) {
+            .ai-team-hero-grid {
+              grid-template-columns: 1fr !important;
+            }
 
-        <Link
-          href="/chat"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "none",
-            background: "var(--color-amber)",
-            color: "var(--color-base)",
-            borderRadius: 12,
-            padding: "11px 15px",
-            textDecoration: "none",
-            fontSize: 14,
-            fontWeight: 900,
-            whiteSpace: "nowrap",
-          }}
-        >
-          Ask Overall Team
-        </Link>
-      </header>
+            .ai-team-coverage-card {
+              max-width: 100% !important;
+              justify-self: stretch !important;
+            }
+          }
 
-      <p className="page-intro">
-        This is your AI finance department. Each agent uses only approved
-        documents, so unreviewed or rejected files do not affect dashboard,
-        chat, or business recommendations.
-      </p>
+          @media (max-width: 760px) {
+            .ai-team-page-title {
+              font-size: 34px !important;
+              line-height: 1.05 !important;
+              letter-spacing: -0.055em !important;
+            }
 
-      <section
-        className="alerts-card"
+            .ai-team-agent-grid {
+              grid-template-columns: 1fr !important;
+            }
+
+            .ai-team-stat-grid {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}
+      </style>
+
+      <header
         style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.35fr) minmax(280px, 0.85fr)",
-          gap: 18,
           marginBottom: 24,
+          border: "1px solid rgba(245,158,11,0.22)",
+          background:
+            "radial-gradient(circle at top left, rgba(245,158,11,0.15), transparent 34%), radial-gradient(circle at bottom right, rgba(46,213,115,0.08), transparent 32%), linear-gradient(135deg, rgba(255,255,255,0.062), rgba(255,255,255,0.026))",
+          borderRadius: 30,
+          padding: 26,
+          display: "grid",
+          gap: 20,
+          boxShadow:
+            "0 24px 80px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)",
           overflow: "hidden",
+          minWidth: 0,
         }}
       >
         <div
+          className="ai-team-hero-grid"
           style={{
-            position: "relative",
-            border: "1px solid var(--color-border)",
-            borderRadius: 24,
-            padding: 24,
-            background:
-              "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(255,255,255,0.025))",
-            overflow: "hidden",
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 360px)",
+            gap: 20,
+            alignItems: "stretch",
+            width: "100%",
+            minWidth: 0,
           }}
         >
           <div
             style={{
-              position: "absolute",
-              width: 280,
-              height: 280,
-              borderRadius: "50%",
-              background: "rgba(245,158,11,0.14)",
-              filter: "blur(50px)",
-              right: -90,
-              top: -120,
-              pointerEvents: "none",
-            }}
-          />
-
-          <div
-            style={{
-              position: "relative",
-              zIndex: 1,
               display: "grid",
-              gap: 16,
+              gap: 14,
+              minWidth: 0,
+              alignContent: "start",
             }}
           >
-            <div
+            <p className="eyebrow" style={{ margin: 0 }}>
+              AI finance team
+            </p>
+
+            <h1
+              className="ai-team-page-title"
               style={{
-                width: 54,
-                height: 54,
-                borderRadius: 18,
-                border: "1px solid rgba(245,158,11,0.32)",
-                background: "rgba(245,158,11,0.12)",
-                display: "grid",
-                placeItems: "center",
-                fontSize: 26,
+                margin: 0,
+                color: "var(--color-text-primary)",
+                fontSize: "clamp(36px, 5vw, 72px)",
+                lineHeight: 0.98,
+                letterSpacing: "-0.075em",
+                maxWidth: 760,
+                overflowWrap: "anywhere",
               }}
             >
-              🤖
-            </div>
+              Your executive finance agents are ready.
+            </h1>
 
-            <div>
-              <p className="section-title">Overall Finance Team</p>
-
-              <h2
-                style={{
-                  margin: "9px 0 12px",
-                  color: "var(--color-text-primary)",
-                  fontSize: 32,
-                  lineHeight: 1.08,
-                  fontWeight: 950,
-                  letterSpacing: "-0.045em",
-                  maxWidth: 760,
-                }}
-              >
-                One complete finance department for your business.
-              </h2>
-
-              <p
-                style={{
-                  margin: 0,
-                  color: "var(--color-text-secondary)",
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                  maxWidth: 740,
-                }}
-              >
-                The overall chat combines CFO, accountant, financial analyst,
-                cash flow, consultant, and risk views into one answer. Use it
-                for general decisions, then open specialist agents for deeper
-                analysis.
-              </p>
-            </div>
+            <p
+              className="page-intro"
+              style={{
+                margin: 0,
+                lineHeight: 1.7,
+                maxWidth: 760,
+              }}
+            >
+              Each agent uses your business profile and approved financial
+              documents. Pending and rejected data stay out of dashboard, chat,
+              and recommendations.
+            </p>
 
             <div
               style={{
                 display: "flex",
                 gap: 10,
                 flexWrap: "wrap",
+                marginTop: 6,
+                minWidth: 0,
               }}
             >
-              <Link
-                href="/chat"
+              <span
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "none",
-                  background: "var(--color-amber)",
-                  color: "var(--color-base)",
-                  borderRadius: 12,
-                  padding: "11px 15px",
-                  textDecoration: "none",
-                  fontSize: 14,
+                  border: "1px solid rgba(245,158,11,0.26)",
+                  background: "rgba(245,158,11,0.09)",
+                  color: "var(--color-gold)",
+                  borderRadius: 999,
+                  padding: "10px 14px",
+                  fontSize: 12,
+                  fontWeight: 900,
+                  maxWidth: "100%",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {businessLine}
+              </span>
+
+              <span
+                style={{
+                  border: "1px solid rgba(46,213,115,0.26)",
+                  background: "rgba(46,213,115,0.085)",
+                  color: "var(--color-sage)",
+                  borderRadius: 999,
+                  padding: "10px 14px",
+                  fontSize: 12,
                   fontWeight: 900,
                 }}
               >
-                Ask overall team
-              </Link>
-
-              <Link
-                href="/documents"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "1px solid var(--color-border)",
-                  background: "rgba(255,255,255,0.04)",
-                  color: "var(--color-text-primary)",
-                  borderRadius: 12,
-                  padding: "11px 15px",
-                  textDecoration: "none",
-                  fontSize: 14,
-                  fontWeight: 850,
-                }}
-              >
-                Review documents
-              </Link>
+                {approvedDocuments} trusted document
+                {approvedDocuments === 1 ? "" : "s"}
+              </span>
             </div>
           </div>
-        </div>
 
-        <div
-          style={{
-            border: "1px solid var(--color-border)",
-            borderRadius: 24,
-            padding: 18,
-            background: "rgba(255,255,255,0.025)",
-            display: "grid",
-            gap: 12,
-          }}
-        >
-          <div>
-            <p className="section-title">Team operating mode</p>
-            <p className="section-hint">
-              Your agents are powered by approved financial documents only.
-            </p>
-          </div>
-
-          <div
+          <aside
+            className="ai-team-coverage-card"
             style={{
-              border: "1px solid rgba(46,213,115,0.24)",
-              background: "rgba(46,213,115,0.08)",
-              color: "#7bed9f",
-              borderRadius: 16,
-              padding: 14,
+              border: "1px solid rgba(245,158,11,0.14)",
+              background:
+                "linear-gradient(135deg, rgba(0,0,0,0.16), rgba(255,255,255,0.025))",
+              borderRadius: 24,
+              padding: 18,
               display: "grid",
-              gap: 5,
+              gap: 12,
+              alignContent: "start",
+              width: "100%",
+              minWidth: 0,
+              maxWidth: 360,
+              justifySelf: "end",
+              overflow: "hidden",
             }}
           >
-            <strong
+            <p
               style={{
-                fontSize: 14,
-              }}
-            >
-              Trusted data mode
-            </strong>
-
-            <span
-              style={{
+                margin: 0,
                 color: "var(--color-text-secondary)",
-                fontSize: 13,
-                lineHeight: 1.5,
+                fontSize: 12,
+                fontWeight: 950,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                overflowWrap: "anywhere",
               }}
             >
-              Pending and rejected documents are excluded from AI answers.
-            </span>
-          </div>
+              Agent coverage
+            </p>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 10,
-            }}
-          >
-            <MiniStat
-              label="Trusted"
-              value={team.trustedDocuments}
-              hint="Approved docs"
-              tone={team.trustedDocuments > 0 ? "good" : "warning"}
-            />
+            <div
+              style={{
+                display: "grid",
+                gap: 10,
+                minWidth: 0,
+              }}
+            >
+              <WorkflowCard
+                icon="✅"
+                title="Trusted data only"
+                hint="Agents use approved documents, not pending or rejected files."
+              />
 
-            <MiniStat
-              label="Pending"
-              value={team.pendingReview}
-              hint="Need review"
-              tone={team.pendingReview > 0 ? "warning" : "neutral"}
-            />
-
-            <MiniStat
-              label="Rejected"
-              value={team.rejectedDocuments}
-              hint="Excluded"
-              tone={team.rejectedDocuments > 0 ? "danger" : "neutral"}
-            />
-
-            <MiniStat
-              label="Processed"
-              value={team.processedDocuments}
-              hint="AI analyzed"
-              tone={team.processedDocuments > 0 ? "good" : "neutral"}
-            />
-          </div>
+              <WorkflowCard
+                icon="💬"
+                title="Ask role-based questions"
+                hint="CFO, accountant, analyst, cash flow, consultant, and risk agents."
+              />
+            </div>
+          </aside>
         </div>
+      </header>
+
+      <section
+        className="ai-team-stat-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+          gap: 14,
+          alignItems: "stretch",
+          marginBottom: 24,
+        }}
+      >
+        <StatCard
+          label="Trusted docs"
+          value={approvedDocuments}
+          hint="Used by dashboard, reports, and AI"
+          tone="sage"
+        />
+
+        <StatCard
+          label="Pending review"
+          value={pendingReview}
+          hint="Processed but not trusted yet"
+          tone={pendingReview > 0 ? "gold" : "sage"}
+        />
+
+        <StatCard
+          label="Rejected"
+          value={rejectedDocuments}
+          hint="Excluded from finance intelligence"
+          tone={rejectedDocuments > 0 ? "danger" : "neutral"}
+        />
+
+        <StatCard
+          label="Health score"
+          value={`${profile.healthScore}/100`}
+          hint={profile.healthLabel}
+          tone={profile.healthScore >= 70 ? "sage" : "gold"}
+        />
       </section>
 
       <section
-        className="alerts-card"
+        className="section-card"
         style={{
           display: "grid",
-          gap: 16,
-          marginBottom: 24,
+          gap: 18,
+          padding: 22,
+          overflow: "hidden",
+          minWidth: 0,
         }}
       >
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            gap: 18,
+            gap: 14,
             alignItems: "flex-start",
             flexWrap: "wrap",
+            minWidth: 0,
           }}
         >
-          <div>
-            <p className="section-title">Team status</p>
-            <p className="section-hint">
-              Live readiness of each finance specialist.
+          <div
+            style={{
+              display: "grid",
+              gap: 6,
+              minWidth: 0,
+            }}
+          >
+            <p className="section-title" style={{ margin: 0 }}>
+              Specialist agents
+            </p>
+
+            <p
+              className="section-hint"
+              style={{
+                margin: 0,
+                lineHeight: 1.55,
+              }}
+            >
+              Pick the right finance agent for the question you want to ask.
             </p>
           </div>
 
-          <span className="badge-sample">
-            {team.agents.length} agents · {activeAgents} active ·{" "}
-            {attentionAgents} attention · {waitingAgents} waiting
-          </span>
+          <Link href="/chat" className="btn-ghost">
+            Open full AI chat
+          </Link>
         </div>
 
         <div
+          className="ai-team-agent-grid"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 12,
+            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gap: 18,
+            alignItems: "stretch",
+            minWidth: 0,
           }}
         >
-          <MiniStat
-            label="Active agents"
-            value={activeAgents}
-            hint="Ready to answer with trusted data"
-            tone={activeAgents > 0 ? "good" : "warning"}
-          />
-
-          <MiniStat
-            label="Need attention"
-            value={attentionAgents}
-            hint="Agents seeing warnings or risks"
-            tone={attentionAgents > 0 ? "warning" : "neutral"}
-          />
-
-          <MiniStat
-            label="Waiting agents"
-            value={waitingAgents}
-            hint="Need approved data"
-            tone={waitingAgents > 0 ? "warning" : "good"}
-          />
-
-          <MiniStat
-            label="Total documents"
-            value={team.totalDocuments}
-            hint="Uploaded into the system"
-            tone={team.totalDocuments > 0 ? "good" : "neutral"}
-          />
+          {agents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} />
+          ))}
         </div>
-      </section>
-
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 18,
-        }}
-      >
-        {team.agents.map((agent) => (
-          <AgentCard key={agent.id} agent={agent} />
-        ))}
       </section>
     </>
   );

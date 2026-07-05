@@ -16,7 +16,6 @@ model User {
   image         String?
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
-
   accounts      Account[]
   auditEvents   AuditEvent[]
   business      Business?
@@ -36,7 +35,6 @@ model Session {
   userAgent String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -57,7 +55,6 @@ model Account {
   scope                 String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("account")
@@ -84,7 +81,6 @@ model Business {
   country       String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
   userId        String   @unique
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -103,12 +99,10 @@ model Document {
   extractedAt     DateTime?
   processingError String?
   uploadedAt      DateTime             @default(now())
-
+  userId          String
   reviewNote      String?
   reviewStatus    DocumentReviewStatus @default(NEEDS_REVIEW)
   reviewedAt      DateTime?
-
-  userId          String
   user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, uploadedAt])
@@ -121,7 +115,6 @@ model BusinessChatMessage {
   role      String
   content   String
   createdAt DateTime @default(now())
-
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -133,7 +126,6 @@ model UsageEvent {
   id        String   @id @default(cuid())
   eventType String
   createdAt DateTime @default(now())
-
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -150,7 +142,6 @@ model AuditEvent {
   fileName    String?
   metadata    Json?
   createdAt   DateTime @default(now())
-
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -163,11 +154,13 @@ enum DocumentCategory {
   BANK_STATEMENT
   SALES_INVOICE
   PURCHASE_INVOICE
+  PAYROLL
+  UTILITY_BILL
+  FINANCIAL_STATEMENT
+  OTHER
   RECEIPT
   CREDIT_NOTE
   DEBIT_NOTE
-  PAYROLL
-  UTILITY_BILL
   TAX_DOCUMENT
   GST_RETURN
   LOAN_STATEMENT
@@ -176,8 +169,6 @@ enum DocumentCategory {
   INVENTORY_REPORT
   PURCHASE_ORDER
   SALES_ORDER
-  FINANCIAL_STATEMENT
-  OTHER
 }
 
 enum DocumentStatus {

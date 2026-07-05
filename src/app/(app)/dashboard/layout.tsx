@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DemoSampleDataButton } from "./components/DemoSampleDataButton";
 
 type DashboardLayoutProps = {
-  children: React.ReactNode;
+  children: ReactNode;
 };
 
-type Tone = "green" | "blue" | "yellow" | "neutral";
+type Tone = "sage" | "amber" | "gold" | "neutral";
 
 function displayValue(value?: string | null) {
   return value && value.trim().length > 0 ? value.trim() : "Not set";
@@ -17,29 +18,29 @@ function displayValue(value?: string | null) {
 
 function getToneStyle(tone: Tone) {
   return {
-    green: {
-      color: "#7bed9f",
-      border: "rgba(46,213,115,0.26)",
-      background: "rgba(46,213,115,0.08)",
-      glow: "rgba(46,213,115,0.18)",
+    sage: {
+      color: "var(--color-sage)",
+      border: "rgba(46,213,115,0.28)",
+      background: "rgba(46,213,115,0.085)",
+      glow: "rgba(46,213,115,0.13)",
     },
-    blue: {
-      color: "#8abfff",
-      border: "rgba(88,166,255,0.28)",
-      background: "rgba(88,166,255,0.08)",
-      glow: "rgba(88,166,255,0.16)",
+    amber: {
+      color: "var(--color-amber)",
+      border: "rgba(245,158,11,0.30)",
+      background: "rgba(245,158,11,0.095)",
+      glow: "rgba(245,158,11,0.13)",
     },
-    yellow: {
-      color: "#ffd166",
-      border: "rgba(255,193,7,0.28)",
-      background: "rgba(255,193,7,0.08)",
-      glow: "rgba(255,193,7,0.16)",
+    gold: {
+      color: "var(--color-gold)",
+      border: "rgba(255,209,102,0.28)",
+      background: "rgba(255,209,102,0.085)",
+      glow: "rgba(255,209,102,0.12)",
     },
     neutral: {
       color: "var(--color-text-secondary)",
       border: "var(--color-border)",
-      background: "rgba(255,255,255,0.04)",
-      glow: "rgba(255,255,255,0.08)",
+      background: "rgba(255,255,255,0.045)",
+      glow: "rgba(255,255,255,0.06)",
     },
   }[tone];
 }
@@ -69,6 +70,7 @@ function ContextPill({
         gap: 6,
         alignItems: "center",
         whiteSpace: "nowrap",
+        boxShadow: `0 12px 30px ${toneStyle.glow}`,
       }}
     >
       <span
@@ -80,13 +82,7 @@ function ContextPill({
         {label}
       </span>
 
-      <strong
-        style={{
-          color: "inherit",
-        }}
-      >
-        {value}
-      </strong>
+      <strong style={{ color: "inherit" }}>{value}</strong>
     </span>
   );
 }
@@ -108,14 +104,15 @@ function MiniStat({
     <div
       style={{
         border: `1px solid ${toneStyle.border}`,
-        background: `linear-gradient(135deg, ${toneStyle.background}, rgba(255,255,255,0.025))`,
+        background: `linear-gradient(135deg, ${toneStyle.background}, rgba(255,255,255,0.024))`,
         borderRadius: 18,
         padding: 14,
         minHeight: 102,
         display: "grid",
         alignContent: "space-between",
         gap: 8,
-        boxShadow: `0 16px 40px ${toneStyle.glow}`,
+        boxShadow: `0 16px 40px ${toneStyle.glow}, inset 0 1px 0 rgba(255,255,255,0.05)`,
+        minWidth: 0,
       }}
     >
       <p
@@ -137,6 +134,7 @@ function MiniStat({
           fontSize: 24,
           lineHeight: 1,
           fontWeight: 950,
+          overflowWrap: "anywhere",
         }}
       >
         {value}
@@ -158,16 +156,11 @@ function MiniStat({
 }
 
 function CompletionBar({ percent }: { percent: number }) {
-  const tone = percent >= 80 ? "green" : percent >= 50 ? "yellow" : "neutral";
+  const tone: Tone = percent >= 80 ? "sage" : percent >= 50 ? "gold" : "neutral";
   const toneStyle = getToneStyle(tone);
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: 8,
-      }}
-    >
+    <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
       <div
         style={{
           display: "flex",
@@ -220,13 +213,266 @@ function CompletionBar({ percent }: { percent: number }) {
   );
 }
 
+function NextActionCard({
+  icon,
+  title,
+  hint,
+  href,
+  actionLabel,
+  tone,
+}: {
+  icon: string;
+  title: string;
+  hint: string;
+  href: string;
+  actionLabel: string;
+  tone: Tone;
+}) {
+  const toneStyle = getToneStyle(tone);
+
+  return (
+    <article
+      style={{
+        border: `1px solid ${toneStyle.border}`,
+        background: `linear-gradient(135deg, ${toneStyle.background}, rgba(255,255,255,0.022))`,
+        borderRadius: 20,
+        padding: 15,
+        display: "grid",
+        gap: 12,
+        minHeight: 170,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.045)",
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "flex-start",
+          minWidth: 0,
+        }}
+      >
+        <span
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 16,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: toneStyle.background,
+            border: `1px solid ${toneStyle.border}`,
+            fontSize: 19,
+            flex: "0 0 auto",
+          }}
+        >
+          {icon}
+        </span>
+
+        <div style={{ display: "grid", gap: 5, minWidth: 0 }}>
+          <strong
+            style={{
+              color: "var(--color-text-primary)",
+              fontSize: 14,
+              lineHeight: 1.3,
+              overflowWrap: "break-word",
+            }}
+          >
+            {title}
+          </strong>
+
+          <p
+            style={{
+              margin: 0,
+              color: "var(--color-text-secondary)",
+              fontSize: 12,
+              lineHeight: 1.55,
+              overflowWrap: "break-word",
+            }}
+          >
+            {hint}
+          </p>
+        </div>
+      </div>
+
+      <Link
+        href={href}
+        className="btn-ghost"
+        style={{
+          alignItems: "center",
+          justifyContent: "center",
+          width: "fit-content",
+          minWidth: 160,
+          maxWidth: "100%",
+          background: toneStyle.background,
+          border: `1px solid ${toneStyle.border}`,
+          color: toneStyle.color,
+        }}
+      >
+        {actionLabel}
+      </Link>
+    </article>
+  );
+}
+
+function WorkspaceNextActions({
+  completionPercent,
+  totalDocuments,
+  approvedDocuments,
+  needsReviewDocuments,
+}: {
+  completionPercent: number;
+  totalDocuments: number;
+  approvedDocuments: number;
+  needsReviewDocuments: number;
+}) {
+  const shouldShow =
+    completionPercent < 100 || totalDocuments < 3 || needsReviewDocuments > 0;
+
+  if (!shouldShow) {
+    return null;
+  }
+
+  return (
+    <section
+      style={{
+        marginBottom: 28,
+        border: "1px solid rgba(245,158,11,0.20)",
+        background:
+          "radial-gradient(circle at top left, rgba(245,158,11,0.12), transparent 34%), linear-gradient(135deg, rgba(255,255,255,0.052), rgba(255,255,255,0.024))",
+        borderRadius: 26,
+        padding: 18,
+        display: "grid",
+        gap: 16,
+        boxShadow:
+          "0 18px 60px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.05)",
+        minWidth: 0,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 14,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          minWidth: 0,
+        }}
+      >
+        <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+          <p className="eyebrow" style={{ margin: 0 }}>
+            Recommended next actions
+          </p>
+
+          <h2
+            style={{
+              margin: 0,
+              color: "var(--color-text-primary)",
+              fontSize: 24,
+              lineHeight: 1.1,
+              letterSpacing: "-0.03em",
+              wordBreak: "normal",
+              overflowWrap: "normal",
+              hyphens: "none",
+            }}
+          >
+            Improve your finance workspace
+          </h2>
+
+          <p
+            className="section-hint"
+            style={{
+              margin: 0,
+              lineHeight: 1.55,
+              maxWidth: 760,
+              overflowWrap: "break-word",
+            }}
+          >
+            Complete these recommended steps to improve dashboard accuracy, AI
+            answers, and CFO report quality.
+          </p>
+        </div>
+
+        <span
+          style={{
+            border: "1px solid rgba(245,158,11,0.30)",
+            background: "rgba(245,158,11,0.09)",
+            color: "var(--color-amber)",
+            borderRadius: 999,
+            padding: "8px 11px",
+            fontSize: 12,
+            fontWeight: 950,
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Recommended
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: 12,
+          minWidth: 0,
+        }}
+      >
+        {needsReviewDocuments > 0 && (
+          <NextActionCard
+            icon="✅"
+            title="Approve pending documents"
+            hint={`${needsReviewDocuments} processed document(s) are waiting for review. Approve them to improve dashboard accuracy.`}
+            href="/documents"
+            actionLabel="Review documents"
+            tone="gold"
+          />
+        )}
+
+        {completionPercent < 100 && (
+          <NextActionCard
+            icon="🏢"
+            title="Complete business profile"
+            hint="Add missing profile fields so AI chat and CFO reports become more personalized."
+            href="/business"
+            actionLabel="Update profile"
+            tone="amber"
+          />
+        )}
+
+        {totalDocuments < 3 && (
+          <NextActionCard
+            icon="📄"
+            title="Upload more finance data"
+            hint="Add bank statements, invoices, payroll, or financial statements for stronger analysis."
+            href="/documents"
+            actionLabel="Upload documents"
+            tone="sage"
+          />
+        )}
+
+        {approvedDocuments > 0 && (
+          <NextActionCard
+            icon="🤖"
+            title="Ask the AI finance team"
+            hint="Use approved data to ask about profit, expenses, cash flow, risks, and next actions."
+            href="/chat"
+            actionLabel="Open AI chat"
+            tone="amber"
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
 async function getDashboardBusinessContext(userId: string) {
   const [business, approvedDocuments, totalDocuments, needsReviewDocuments] =
     await Promise.all([
       prisma.business.findUnique({
-        where: {
-          userId,
-        },
+        where: { userId },
         select: {
           name: true,
           industry: true,
@@ -245,9 +491,7 @@ async function getDashboardBusinessContext(userId: string) {
         },
       }),
       prisma.document.count({
-        where: {
-          userId,
-        },
+        where: { userId },
       }),
       prisma.document.count({
         where: {
@@ -314,7 +558,7 @@ export default async function DashboardLayout({
           marginBottom: 28,
           border: "1px solid rgba(245,158,11,0.22)",
           background:
-            "radial-gradient(circle at top left, rgba(245,158,11,0.14), transparent 34%), linear-gradient(135deg, rgba(255,255,255,0.062), rgba(255,255,255,0.026))",
+            "radial-gradient(circle at top left, rgba(245,158,11,0.15), transparent 34%), radial-gradient(circle at bottom right, rgba(46,213,115,0.08), transparent 32%), linear-gradient(135deg, rgba(255,255,255,0.062), rgba(255,255,255,0.026))",
           borderRadius: 28,
           padding: 22,
           display: "grid",
@@ -323,6 +567,7 @@ export default async function DashboardLayout({
             "0 24px 80px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)",
           position: "relative",
           overflow: "hidden",
+          minWidth: 0,
         }}
       >
         <div
@@ -346,6 +591,7 @@ export default async function DashboardLayout({
             gridTemplateColumns: "minmax(0, 1.4fr) minmax(280px, 0.8fr)",
             gap: 18,
             alignItems: "stretch",
+            minWidth: 0,
           }}
         >
           <div
@@ -362,6 +608,7 @@ export default async function DashboardLayout({
                 gap: 16,
                 alignItems: "flex-start",
                 flexWrap: "wrap",
+                minWidth: 0,
               }}
             >
               <div
@@ -371,12 +618,7 @@ export default async function DashboardLayout({
                   minWidth: 0,
                 }}
               >
-                <p
-                  className="eyebrow"
-                  style={{
-                    margin: 0,
-                  }}
-                >
+                <p className="eyebrow" style={{ margin: 0 }}>
                   Executive workspace
                 </p>
 
@@ -388,6 +630,7 @@ export default async function DashboardLayout({
                     lineHeight: 1.08,
                     fontWeight: 950,
                     wordBreak: "break-word",
+                    letterSpacing: "-0.055em",
                   }}
                 >
                   {businessName}
@@ -411,7 +654,7 @@ export default async function DashboardLayout({
                 style={{
                   border: "1px solid rgba(46,213,115,0.28)",
                   background: "rgba(46,213,115,0.10)",
-                  color: "#7bed9f",
+                  color: "var(--color-sage)",
                   borderRadius: 999,
                   padding: "8px 11px",
                   fontSize: 12,
@@ -433,31 +676,31 @@ export default async function DashboardLayout({
               <ContextPill
                 label="Industry"
                 value={industry}
-                tone={industry !== "Not set" ? "blue" : "yellow"}
+                tone={industry !== "Not set" ? "amber" : "gold"}
               />
 
               <ContextPill
                 label="Type"
                 value={businessType}
-                tone={businessType !== "Not set" ? "blue" : "yellow"}
+                tone={businessType !== "Not set" ? "amber" : "gold"}
               />
 
               <ContextPill
                 label="Country"
                 value={country}
-                tone={country !== "Not set" ? "green" : "yellow"}
+                tone={country !== "Not set" ? "sage" : "gold"}
               />
 
               <ContextPill
                 label="Currency"
                 value={currency}
-                tone={currency !== "Not set" ? "green" : "yellow"}
+                tone={currency !== "Not set" ? "sage" : "gold"}
               />
 
               <ContextPill
                 label="FY"
                 value={financialYear}
-                tone={financialYear !== "Not set" ? "green" : "yellow"}
+                tone={financialYear !== "Not set" ? "sage" : "gold"}
               />
             </div>
 
@@ -491,14 +734,16 @@ export default async function DashboardLayout({
 
           <aside
             style={{
-              border: "1px solid var(--color-border)",
-              background: "rgba(0,0,0,0.12)",
+              border: "1px solid rgba(245,158,11,0.15)",
+              background:
+                "linear-gradient(135deg, rgba(0,0,0,0.16), rgba(255,255,255,0.025))",
               borderRadius: 22,
               padding: 16,
               display: "grid",
               gap: 14,
               alignContent: "start",
               minWidth: 0,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
             }}
           >
             <CompletionBar percent={completionPercent} />
@@ -508,39 +753,47 @@ export default async function DashboardLayout({
                 display: "grid",
                 gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
                 gap: 10,
+                minWidth: 0,
               }}
             >
               <MiniStat
                 label="Trusted docs"
                 value={String(approvedDocuments)}
                 hint="Used by dashboard"
-                tone="green"
+                tone="sage"
               />
 
               <MiniStat
                 label="Needs review"
                 value={String(needsReviewDocuments)}
                 hint="Awaiting approval"
-                tone={needsReviewDocuments > 0 ? "yellow" : "green"}
+                tone={needsReviewDocuments > 0 ? "gold" : "sage"}
               />
 
               <MiniStat
                 label="Total uploads"
                 value={String(totalDocuments)}
                 hint="All files"
-                tone={totalDocuments > 0 ? "blue" : "neutral"}
+                tone={totalDocuments > 0 ? "amber" : "neutral"}
               />
 
               <MiniStat
                 label="Context"
                 value="Ready"
                 hint="AI personalization"
-                tone="green"
+                tone="sage"
               />
             </div>
           </aside>
         </div>
       </section>
+
+      <WorkspaceNextActions
+        completionPercent={completionPercent}
+        totalDocuments={totalDocuments}
+        approvedDocuments={approvedDocuments}
+        needsReviewDocuments={needsReviewDocuments}
+      />
 
       {children}
     </>

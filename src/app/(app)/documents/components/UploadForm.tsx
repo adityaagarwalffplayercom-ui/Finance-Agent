@@ -1,292 +1,132 @@
 "use client";
 
-import {
-  useRef,
-  useState,
-  type ChangeEvent,
-  type CSSProperties,
-  type DragEvent,
-  type FocusEvent,
-  type FormEvent,
-} from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { DocumentCategory } from "@prisma/client";
 import {
-  ALLOWED_MIME_TYPES,
   DOCUMENT_CATEGORIES,
-  MAX_FILE_SIZE_BYTES,
-  formatFileSize,
-  type DocumentCategoryValue,
+  getDocumentCategoryConfig,
 } from "@/lib/document-categories";
-import { getUsageLimitMessage } from "@/lib/usage-limits";
 
-const CATEGORY_STYLES: Record<
-  DocumentCategoryValue,
-  {
-    icon: string;
-    accent: string;
-    soft: string;
-    border: string;
-    hint: string;
-  }
-> = {
-  BANK_STATEMENT: {
-    icon: "🏦",
-    accent: "#8abfff",
-    soft: "rgba(88,166,255,0.10)",
-    border: "rgba(88,166,255,0.28)",
-    hint: "Cash, deposits, withdrawals",
-  },
-  SALES_INVOICE: {
-    icon: "📈",
-    accent: "#7bed9f",
-    soft: "rgba(46,213,115,0.10)",
-    border: "rgba(46,213,115,0.28)",
-    hint: "Revenue and customer bills",
-  },
-  PURCHASE_INVOICE: {
-    icon: "🧾",
-    accent: "#ff8a95",
-    soft: "rgba(255,71,87,0.10)",
-    border: "rgba(255,71,87,0.28)",
-    hint: "Vendor bills and expenses",
-  },
-  RECEIPT: {
-    icon: "🧾",
-    accent: "#7bed9f",
-    soft: "rgba(46,213,115,0.10)",
-    border: "rgba(46,213,115,0.28)",
-    hint: "Proof of payment",
-  },
-  CREDIT_NOTE: {
-    icon: "↩️",
-    accent: "#8abfff",
-    soft: "rgba(88,166,255,0.10)",
-    border: "rgba(88,166,255,0.28)",
-    hint: "Sales return or adjustment",
-  },
-  DEBIT_NOTE: {
-    icon: "↪️",
-    accent: "#ffd166",
-    soft: "rgba(255,193,7,0.11)",
-    border: "rgba(255,193,7,0.30)",
-    hint: "Purchase adjustment",
-  },
-  PAYROLL: {
-    icon: "👥",
-    accent: "#caa8ff",
-    soft: "rgba(170,120,255,0.12)",
-    border: "rgba(170,120,255,0.30)",
-    hint: "Salary and team costs",
-  },
-  UTILITY_BILL: {
-    icon: "⚡",
-    accent: "#ffd166",
-    soft: "rgba(255,193,7,0.11)",
-    border: "rgba(255,193,7,0.30)",
-    hint: "Electricity, rent, services",
-  },
-  TAX_DOCUMENT: {
-    icon: "🏛️",
-    accent: "#ffb86b",
-    soft: "rgba(255,184,107,0.11)",
-    border: "rgba(255,184,107,0.30)",
-    hint: "Tax challans and filings",
-  },
-  GST_RETURN: {
-    icon: "🧮",
-    accent: "#ffb86b",
-    soft: "rgba(255,184,107,0.11)",
-    border: "rgba(255,184,107,0.30)",
-    hint: "GST sales, purchases, tax",
-  },
-  LOAN_STATEMENT: {
-    icon: "🏦",
-    accent: "#caa8ff",
-    soft: "rgba(170,120,255,0.12)",
-    border: "rgba(170,120,255,0.30)",
-    hint: "EMI, interest, principal",
-  },
-  RENT_LEASE: {
-    icon: "🏢",
-    accent: "#ffd166",
-    soft: "rgba(255,193,7,0.11)",
-    border: "rgba(255,193,7,0.30)",
-    hint: "Rent and lease payments",
-  },
-  INSURANCE_DOCUMENT: {
-    icon: "🛡️",
-    accent: "#8abfff",
-    soft: "rgba(88,166,255,0.10)",
-    border: "rgba(88,166,255,0.28)",
-    hint: "Premiums and coverage",
-  },
-  INVENTORY_REPORT: {
-    icon: "📦",
-    accent: "#7bed9f",
-    soft: "rgba(46,213,115,0.10)",
-    border: "rgba(46,213,115,0.28)",
-    hint: "Stock, COGS, movement",
-  },
-  PURCHASE_ORDER: {
-    icon: "🛒",
-    accent: "#ff8a95",
-    soft: "rgba(255,71,87,0.10)",
-    border: "rgba(255,71,87,0.28)",
-    hint: "Planned vendor purchase",
-  },
-  SALES_ORDER: {
-    icon: "🧾",
-    accent: "#7bed9f",
-    soft: "rgba(46,213,115,0.10)",
-    border: "rgba(46,213,115,0.28)",
-    hint: "Confirmed customer order",
-  },
-  FINANCIAL_STATEMENT: {
-    icon: "📊",
-    accent: "var(--color-amber)",
-    soft: "rgba(245,158,11,0.12)",
-    border: "rgba(245,158,11,0.34)",
-    hint: "Balance sheet and P&L",
-  },
-  OTHER: {
-    icon: "📄",
-    accent: "var(--color-text-secondary)",
-    soft: "rgba(255,255,255,0.06)",
-    border: "var(--color-border)",
-    hint: "Any other finance file",
-  },
+type UploadState = {
+  type: "idle" | "success" | "error";
+  message: string;
 };
 
-function getFriendlyUploadError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message.toLowerCase().includes("failed to fetch")) {
-      return "Upload request failed. Check if the dev server is running, then try again.";
-    }
+type Tone = "sage" | "amber" | "gold" | "danger" | "neutral";
 
-    return error.message;
-  }
-
-  return "Upload failed. Try again.";
-}
-
-async function readUploadError(response: Response) {
-  try {
-    const data = await response.json();
-
-    if (typeof data?.error === "string") {
-      return data.error;
-    }
-
-    return "Upload failed. Try again.";
-  } catch {
-    return "Upload failed. Try again.";
-  }
-}
-
-function dropdownButtonStyle(isOpen: boolean, hasValue: boolean): CSSProperties {
+function getToneStyle(tone: Tone) {
   return {
-    width: "100%",
-    border: isOpen
-      ? "1px solid rgba(245,158,11,0.55)"
-      : "1px solid var(--color-border)",
-    background: isOpen
-      ? "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(255,255,255,0.04))"
-      : "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025))",
-    color: hasValue ? "var(--color-text-primary)" : "var(--color-text-muted)",
-    borderRadius: 16,
-    padding: "13px 14px",
-    outline: "none",
-    fontSize: 14,
-    cursor: "pointer",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    textAlign: "left",
-    boxShadow: isOpen
-      ? "0 0 0 1px rgba(245,158,11,0.16), 0 18px 45px rgba(0,0,0,0.20)"
-      : "inset 0 1px 0 rgba(255,255,255,0.04)",
-  };
+    sage: {
+      color: "var(--color-sage)",
+      border: "rgba(46,213,115,0.28)",
+      background: "rgba(46,213,115,0.085)",
+    },
+    amber: {
+      color: "var(--color-amber)",
+      border: "rgba(245,158,11,0.30)",
+      background: "rgba(245,158,11,0.095)",
+    },
+    gold: {
+      color: "var(--color-gold)",
+      border: "rgba(255,209,102,0.30)",
+      background: "rgba(255,209,102,0.085)",
+    },
+    danger: {
+      color: "var(--color-danger)",
+      border: "rgba(255,138,149,0.30)",
+      background: "rgba(255,138,149,0.085)",
+    },
+    neutral: {
+      color: "var(--color-text-secondary)",
+      border: "var(--color-border)",
+      background: "rgba(255,255,255,0.045)",
+    },
+  }[tone];
+}
+
+function formatBytes(bytes: number) {
+  if (bytes === 0) return "0 B";
+
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.floor(Math.log(bytes) / Math.log(1024));
+  const value = bytes / Math.pow(1024, index);
+
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[index]}`;
 }
 
 function DocumentTypeSelect({
   value,
-  disabled,
   onChange,
+  disabled,
 }: {
-  value: DocumentCategoryValue;
+  value: DocumentCategory;
+  onChange: (value: DocumentCategory) => void;
   disabled: boolean;
-  onChange: (value: DocumentCategoryValue) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const selectedOption =
-    DOCUMENT_CATEGORIES.find((option) => option.value === value) ??
-    DOCUMENT_CATEGORIES[0];
-
-  const selectedStyle = CATEGORY_STYLES[selectedOption.value];
-
-  function handleBlur(event: FocusEvent<HTMLDivElement>) {
-    const nextFocusedElement = event.relatedTarget as Node | null;
-
-    if (
-      nextFocusedElement &&
-      event.currentTarget.contains(nextFocusedElement)
-    ) {
-      return;
-    }
-
-    setIsOpen(false);
-  }
+  const [open, setOpen] = useState(false);
+  const selected = getDocumentCategoryConfig(value);
+  const selectedTone = getToneStyle(selected.tone);
 
   return (
     <div
-      onBlur={handleBlur}
       style={{
         position: "relative",
+        minWidth: 0,
       }}
     >
       <button
         type="button"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
         disabled={disabled}
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => setOpen((current) => !current)}
         style={{
-          ...dropdownButtonStyle(isOpen, Boolean(selectedOption)),
-          opacity: disabled ? 0.65 : 1,
+          width: "100%",
+          border: `1px solid ${selectedTone.border}`,
+          background:
+            "linear-gradient(135deg, rgba(255,255,255,0.060), rgba(255,255,255,0.025))",
+          color: "var(--color-text-primary)",
+          borderRadius: 18,
+          padding: 14,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
           cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.65 : 1,
+          textAlign: "left",
+          minWidth: 0,
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
         }}
       >
         <span
           style={{
             display: "flex",
+            gap: 12,
             alignItems: "center",
-            gap: 11,
             minWidth: 0,
           }}
         >
           <span
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 13,
+              width: 42,
+              height: 42,
+              borderRadius: 15,
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              background: selectedStyle.soft,
-              border: `1px solid ${selectedStyle.border}`,
-              fontSize: 17,
+              border: `1px solid ${selectedTone.border}`,
+              background: selectedTone.background,
+              fontSize: 18,
               flex: "0 0 auto",
             }}
           >
-            {selectedStyle.icon}
+            {selected.icon}
           </span>
 
           <span
             style={{
               display: "grid",
-              gap: 3,
+              gap: 4,
               minWidth: 0,
             }}
           >
@@ -294,113 +134,104 @@ function DocumentTypeSelect({
               style={{
                 color: "var(--color-text-primary)",
                 fontSize: 14,
-                lineHeight: 1.2,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                lineHeight: 1.25,
+                overflowWrap: "anywhere",
               }}
             >
-              {selectedOption.label}
+              {selected.label}
             </strong>
 
             <span
               style={{
                 color: "var(--color-text-secondary)",
                 fontSize: 12,
-                lineHeight: 1.25,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                lineHeight: 1.35,
+                overflowWrap: "anywhere",
               }}
             >
-              {selectedStyle.hint}
+              {selected.description}
             </span>
           </span>
         </span>
 
         <span
           style={{
-            color: "var(--color-amber)",
-            fontSize: 13,
-            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "0.18s ease",
+            color: "var(--color-gold)",
+            fontSize: 16,
+            lineHeight: 1,
             flex: "0 0 auto",
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 160ms ease",
           }}
         >
-          ▼
+          ▾
         </span>
       </button>
 
-      {isOpen && (
+      {open && (
         <div
-          role="listbox"
           style={{
             position: "absolute",
-            zIndex: 50,
-            top: "calc(100% + 8px)",
+            zIndex: 30,
             left: 0,
             right: 0,
-            border: "1px solid rgba(245,158,11,0.28)",
+            top: "calc(100% + 8px)",
+            border: "1px solid rgba(245,158,11,0.22)",
             background:
-              "linear-gradient(180deg, rgba(18,24,33,0.98), rgba(10,15,22,0.98))",
-            color: "var(--color-text-primary)",
-            borderRadius: 18,
+              "linear-gradient(135deg, rgba(10,15,22,0.98), rgba(14,20,30,0.98))",
+            borderRadius: 20,
             padding: 8,
             display: "grid",
             gap: 6,
-            maxHeight: 320,
+            maxHeight: 360,
             overflowY: "auto",
             boxShadow:
-              "0 22px 70px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)",
-            backdropFilter: "blur(16px)",
+              "0 24px 80px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.06)",
           }}
         >
-          {DOCUMENT_CATEGORIES.map((option) => {
-            const style = CATEGORY_STYLES[option.value];
-            const isSelected = option.value === value;
+          {DOCUMENT_CATEGORIES.map((category) => {
+            const tone = getToneStyle(category.tone);
+            const active = category.value === value;
 
             return (
               <button
-                key={option.value}
+                key={category.value}
                 type="button"
-                role="option"
-                aria-selected={isSelected}
                 onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
+                  onChange(category.value);
+                  setOpen(false);
                 }}
                 style={{
-                  border: isSelected
-                    ? `1px solid ${style.border}`
+                  border: active
+                    ? `1px solid ${tone.border}`
                     : "1px solid transparent",
-                  background: isSelected
-                    ? `linear-gradient(135deg, ${style.soft}, rgba(255,255,255,0.035))`
-                    : "rgba(255,255,255,0.025)",
-                  color: isSelected ? style.accent : "var(--color-text-primary)",
-                  borderRadius: 14,
+                  background: active ? tone.background : "transparent",
+                  color: "var(--color-text-primary)",
+                  borderRadius: 15,
                   padding: 11,
-                  textAlign: "left",
-                  cursor: "pointer",
                   display: "flex",
                   gap: 11,
                   alignItems: "center",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  minWidth: 0,
                 }}
               >
                 <span
                   style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 12,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 13,
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: style.soft,
-                    border: `1px solid ${style.border}`,
+                    border: `1px solid ${tone.border}`,
+                    background: tone.background,
                     fontSize: 16,
                     flex: "0 0 auto",
                   }}
                 >
-                  {style.icon}
+                  {category.icon}
                 </span>
 
                 <span
@@ -412,25 +243,24 @@ function DocumentTypeSelect({
                 >
                   <strong
                     style={{
-                      color: isSelected
-                        ? style.accent
-                        : "var(--color-text-primary)",
+                      color: active ? tone.color : "var(--color-text-primary)",
                       fontSize: 13,
-                      fontWeight: isSelected ? 950 : 800,
-                      lineHeight: 1.25,
+                      lineHeight: 1.2,
+                      overflowWrap: "anywhere",
                     }}
                   >
-                    {option.label}
+                    {category.label}
                   </strong>
 
                   <span
                     style={{
                       color: "var(--color-text-secondary)",
-                      fontSize: 12,
-                      lineHeight: 1.3,
+                      fontSize: 11,
+                      lineHeight: 1.35,
+                      overflowWrap: "anywhere",
                     }}
                   >
-                    {style.hint}
+                    {category.description}
                   </span>
                 </span>
               </button>
@@ -445,287 +275,327 @@ function DocumentTypeSelect({
 export function UploadForm() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [category, setCategory] =
+    useState<DocumentCategory>("FINANCIAL_STATEMENT");
+  const [file, setFile] = useState<File | null>(null);
+  const [state, setState] = useState<UploadState>({
+    type: "idle",
+    message: "",
+  });
+  const [isPending, startTransition] = useTransition();
 
-  const [category, setCategory] = useState<DocumentCategoryValue>(
-    DOCUMENT_CATEGORIES[0].value,
+  const selectedCategory = useMemo(
+    () => getDocumentCategoryConfig(category),
+    [category],
   );
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
 
-  function validateAndSetFile(file: File | null) {
-    setError(null);
+  const selectedTone = getToneStyle(selectedCategory.tone);
+  const disabled = isPending;
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
     if (!file) {
-      setSelectedFile(null);
-      return;
-    }
-
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      setSelectedFile(null);
-      setError("Use a PDF, image (JPG/PNG/WebP), CSV, or Excel file.");
-      return;
-    }
-
-    if (file.size === 0) {
-      setSelectedFile(null);
-      setError("That file is empty.");
-      return;
-    }
-
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setSelectedFile(null);
-      setError(
-        `Files must be ${formatFileSize(
-          MAX_FILE_SIZE_BYTES,
-        )} or smaller. Use smaller demo documents to protect Gemini quota.`,
-      );
-      return;
-    }
-
-    setSelectedFile(file);
-  }
-
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    validateAndSetFile(event.target.files?.[0] ?? null);
-  }
-
-  function handleDrop(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    setIsDraggingOver(false);
-
-    const file = event.dataTransfer.files?.[0] ?? null;
-    validateAndSetFile(file);
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-
-    if (!selectedFile) {
-      setError("Choose a file first.");
-      return;
-    }
-
-    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
-      setError(`Files must be ${formatFileSize(MAX_FILE_SIZE_BYTES)} or smaller.`);
+      setState({
+        type: "error",
+        message: "Please choose a document before uploading.",
+      });
       return;
     }
 
     const formData = new FormData();
-    formData.append("file", selectedFile);
+    formData.append("file", file);
     formData.append("category", category);
 
-    setIsUploading(true);
+    setState({
+      type: "idle",
+      message: "",
+    });
 
-    try {
-      const response = await fetch("/api/documents", {
-        method: "POST",
-        body: formData,
-      });
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/documents", {
+          method: "POST",
+          body: formData,
+        });
 
-      if (!response.ok) {
-        const message = await readUploadError(response);
-        setError(message);
-        return;
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+        } | null;
+
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Document upload failed.");
+        }
+
+        setFile(null);
+
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+
+        setState({
+          type: "success",
+          message:
+            data?.message ??
+            "Document uploaded successfully. You can process it with AI from the review queue.",
+        });
+
+        router.refresh();
+      } catch (error) {
+        setState({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Document upload failed. Please try again.",
+        });
       }
-
-      setSelectedFile(null);
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-
-      router.refresh();
-    } catch (uploadError) {
-      setError(getFriendlyUploadError(uploadError));
-    } finally {
-      setIsUploading(false);
-    }
+    });
   }
 
   return (
     <form
-      className="upload-card"
       onSubmit={handleSubmit}
       style={{
+        border: "1px solid rgba(245,158,11,0.16)",
+        background:
+          "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.024))",
+        borderRadius: 24,
+        padding: 20,
         display: "grid",
         gap: 18,
+        minWidth: 0,
+        overflow: "visible",
+        boxShadow:
+          "0 18px 60px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.052)",
       }}
     >
       <div
         style={{
-          display: "grid",
-          gap: 8,
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 14,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          minWidth: 0,
         }}
       >
-        <p
-          className="section-title"
+        <div
           style={{
-            margin: 0,
+            display: "grid",
+            gap: 6,
+            minWidth: 0,
           }}
         >
-          Upload a document
-        </p>
+          <p
+            className="section-title"
+            style={{
+              margin: 0,
+            }}
+          >
+            Upload a document
+          </p>
 
-        <p
-          className="section-hint"
+          <p
+            className="section-hint"
+            style={{
+              margin: 0,
+              lineHeight: 1.55,
+            }}
+          >
+            PDF, image, CSV, or Excel. Select the correct category before
+            uploading.
+          </p>
+        </div>
+
+        <span
           style={{
-            margin: 0,
-            lineHeight: 1.55,
+            border: `1px solid ${selectedTone.border}`,
+            background: selectedTone.background,
+            color: selectedTone.color,
+            borderRadius: 999,
+            padding: "8px 11px",
+            fontSize: 11,
+            fontWeight: 950,
+            whiteSpace: "nowrap",
           }}
         >
-          PDF, image, CSV, or Excel. Production guardrails are enabled:{" "}
-          {getUsageLimitMessage()}.
-        </p>
+          Selected: {selectedCategory.label}
+        </span>
       </div>
 
       <div
         style={{
           display: "grid",
           gap: 10,
+          minWidth: 0,
         }}
       >
-        <div
+        <label
+          htmlFor="document-category"
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 12,
-            alignItems: "center",
-            flexWrap: "wrap",
+            color: "var(--color-text-primary)",
+            fontSize: 13,
+            fontWeight: 900,
           }}
         >
-          <label
-            style={{
-              color: "var(--color-text-secondary)",
-              fontSize: 13,
-              fontWeight: 850,
-            }}
-          >
-            Choose document type
-          </label>
+          Choose document type
+        </label>
 
-          <span
-            style={{
-              border: `1px solid ${CATEGORY_STYLES[category].border}`,
-              background: CATEGORY_STYLES[category].soft,
-              color: CATEGORY_STYLES[category].accent,
-              borderRadius: 999,
-              padding: "6px 10px",
-              fontSize: 12,
-              fontWeight: 900,
-            }}
-          >
-            Selected:{" "}
-            {DOCUMENT_CATEGORIES.find((item) => item.value === category)?.label}
-          </span>
-        </div>
+        <input
+          id="document-category"
+          type="hidden"
+          name="category"
+          value={category}
+        />
 
         <DocumentTypeSelect
           value={category}
-          disabled={isUploading}
           onChange={setCategory}
+          disabled={disabled}
         />
       </div>
 
-      <label
-        onDragOver={(event) => {
-          event.preventDefault();
-          setIsDraggingOver(true);
-        }}
-        onDragLeave={() => setIsDraggingOver(false)}
-        onDrop={handleDrop}
+      <div
         style={{
-          border: isDraggingOver
-            ? "1px solid rgba(245,158,11,0.65)"
-            : selectedFile
-              ? "1px solid rgba(46,213,115,0.34)"
-              : "1px dashed var(--color-border)",
-          background: isDraggingOver
-            ? "rgba(245,158,11,0.10)"
-            : selectedFile
-              ? "rgba(46,213,115,0.08)"
-              : "rgba(255,255,255,0.03)",
-          borderRadius: 18,
-          padding: 20,
           display: "grid",
           gap: 10,
-          cursor: isUploading ? "not-allowed" : "pointer",
-          transition: "0.18s ease",
+          minWidth: 0,
         }}
       >
+        <label
+          htmlFor="document-file"
+          style={{
+            color: "var(--color-text-primary)",
+            fontSize: 13,
+            fontWeight: 900,
+          }}
+        >
+          Choose file
+        </label>
+
+        <label
+          htmlFor="document-file"
+          style={{
+            border: "1px dashed rgba(245,158,11,0.26)",
+            background: "rgba(245,158,11,0.045)",
+            borderRadius: 20,
+            padding: 18,
+            display: "grid",
+            gap: 8,
+            cursor: disabled ? "not-allowed" : "pointer",
+            opacity: disabled ? 0.65 : 1,
+            minWidth: 0,
+          }}
+        >
+          <strong
+            style={{
+              color: "var(--color-text-primary)",
+              fontSize: 14,
+              lineHeight: 1.35,
+              overflowWrap: "anywhere",
+            }}
+          >
+            {file ? file.name : "Click to choose a document"}
+          </strong>
+
+          <span
+            style={{
+              color: "var(--color-text-secondary)",
+              fontSize: 12,
+              lineHeight: 1.45,
+              overflowWrap: "anywhere",
+            }}
+          >
+            {file
+              ? `${formatBytes(file.size)} · Ready to upload as ${selectedCategory.label}`
+              : "Supported: PDF, image, CSV, Excel"}
+          </span>
+        </label>
+
         <input
           ref={fileInputRef}
+          id="document-file"
+          name="file"
           type="file"
-          accept={ALLOWED_MIME_TYPES.join(",")}
-          onChange={handleFileChange}
-          disabled={isUploading}
+          disabled={disabled}
+          accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xls,.xlsx,application/pdf,image/*,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          onChange={(event) => {
+            const selectedFile = event.target.files?.[0] ?? null;
+            setFile(selectedFile);
+            setState({
+              type: "idle",
+              message: "",
+            });
+          }}
           style={{
             display: "none",
           }}
         />
+      </div>
 
-        <span
-          style={{
-            color: "var(--color-text-primary)",
-            fontSize: 14,
-            fontWeight: 900,
-          }}
-        >
-          {selectedFile ? selectedFile.name : "Choose a file, or drag it here"}
-        </span>
-
-        <span
-          style={{
-            color: selectedFile ? "#7bed9f" : "var(--color-text-secondary)",
-            fontSize: 13,
-            lineHeight: 1.45,
-            fontWeight: selectedFile ? 750 : 500,
-          }}
-        >
-          {selectedFile
-            ? `${formatFileSize(selectedFile.size)} selected`
-            : `Maximum file size: ${formatFileSize(MAX_FILE_SIZE_BYTES)}`}
-        </span>
-      </label>
-
-      {error && (
+      {state.type !== "idle" && (
         <div
           style={{
-            border: "1px solid rgba(255,71,87,0.28)",
-            background: "rgba(255,71,87,0.08)",
-            color: "#ff8a95",
-            borderRadius: 14,
-            padding: 12,
+            border:
+              state.type === "success"
+                ? "1px solid rgba(46,213,115,0.28)"
+                : "1px solid rgba(255,138,149,0.30)",
+            background:
+              state.type === "success"
+                ? "rgba(46,213,115,0.085)"
+                : "rgba(255,138,149,0.085)",
+            color:
+              state.type === "success"
+                ? "var(--color-sage)"
+                : "var(--color-danger)",
+            borderRadius: 16,
+            padding: 13,
             fontSize: 13,
             lineHeight: 1.5,
+            fontWeight: 750,
+            overflowWrap: "anywhere",
           }}
         >
-          {error}
+          {state.message}
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={!selectedFile || isUploading}
+      <div
         style={{
-          border: "none",
-          background: selectedFile
-            ? "linear-gradient(135deg, var(--color-amber), #ffd166)"
-            : "rgba(245,158,11,0.55)",
-          color: "var(--color-base)",
-          borderRadius: 14,
-          padding: "13px 16px",
-          cursor: !selectedFile || isUploading ? "not-allowed" : "pointer",
-          fontSize: 14,
-          fontWeight: 950,
-          opacity: !selectedFile || isUploading ? 0.65 : 1,
-          boxShadow: selectedFile ? "0 16px 40px rgba(245,158,11,0.18)" : "none",
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+          flexWrap: "wrap",
         }}
       >
-        {isUploading ? "Uploading..." : "Upload document"}
-      </button>
+        <button
+          type="submit"
+          disabled={disabled}
+          className="btn-ghost"
+          style={{
+            border: `1px solid ${selectedTone.border}`,
+            background: selectedTone.background,
+            color: selectedTone.color,
+            cursor: disabled ? "not-allowed" : "pointer",
+            opacity: disabled ? 0.7 : 1,
+          }}
+        >
+          {disabled ? "Uploading..." : "Upload document"}
+        </button>
+
+        <span
+          style={{
+            color: "var(--color-text-secondary)",
+            fontSize: 12,
+            lineHeight: 1.45,
+          }}
+        >
+          After upload, process it with AI and approve the extraction before it
+          affects dashboard results.
+        </span>
+      </div>
     </form>
   );
 }

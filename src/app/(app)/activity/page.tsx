@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-type Tone = "green" | "blue" | "yellow" | "red" | "neutral";
+type Tone = "green" | "amber" | "yellow" | "red" | "neutral";
 
 type BusinessContext = {
   name: string | null;
@@ -27,28 +27,28 @@ const TONE_STYLES: Record<
   }
 > = {
   green: {
-    color: "#7bed9f",
+    color: "var(--color-sage)",
     border: "rgba(46,213,115,0.28)",
     background: "rgba(46,213,115,0.09)",
     softBackground: "rgba(46,213,115,0.055)",
   },
-  blue: {
-    color: "#8abfff",
-    border: "rgba(88,166,255,0.28)",
-    background: "rgba(88,166,255,0.09)",
-    softBackground: "rgba(88,166,255,0.055)",
+  amber: {
+    color: "var(--color-gold)",
+    border: "rgba(245,158,11,0.28)",
+    background: "rgba(245,158,11,0.09)",
+    softBackground: "rgba(245,158,11,0.055)",
   },
   yellow: {
-    color: "#ffd166",
-    border: "rgba(255,193,7,0.30)",
-    background: "rgba(255,193,7,0.09)",
-    softBackground: "rgba(255,193,7,0.055)",
+    color: "var(--color-gold)",
+    border: "rgba(255,209,102,0.30)",
+    background: "rgba(255,209,102,0.09)",
+    softBackground: "rgba(255,209,102,0.055)",
   },
   red: {
-    color: "#ff8a95",
-    border: "rgba(255,71,87,0.30)",
-    background: "rgba(255,71,87,0.09)",
-    softBackground: "rgba(255,71,87,0.055)",
+    color: "var(--color-danger)",
+    border: "rgba(255,138,149,0.30)",
+    background: "rgba(255,138,149,0.09)",
+    softBackground: "rgba(255,138,149,0.055)",
   },
   neutral: {
     color: "var(--color-text-secondary)",
@@ -85,7 +85,7 @@ function getStatusTone(status: string): Tone {
   if (status === "PROCESSED" || status === "APPROVED") return "green";
   if (status === "FAILED" || status === "REJECTED") return "red";
   if (status === "PROCESSING" || status === "NEEDS_REVIEW") return "yellow";
-  return "blue";
+  return "amber";
 }
 
 function getDocumentIcon(fileName: string, category: string) {
@@ -200,6 +200,7 @@ function StatCard({
         gap: 10,
         minHeight: 118,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.045)",
+        minWidth: 0,
       }}
     >
       <p
@@ -258,6 +259,7 @@ function SectionHeader({
         gap: 12,
         alignItems: "flex-start",
         flexWrap: "wrap",
+        minWidth: 0,
       }}
     >
       <div
@@ -267,12 +269,7 @@ function SectionHeader({
           minWidth: 0,
         }}
       >
-        <p
-          className="section-title"
-          style={{
-            margin: 0,
-          }}
-        >
+        <p className="section-title" style={{ margin: 0 }}>
           {title}
         </p>
 
@@ -308,9 +305,9 @@ function EmptyState({
   return (
     <div
       style={{
-        border: "1px dashed var(--color-border)",
+        border: "1px dashed rgba(245,158,11,0.22)",
         background:
-          "linear-gradient(135deg, rgba(255,255,255,0.035), rgba(255,255,255,0.018))",
+          "linear-gradient(135deg, rgba(245,158,11,0.055), rgba(255,255,255,0.018))",
         borderRadius: 20,
         padding: 22,
         display: "grid",
@@ -334,12 +331,7 @@ function EmptyState({
         {icon}
       </span>
 
-      <div
-        style={{
-          display: "grid",
-          gap: 6,
-        }}
-      >
+      <div style={{ display: "grid", gap: 6 }}>
         <strong
           style={{
             color: "var(--color-text-primary)",
@@ -388,6 +380,7 @@ function TimelineItem({
         display: "grid",
         gridTemplateColumns: "44px minmax(0, 1fr)",
         gap: 13,
+        minWidth: 0,
       }}
     >
       <div
@@ -427,7 +420,7 @@ function TimelineItem({
 
       <div
         style={{
-          border: "1px solid var(--color-border)",
+          border: "1px solid rgba(245,158,11,0.14)",
           background:
             "linear-gradient(135deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02))",
           borderRadius: 18,
@@ -443,6 +436,7 @@ function TimelineItem({
             justifyContent: "space-between",
             gap: 12,
             alignItems: "flex-start",
+            minWidth: 0,
           }}
         >
           <div
@@ -506,14 +500,17 @@ function ChatPreviewCard({
   return (
     <article
       style={{
-        border: "1px solid var(--color-border)",
+        border: isUser
+          ? "1px solid rgba(245,158,11,0.22)"
+          : "1px solid rgba(46,213,115,0.20)",
         background: isUser
           ? "rgba(245,158,11,0.055)"
-          : "rgba(88,166,255,0.055)",
+          : "rgba(46,213,115,0.050)",
         borderRadius: 18,
         padding: 14,
         display: "grid",
         gap: 9,
+        minWidth: 0,
       }}
     >
       <div
@@ -522,11 +519,12 @@ function ChatPreviewCard({
           gap: 10,
           justifyContent: "space-between",
           alignItems: "center",
+          minWidth: 0,
         }}
       >
         <span
           style={{
-            color: isUser ? "var(--color-amber)" : "#8abfff",
+            color: isUser ? "var(--color-amber)" : "var(--color-sage)",
             fontSize: 12,
             fontWeight: 950,
             textTransform: "uppercase",
@@ -553,6 +551,7 @@ function ChatPreviewCard({
           color: "var(--color-text-secondary)",
           fontSize: 13,
           lineHeight: 1.55,
+          overflowWrap: "break-word",
         }}
       >
         {shortenText(content, 170)}
@@ -661,6 +660,7 @@ function BusinessContextCard({ business }: { business: BusinessContext }) {
           "0 20px 60px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)",
         overflow: "hidden",
         position: "relative",
+        minWidth: 0,
       }}
     >
       <div
@@ -683,6 +683,7 @@ function BusinessContextCard({ business }: { business: BusinessContext }) {
           justifyContent: "space-between",
           gap: 12,
           alignItems: "flex-start",
+          minWidth: 0,
         }}
       >
         <div
@@ -840,14 +841,14 @@ function BusinessContextCard({ business }: { business: BusinessContext }) {
           icon="🏭"
           label="Industry"
           value={displayValue(business?.industry)}
-          tone={business?.industry ? "blue" : "yellow"}
+          tone={business?.industry ? "amber" : "yellow"}
         />
 
         <ProfileDetail
           icon="🏷️"
           label="Business type"
           value={displayValue(business?.businessType)}
-          tone={business?.businessType ? "blue" : "yellow"}
+          tone={business?.businessType ? "amber" : "yellow"}
         />
 
         <div
@@ -888,7 +889,7 @@ function BusinessContextCard({ business }: { business: BusinessContext }) {
           justifyContent: "center",
           border: "1px solid rgba(245,158,11,0.32)",
           background: "rgba(245,158,11,0.09)",
-          color: "var(--color-amber)",
+          color: "var(--color-gold)",
         }}
       >
         {isComplete ? "Edit business profile" : "Complete business profile"}
@@ -1038,12 +1039,7 @@ export default async function ActivityPage() {
               minWidth: 0,
             }}
           >
-            <p
-              className="eyebrow"
-              style={{
-                margin: 0,
-              }}
-            >
+            <p className="eyebrow" style={{ margin: 0 }}>
               Activity center
             </p>
 
@@ -1092,14 +1088,14 @@ export default async function ActivityPage() {
               <SmallPill
                 label="Country"
                 value={business?.country || "Not set"}
-                tone={business?.country ? "blue" : "yellow"}
+                tone={business?.country ? "amber" : "yellow"}
               />
             </div>
           </div>
 
           <div
             style={{
-              border: "1px solid var(--color-border)",
+              border: "1px solid rgba(245,158,11,0.14)",
               background: "rgba(0,0,0,0.12)",
               borderRadius: 22,
               padding: 16,
@@ -1154,7 +1150,7 @@ export default async function ActivityPage() {
           label="Total uploads"
           value={totalDocuments}
           hint="All uploaded files"
-          tone="blue"
+          tone="amber"
         />
 
         <StatCard
@@ -1271,7 +1267,7 @@ export default async function ActivityPage() {
                       <p
                         style={{
                           margin: 0,
-                          color: "#ff8a95",
+                          color: "var(--color-danger)",
                           fontSize: 12,
                           lineHeight: 1.45,
                         }}
