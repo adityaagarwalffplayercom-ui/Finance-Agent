@@ -10,7 +10,8 @@ export const DOCUMENT_CATEGORIES = [
   { value: "OTHER", label: "Other" },
 ] as const;
 
-export type DocumentCategoryValue = (typeof DOCUMENT_CATEGORIES)[number]["value"];
+export type DocumentCategoryValue =
+  (typeof DOCUMENT_CATEGORIES)[number]["value"];
 
 const CATEGORY_LABELS = new Map(
   DOCUMENT_CATEGORIES.map((category) => [category.value, category.label]),
