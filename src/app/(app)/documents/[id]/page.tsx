@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { categoryLabel, formatFileSize } from "@/lib/document-categories";
+import type { ExtractedDocumentData } from "@/lib/gemini";
+import { DocumentTimeline } from "../components/DocumentTimeline";
+import { DocumentReviewPanel } from "./DocumentReviewPanel";
 
 type PageProps = {
   params: Promise<{
@@ -11,91 +14,146 @@ type PageProps = {
   }>;
 };
 
-type ExtractedLineItem = {
-  description?: string;
-  amount?: number;
-  category?: string;
-  date?: string;
+type LineItem = {
+  description: string;
+  category: string;
+  amount: number | null;
 };
 
-type ExtractedData = {
-  summary?: string;
-  description?: string;
-
-  documentDate?: string;
-  date?: string;
-  periodStart?: string;
-  startDate?: string;
-  periodEnd?: string;
-  endDate?: string;
-
-  currency?: string;
-
-  reportedUnit?: string;
-  scaleMultiplier?: number;
-  unitDetectionEvidence?: string;
-
-  totalAmount?: number;
-  amount?: number;
-  totalAmountLabel?: string;
-
-  revenue?: number;
-  totalRevenue?: number;
-  sales?: number;
-
-  expenses?: number;
-  totalExpenses?: number;
-
-  profit?: number;
-  netProfit?: number;
-  loss?: number;
-  netLoss?: number;
-  netIncome?: number;
-
-  cash?: number;
-  closingBalance?: number;
-  openingBalance?: number;
-  balance?: number;
-
-  assets?: number;
-  liabilities?: number;
-  equity?: number;
-
-  lineItems?: ExtractedLineItem[];
-
-  [key: string]: unknown;
+const STATUS_COPY: Record<
+  string,
+  {
+    label: string;
+    color: string;
+    border: string;
+    background: string;
+  }
+> = {
+  UPLOADED: {
+    label: "Uploaded",
+    color: "#8abfff",
+    border: "rgba(88,166,255,0.30)",
+    background: "rgba(88,166,255,0.10)",
+  },
+  PROCESSING: {
+    label: "Processing",
+    color: "#ffd166",
+    border: "rgba(255,193,7,0.30)",
+    background: "rgba(255,193,7,0.10)",
+  },
+  PROCESSED: {
+    label: "Processed",
+    color: "#7bed9f",
+    border: "rgba(46,213,115,0.30)",
+    background: "rgba(46,213,115,0.10)",
+  },
+  FAILED: {
+    label: "Failed",
+    color: "#ff8a95",
+    border: "rgba(255,71,87,0.30)",
+    background: "rgba(255,71,87,0.10)",
+  },
 };
 
-function formatDate(date: Date | string | null | undefined) {
-  if (!date) return "-";
+const REVIEW_COPY: Record<
+  string,
+  {
+    label: string;
+    color: string;
+    border: string;
+    background: string;
+  }
+> = {
+  NEEDS_REVIEW: {
+    label: "Needs review",
+    color: "#ffd166",
+    border: "rgba(255,193,7,0.30)",
+    background: "rgba(255,193,7,0.10)",
+  },
+  APPROVED: {
+    label: "Trusted",
+    color: "#7bed9f",
+    border: "rgba(46,213,115,0.30)",
+    background: "rgba(46,213,115,0.10)",
+  },
+  REJECTED: {
+    label: "Rejected",
+    color: "#ff8a95",
+    border: "rgba(255,71,87,0.30)",
+    background: "rgba(255,71,87,0.10)",
+  },
+};
 
-  const parsed = date instanceof Date ? date : new Date(date);
+function formatDateTime(value?: Date | string | null) {
+  if (!value) return "Not available";
 
-  if (Number.isNaN(parsed.getTime())) return "-";
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not available";
+  }
 
   return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(parsed);
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
-function formatMoney(value: unknown, currency = "INR") {
-  if (typeof value !== "number" || Number.isNaN(value)) return "-";
+function getRecord(data: ExtractedDocumentData | null) {
+  return (data ?? {}) as unknown as Record<string, unknown>;
+}
 
-  const absoluteValue = Math.abs(value);
+function getNumberValue(
+  data: ExtractedDocumentData | null,
+  keys: string[],
+): number | null {
+  const record = getRecord(data);
 
-  let compactValue = value;
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function getStringValue(
+  data: ExtractedDocumentData | null,
+  keys: string[],
+): string | null {
+  const record = getRecord(data);
+
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function formatAmount(amount: number | null, currency?: string | null) {
+  if (amount === null) return "Not found";
+
+  const finalCurrency = currency ?? "INR";
+  const absoluteValue = Math.abs(amount);
+
+  let compactValue = amount;
   let suffix = "";
 
   if (absoluteValue >= 1_000_000_000) {
-    compactValue = value / 1_000_000_000;
+    compactValue = amount / 1_000_000_000;
     suffix = "B";
   } else if (absoluteValue >= 1_000_000) {
-    compactValue = value / 1_000_000;
+    compactValue = amount / 1_000_000;
     suffix = "M";
   } else if (absoluteValue >= 1_000) {
-    compactValue = value / 1_000;
+    compactValue = amount / 1_000;
     suffix = "K";
   }
 
@@ -104,9 +162,10 @@ function formatMoney(value: unknown, currency = "INR") {
     USD: "$",
     EUR: "€",
     GBP: "£",
+    CHF: "CHF ",
   };
 
-  const symbol = currencySymbols[currency] ?? `${currency} `;
+  const symbol = currencySymbols[finalCurrency] ?? `${finalCurrency} `;
 
   const formattedNumber = new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: compactValue % 1 === 0 ? 0 : 2,
@@ -115,141 +174,195 @@ function formatMoney(value: unknown, currency = "INR") {
   return `${symbol}${formattedNumber}${suffix}`;
 }
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+function getLineItems(data: ExtractedDocumentData | null): LineItem[] {
+  const record = getRecord(data);
+  const rawLineItems = record.lineItems;
+
+  if (!Array.isArray(rawLineItems)) return [];
+
+  return rawLineItems
+    .map((item) => {
+      const lineItem = item as Record<string, unknown>;
+
+      return {
+        description:
+          typeof lineItem.description === "string"
+            ? lineItem.description
+            : "Untitled line item",
+        category:
+          typeof lineItem.category === "string" ? lineItem.category : "Other",
+        amount:
+          typeof lineItem.amount === "number" && Number.isFinite(lineItem.amount)
+            ? lineItem.amount
+            : null,
+      };
+    })
+    .slice(0, 80);
 }
 
-function prettyCategory(category: string) {
-  return category
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
+function Pill({ type, value }: { type: "status" | "review"; value: string }) {
+  const copy =
+    type === "status"
+      ? STATUS_COPY[value] ?? STATUS_COPY.UPLOADED
+      : REVIEW_COPY[value] ?? REVIEW_COPY.NEEDS_REVIEW;
 
-function statusStyle(status: string) {
-  if (status === "PROCESSED" || status === "APPROVED") {
-    return {
-      border: "1px solid rgba(46,213,115,0.28)",
-      background: "rgba(46,213,115,0.10)",
-      color: "#7bed9f",
-    };
-  }
-
-  if (status === "FAILED" || status === "REJECTED") {
-    return {
-      border: "1px solid rgba(255,71,87,0.28)",
-      background: "rgba(255,71,87,0.10)",
-      color: "#ff8a95",
-    };
-  }
-
-  return {
-    border: "1px solid rgba(255,193,7,0.28)",
-    background: "rgba(255,193,7,0.10)",
-    color: "#ffd166",
-  };
-}
-
-function getNumber(data: ExtractedData | null, keys: string[]) {
-  if (!data) return undefined;
-
-  for (const key of keys) {
-    const value = data[key];
-
-    if (typeof value === "number" && !Number.isNaN(value)) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
-function getString(data: ExtractedData | null, keys: string[]) {
-  if (!data) return undefined;
-
-  for (const key of keys) {
-    const value = data[key];
-
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
-function getLineItems(data: ExtractedData | null) {
-  if (!data || !Array.isArray(data.lineItems)) return [];
-
-  return data.lineItems.filter(
-    (item) =>
-      item &&
-      (typeof item.description === "string" || typeof item.amount === "number"),
+  return (
+    <span
+      style={{
+        border: `1px solid ${copy.border}`,
+        background: copy.background,
+        color: copy.color,
+        borderRadius: 999,
+        padding: "8px 11px",
+        fontSize: 12,
+        fontWeight: 950,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {copy.label}
+    </span>
   );
 }
 
-async function getSessionUserId() {
+function MetricCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone: "green" | "red" | "blue" | "yellow" | "neutral";
+}) {
+  const toneStyle = {
+    green: {
+      color: "#7bed9f",
+      border: "rgba(46,213,115,0.25)",
+      background: "rgba(46,213,115,0.08)",
+    },
+    red: {
+      color: "#ff8a95",
+      border: "rgba(255,71,87,0.25)",
+      background: "rgba(255,71,87,0.08)",
+    },
+    blue: {
+      color: "#8abfff",
+      border: "rgba(88,166,255,0.25)",
+      background: "rgba(88,166,255,0.08)",
+    },
+    yellow: {
+      color: "#ffd166",
+      border: "rgba(255,193,7,0.25)",
+      background: "rgba(255,193,7,0.08)",
+    },
+    neutral: {
+      color: "var(--color-text-secondary)",
+      border: "var(--color-border)",
+      background: "rgba(255,255,255,0.035)",
+    },
+  }[tone];
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${toneStyle.border}`,
+        background: toneStyle.background,
+        borderRadius: 18,
+        padding: 16,
+        display: "grid",
+        gap: 8,
+        minHeight: 124,
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          color: "var(--color-text-secondary)",
+          fontSize: 12,
+          fontWeight: 850,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        {label}
+      </p>
+
+      <strong
+        style={{
+          color: "var(--color-text-primary)",
+          fontSize: 25,
+          lineHeight: 1.1,
+        }}
+      >
+        {value}
+      </strong>
+
+      <p
+        style={{
+          margin: 0,
+          color: toneStyle.color,
+          fontSize: 12,
+          fontWeight: 750,
+          lineHeight: 1.4,
+        }}
+      >
+        {hint}
+      </p>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        borderBottom: "1px solid var(--color-border)",
+        padding: "12px 0",
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 18,
+        alignItems: "flex-start",
+      }}
+    >
+      <span
+        style={{
+          color: "var(--color-text-secondary)",
+          fontSize: 13,
+        }}
+      >
+        {label}
+      </span>
+
+      <strong
+        style={{
+          color: "var(--color-text-primary)",
+          fontSize: 13,
+          textAlign: "right",
+          wordBreak: "break-word",
+        }}
+      >
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+export default async function DocumentDetailsPage({ params }: PageProps) {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
 
-  return session?.user?.id ?? null;
-}
-
-async function updateReviewStatus(formData: FormData) {
-  "use server";
-
-  const userId = await getSessionUserId();
-
-  if (!userId) {
+  if (!session?.user?.id) {
     redirect("/login");
   }
 
-  const documentId = String(formData.get("documentId") ?? "");
-  const action = String(formData.get("action") ?? "");
-  const reviewNote = String(formData.get("reviewNote") ?? "").trim();
-
-  if (!documentId) {
-    throw new Error("Document id missing.");
-  }
-
-  const reviewStatus = action === "approve" ? "APPROVED" : "REJECTED";
-
-  await prisma.document.updateMany({
-    where: {
-      id: documentId,
-      userId,
-    },
-    data: {
-      reviewStatus,
-      reviewedAt: new Date(),
-      reviewNote: reviewNote || null,
-    },
-  });
-
-  revalidatePath("/documents");
-  revalidatePath(`/documents/${documentId}`);
-  revalidatePath("/dashboard");
-
-  redirect(`/documents/${documentId}`);
-}
-
-export default async function DocumentDetailsPage({ params }: PageProps) {
   const { id } = await params;
-
-  const userId = await getSessionUserId();
-
-  if (!userId) {
-    redirect("/login");
-  }
 
   const document = await prisma.document.findFirst({
     where: {
       id,
-      userId,
+      userId: session.user.id,
     },
     select: {
       id: true,
@@ -258,13 +371,13 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
       fileSize: true,
       category: true,
       status: true,
+      uploadedAt: true,
       extractedData: true,
       extractedAt: true,
       processingError: true,
       reviewStatus: true,
       reviewedAt: true,
       reviewNote: true,
-      uploadedAt: true,
     },
   });
 
@@ -272,536 +385,487 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
     notFound();
   }
 
-  const data = document.extractedData as ExtractedData | null;
-  const currency = getString(data, ["currency"]) ?? "INR";
+  const extracted = document.extractedData as ExtractedDocumentData | null;
+  const currency = getStringValue(extracted, ["currency"]) ?? "INR";
+  const lineItems = getLineItems(extracted);
 
-  const totalAmount = getNumber(data, ["totalAmount", "amount"]);
-  const revenue = getNumber(data, ["revenue", "totalRevenue", "sales"]);
-  const expenses = getNumber(data, ["expenses", "totalExpenses"]);
+  const summary = getStringValue(extracted, ["summary"]);
+  const reportedUnit = getStringValue(extracted, ["reportedUnit"]);
+  const unitEvidence = getStringValue(extracted, ["unitDetectionEvidence"]);
+  const documentDate = getStringValue(extracted, ["documentDate"]);
+  const periodStart = getStringValue(extracted, ["periodStart"]);
+  const periodEnd = getStringValue(extracted, ["periodEnd"]);
 
-  const profit = getNumber(data, ["profit", "netProfit"]);
-  const loss = getNumber(data, ["loss", "netLoss"]);
-  const netIncome = getNumber(data, ["netIncome"]);
+  const revenue = getNumberValue(extracted, [
+    "revenue",
+    "totalRevenue",
+    "sales",
+    "income",
+  ]);
 
-  const profitOrLoss =
-    typeof netIncome === "number"
-      ? netIncome
-      : typeof profit === "number"
-        ? profit
-        : typeof loss === "number"
-          ? -Math.abs(loss)
-          : undefined;
+  const expenses = getNumberValue(extracted, [
+    "expenses",
+    "totalExpenses",
+    "expenditure",
+  ]);
 
-  const cash = getNumber(data, ["cash", "closingBalance", "balance"]);
-  const assets = getNumber(data, ["assets"]);
-  const liabilities = getNumber(data, ["liabilities"]);
-  const equity = getNumber(data, ["equity"]);
+  const profit = getNumberValue(extracted, [
+    "profit",
+    "netIncome",
+    "netProfit",
+    "netLoss",
+    "loss",
+  ]);
 
-  const summary =
-    getString(data, ["summary", "description"]) ??
-    "No AI summary was extracted for this document.";
+  const cash = getNumberValue(extracted, [
+    "cash",
+    "closingBalance",
+    "bankBalance",
+  ]);
 
-  const documentDate = getString(data, ["documentDate", "date"]);
-  const periodStart = getString(data, ["periodStart", "startDate"]);
-  const periodEnd = getString(data, ["periodEnd", "endDate"]);
-
-  const reportedUnit = getString(data, ["reportedUnit"]) ?? "unknown";
-  const scaleMultiplier = getNumber(data, ["scaleMultiplier"]);
-  const unitDetectionEvidence = getString(data, ["unitDetectionEvidence"]);
-
-  const lineItems = getLineItems(data);
-
-  const fallbackLineItemDate =
-    documentDate ??
-    periodEnd ??
-    periodStart ??
-    document.extractedAt ??
-    document.uploadedAt;
-
-  const fallbackLineItemCategory = prettyCategory(document.category);
-
-  const isProcessed = document.status === "PROCESSED";
-  const isApproved = document.reviewStatus === "APPROVED";
-  const isRejected = document.reviewStatus === "REJECTED";
-  const canReview = isProcessed;
+  const assets = getNumberValue(extracted, ["assets", "totalAssets"]);
+  const liabilities = getNumberValue(extracted, [
+    "liabilities",
+    "totalLiabilities",
+  ]);
+  const equity = getNumberValue(extracted, ["equity", "totalEquity"]);
 
   return (
     <>
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">Document details</p>
-          <h1>{document.fileName}</h1>
-        </div>
-
-        <Link
-          href="/documents"
-          style={{
-            border: "1px solid var(--color-border)",
-            background: "rgba(255,255,255,0.04)",
-            color: "var(--color-text-primary)",
-            borderRadius: 12,
-            padding: "10px 13px",
-            textDecoration: "none",
-            fontSize: 13,
-            fontWeight: 800,
-          }}
-        >
-          ← Back to documents
-        </Link>
-      </header>
-
-      <p className="page-intro">
-        Review the AI extraction before trusting this document. Only approved
-        documents are used in the dashboard, AI team, and finance chat.
-      </p>
-
-      <section
-        className="alerts-card"
+      <header
+        className="dashboard-header"
         style={{
-          display: "grid",
-          gap: 18,
+          alignItems: "flex-start",
           marginBottom: 24,
         }}
       >
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 14,
-            alignItems: "flex-start",
-            flexWrap: "wrap",
+            display: "grid",
+            gap: 10,
+            maxWidth: 820,
           }}
         >
-          <div>
-            <p className="section-title">Trust status</p>
-            <p className="section-hint">
-              Check AI extraction quality before approving this file.
+          <Link
+            href="/documents"
+            style={{
+              color: "var(--color-amber)",
+              fontSize: 13,
+              fontWeight: 900,
+              textDecoration: "none",
+            }}
+          >
+            ← Back to documents
+          </Link>
+
+          <p
+            className="eyebrow"
+            style={{
+              margin: 0,
+            }}
+          >
+            Document review
+          </p>
+
+          <h1
+            style={{
+              margin: 0,
+              lineHeight: 1.08,
+              wordBreak: "break-word",
+            }}
+          >
+            {document.fileName}
+          </h1>
+
+          <p
+            className="page-intro"
+            style={{
+              margin: 0,
+              lineHeight: 1.6,
+              maxWidth: 760,
+            }}
+          >
+            Review AI extraction, approve trusted numbers, and decide whether
+            this document can update your dashboard and AI finance team.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
+        >
+          <Pill type="status" value={document.status} />
+          <Pill type="review" value={document.reviewStatus} />
+        </div>
+      </header>
+
+      <section
+        className="section-card"
+        style={{
+          marginBottom: 24,
+          display: "grid",
+          gap: 18,
+        }}
+      >
+        <div
+          className="section-heading"
+          style={{
+            alignItems: "flex-start",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gap: 6,
+            }}
+          >
+            <p
+              className="section-title"
+              style={{
+                margin: 0,
+              }}
+            >
+              Extraction overview
+            </p>
+
+            <p
+              className="section-hint"
+              style={{
+                margin: 0,
+                lineHeight: 1.55,
+              }}
+            >
+              These are the main numbers the AI detected from this document.
             </p>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
+          <a
+            href={`/api/documents/${document.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-ghost"
           >
-            <span
-              style={{
-                ...statusStyle(document.status),
-                display: "inline-flex",
-                alignItems: "center",
-                borderRadius: 999,
-                padding: "8px 11px",
-                fontSize: 12,
-                fontWeight: 850,
-              }}
-            >
-              AI: {prettyCategory(document.status)}
-            </span>
-
-            <span
-              style={{
-                ...statusStyle(document.reviewStatus),
-                display: "inline-flex",
-                alignItems: "center",
-                borderRadius: 999,
-                padding: "8px 11px",
-                fontSize: 12,
-                fontWeight: 850,
-              }}
-            >
-              Review: {prettyCategory(document.reviewStatus)}
-            </span>
-          </div>
+            Open original file
+          </a>
         </div>
 
-        {document.processingError && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 12,
+          }}
+        >
+          <MetricCard
+            label="Revenue"
+            value={formatAmount(revenue, currency)}
+            hint="Detected income / sales"
+            tone="green"
+          />
+
+          <MetricCard
+            label="Expenses"
+            value={formatAmount(expenses, currency)}
+            hint="Detected costs"
+            tone="red"
+          />
+
+          <MetricCard
+            label="Profit"
+            value={formatAmount(profit, currency)}
+            hint="Net result"
+            tone={profit !== null && profit < 0 ? "red" : "green"}
+          />
+
+          <MetricCard
+            label="Cash"
+            value={formatAmount(cash, currency)}
+            hint="Detected balance"
+            tone="blue"
+          />
+
+          <MetricCard
+            label="Assets"
+            value={formatAmount(assets, currency)}
+            hint="Balance sheet total"
+            tone="blue"
+          />
+
+          <MetricCard
+            label="Liabilities"
+            value={formatAmount(liabilities, currency)}
+            hint="Obligations"
+            tone="yellow"
+          />
+
+          <MetricCard
+            label="Equity"
+            value={formatAmount(equity, currency)}
+            hint="Owner value"
+            tone="green"
+          />
+        </div>
+
+        {summary && (
           <div
             style={{
-              border: "1px solid rgba(255,71,87,0.28)",
-              background: "rgba(255,71,87,0.08)",
-              borderRadius: 16,
-              padding: 14,
+              border: "1px solid var(--color-border)",
+              background: "rgba(255,255,255,0.035)",
+              borderRadius: 18,
+              padding: 16,
             }}
           >
             <p
               style={{
-                margin: "0 0 6px",
-                color: "#ff8a95",
-                fontSize: 13,
+                margin: "0 0 8px",
+                color: "var(--color-text-primary)",
                 fontWeight: 900,
               }}
             >
-              Processing failed
+              AI summary
             </p>
 
             <p
               style={{
                 margin: 0,
                 color: "var(--color-text-secondary)",
-                fontSize: 13,
-                lineHeight: 1.55,
-                whiteSpace: "pre-wrap",
+                lineHeight: 1.65,
+                fontSize: 14,
               }}
             >
-              {document.processingError}
+              {summary}
             </p>
           </div>
         )}
-
-        {canReview && (
-          <form
-            action={updateReviewStatus}
-            style={{
-              display: "grid",
-              gap: 12,
-            }}
-          >
-            <input type="hidden" name="documentId" value={document.id} />
-
-            <label
-              style={{
-                display: "grid",
-                gap: 8,
-                color: "var(--color-text-secondary)",
-                fontSize: 13,
-                fontWeight: 700,
-              }}
-            >
-              Review note optional
-              <textarea
-                name="reviewNote"
-                defaultValue={document.reviewNote ?? ""}
-                placeholder="Example: Numbers match the uploaded financial statement."
-                rows={3}
-                style={{
-                  width: "100%",
-                  resize: "vertical",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 14,
-                  background: "rgba(255,255,255,0.035)",
-                  color: "var(--color-text-primary)",
-                  padding: 12,
-                  fontFamily: "inherit",
-                  fontSize: 14,
-                  outline: "none",
-                }}
-              />
-            </label>
-
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                type="submit"
-                name="action"
-                value="approve"
-                disabled={isApproved}
-                style={{
-                  border: "none",
-                  background: "var(--color-amber)",
-                  color: "var(--color-base)",
-                  borderRadius: 12,
-                  padding: "11px 15px",
-                  fontSize: 14,
-                  fontWeight: 850,
-                  cursor: isApproved ? "not-allowed" : "pointer",
-                  opacity: isApproved ? 0.65 : 1,
-                }}
-              >
-                {isApproved ? "Approved" : "Approve for dashboard"}
-              </button>
-
-              <button
-                type="submit"
-                name="action"
-                value="reject"
-                disabled={isRejected}
-                style={{
-                  border: "1px solid rgba(255,71,87,0.34)",
-                  background: "rgba(255,71,87,0.08)",
-                  color: "#ff8a95",
-                  borderRadius: 12,
-                  padding: "11px 15px",
-                  fontSize: 14,
-                  fontWeight: 850,
-                  cursor: isRejected ? "not-allowed" : "pointer",
-                  opacity: isRejected ? 0.65 : 1,
-                }}
-              >
-                {isRejected ? "Rejected" : "Reject document"}
-              </button>
-            </div>
-          </form>
-        )}
       </section>
 
       <section
-        className="dashboard-top-grid"
+        className="section-card"
         style={{
           marginBottom: 24,
+          display: "grid",
+          gap: 18,
         }}
       >
-        <div className="stat-card">
-          <p className="stat-label">Total amount</p>
-          <p className="stat-value">{formatMoney(totalAmount, currency)}</p>
-          <p className="stat-delta stat-delta-neutral">
-            Main extracted amount
-          </p>
+        <div
+          className="section-heading"
+          style={{
+            alignItems: "flex-start",
+          }}
+        >
+          <div>
+            <p className="section-title">Processing timeline</p>
+            <p className="section-hint">
+              See how this document moved from upload to dashboard impact.
+            </p>
+          </div>
         </div>
 
-        <div className="stat-card">
-          <p className="stat-label">Revenue</p>
-          <p className="stat-value">{formatMoney(revenue, currency)}</p>
-          <p className="stat-delta stat-delta-positive">
-            Actual saved value
-          </p>
+        <DocumentTimeline
+          status={document.status}
+          reviewStatus={document.reviewStatus}
+          uploadedAt={document.uploadedAt}
+          extractedAt={document.extractedAt}
+          reviewedAt={document.reviewedAt}
+          processingError={document.processingError}
+        />
+      </section>
+
+      <DocumentReviewPanel
+        documentId={document.id}
+        fileName={document.fileName}
+        status={document.status}
+        initialReviewStatus={document.reviewStatus}
+        initialReviewNote={document.reviewNote}
+      />
+
+      <div
+        style={{
+          height: 24,
+        }}
+      />
+
+      <section
+        className="section-card"
+        style={{
+          marginBottom: 24,
+          display: "grid",
+          gap: 18,
+        }}
+      >
+        <div
+          className="section-heading"
+          style={{
+            alignItems: "flex-start",
+          }}
+        >
+          <div>
+            <p className="section-title">Document metadata</p>
+            <p className="section-hint">
+              File details and extraction metadata used by the review workflow.
+            </p>
+          </div>
         </div>
 
-        <div className="stat-card">
-          <p className="stat-label">Expenses</p>
-          <p className="stat-value">{formatMoney(expenses, currency)}</p>
-          <p className="stat-delta stat-delta-warning">
-            Actual saved value
-          </p>
-        </div>
-
-        <div className="stat-card">
-          <p className="stat-label">Profit / Loss</p>
-          <p className="stat-value">{formatMoney(profitOrLoss, currency)}</p>
-          <p className="stat-delta stat-delta-neutral">
-            Used for dashboard health
-          </p>
+        <div
+          style={{
+            border: "1px solid var(--color-border)",
+            borderRadius: 18,
+            padding: "4px 16px",
+            background: "rgba(255,255,255,0.025)",
+          }}
+        >
+          <InfoRow label="Category" value={categoryLabel(document.category)} />
+          <InfoRow label="File type" value={document.mimeType} />
+          <InfoRow label="File size" value={formatFileSize(document.fileSize)} />
+          <InfoRow label="Uploaded" value={formatDateTime(document.uploadedAt)} />
+          <InfoRow
+            label="Extracted"
+            value={formatDateTime(document.extractedAt)}
+          />
+          <InfoRow label="Reviewed" value={formatDateTime(document.reviewedAt)} />
+          <InfoRow label="Currency" value={currency} />
+          <InfoRow label="Reported unit" value={reportedUnit ?? "Not detected"} />
+          <InfoRow
+            label="Unit evidence"
+            value={unitEvidence ?? "Not available"}
+          />
+          <InfoRow label="Document date" value={documentDate ?? "Not found"} />
+          <InfoRow
+            label="Period"
+            value={
+              periodStart || periodEnd
+                ? `${periodStart ?? "?"} to ${periodEnd ?? "?"}`
+                : "Not found"
+            }
+          />
         </div>
       </section>
 
       <section
-        className="dashboard-bottom-grid"
+        className="section-card"
         style={{
           marginBottom: 24,
+          display: "grid",
+          gap: 18,
         }}
       >
-        <div className="alerts-card">
-          <div className="cashflow-header">
-            <div>
-              <p className="section-title">AI summary</p>
-              <p className="section-hint">
-                Human-readable interpretation of the document.
-              </p>
-            </div>
-          </div>
-
-          <p
-            style={{
-              margin: 0,
-              color: "var(--color-text-secondary)",
-              fontSize: 14,
-              lineHeight: 1.7,
-            }}
-          >
-            {summary}
-          </p>
-        </div>
-
-        <div className="alerts-card">
-          <div className="cashflow-header">
-            <div>
-              <p className="section-title">Document metadata</p>
-              <p className="section-hint">
-                File, accounting period, and unit detection details.
-              </p>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gap: 12,
-            }}
-          >
-            {[
-              ["Category", prettyCategory(document.category)],
-              ["File size", formatBytes(document.fileSize)],
-              ["MIME type", document.mimeType],
-              ["Uploaded", formatDate(document.uploadedAt)],
-              ["Extracted", formatDate(document.extractedAt)],
-              ["Reviewed", formatDate(document.reviewedAt)],
-              ["Document date", formatDate(documentDate)],
-              [
-                "Period",
-                periodStart || periodEnd
-                  ? `${formatDate(periodStart)} → ${formatDate(periodEnd)}`
-                  : "-",
-              ],
-              ["Currency", currency],
-              ["Reported unit", reportedUnit],
-              [
-                "Scale multiplier",
-                typeof scaleMultiplier === "number"
-                  ? scaleMultiplier.toLocaleString("en-IN")
-                  : "-",
-              ],
-              ["Unit evidence", unitDetectionEvidence ?? "-"],
-              ["Cash / balance", formatMoney(cash, currency)],
-              ["Assets", formatMoney(assets, currency)],
-              ["Liabilities", formatMoney(liabilities, currency)],
-              ["Equity", formatMoney(equity, currency)],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 16,
-                  borderBottom: "1px solid rgba(255,255,255,0.06)",
-                  paddingBottom: 9,
-                }}
-              >
-                <span
-                  style={{
-                    color: "var(--color-text-secondary)",
-                    fontSize: 13,
-                  }}
-                >
-                  {label}
-                </span>
-
-                <span
-                  style={{
-                    color: "var(--color-text-primary)",
-                    fontSize: 13,
-                    fontWeight: 750,
-                    textAlign: "right",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="alerts-card"
-        style={{
-          marginBottom: 24,
-        }}
-      >
-        <div className="cashflow-header">
+        <div
+          className="section-heading"
+          style={{
+            alignItems: "flex-start",
+          }}
+        >
           <div>
             <p className="section-title">Extracted line items</p>
             <p className="section-hint">
-              These amounts are shown from saved AI extraction. No UI multiplier
-              is applied here.
+              The first 80 line items detected by AI. Use this to verify whether
+              the extraction looks reasonable.
             </p>
           </div>
 
-          <span className="section-hint">{lineItems.length} items</span>
+          <span className="badge-sample">
+            {lineItems.length} item{lineItems.length === 1 ? "" : "s"}
+          </span>
         </div>
 
         {lineItems.length === 0 ? (
-          <p
+          <div
             style={{
-              margin: 0,
+              border: "1px dashed var(--color-border)",
+              background: "rgba(255,255,255,0.03)",
+              borderRadius: 18,
+              padding: 20,
               color: "var(--color-text-secondary)",
               fontSize: 14,
-              lineHeight: 1.6,
             }}
           >
-            No line items were extracted. This is normal for summary financial
-            statements, but invoices and bank statements should usually show
-            rows here.
-          </p>
+            No line items were extracted from this document.
+          </div>
         ) : (
           <div
             style={{
               overflowX: "auto",
+              border: "1px solid var(--color-border)",
+              borderRadius: 18,
             }}
           >
             <table
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                minWidth: 620,
+                minWidth: 680,
               }}
             >
               <thead>
-                <tr>
-                  {["Description", "Category", "Date", "Amount"].map(
-                    (heading) => (
-                      <th
-                        key={heading}
-                        style={{
-                          textAlign: heading === "Amount" ? "right" : "left",
-                          color: "var(--color-text-secondary)",
-                          fontSize: 12,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.08em",
-                          padding: "0 0 12px",
-                          borderBottom: "1px solid var(--color-border)",
-                        }}
-                      >
-                        {heading}
-                      </th>
-                    ),
-                  )}
+                <tr
+                  style={{
+                    background: "rgba(255,255,255,0.045)",
+                  }}
+                >
+                  {["Description", "Category", "Amount"].map((heading) => (
+                    <th
+                      key={heading}
+                      style={{
+                        color: "var(--color-text-secondary)",
+                        fontSize: 12,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        textAlign: heading === "Amount" ? "right" : "left",
+                        padding: 13,
+                        borderBottom: "1px solid var(--color-border)",
+                      }}
+                    >
+                      {heading}
+                    </th>
+                  ))}
                 </tr>
               </thead>
 
               <tbody>
                 {lineItems.map((item, index) => (
-                  <tr key={`${item.description ?? "item"}-${index}`}>
+                  <tr key={`${item.description}-${index}`}>
                     <td
                       style={{
-                        padding: "13px 10px 13px 0",
+                        padding: 13,
                         color: "var(--color-text-primary)",
-                        fontSize: 14,
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        fontSize: 13,
+                        borderBottom: "1px solid var(--color-border)",
                       }}
                     >
-                      {item.description ?? "-"}
+                      {item.description}
                     </td>
 
                     <td
                       style={{
-                        padding: "13px 10px",
+                        padding: 13,
                         color: "var(--color-text-secondary)",
                         fontSize: 13,
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        borderBottom: "1px solid var(--color-border)",
                       }}
                     >
-                      {item.category ?? fallbackLineItemCategory}
+                      {item.category}
                     </td>
 
                     <td
                       style={{
-                        padding: "13px 10px",
-                        color: "var(--color-text-secondary)",
+                        padding: 13,
+                        color:
+                          item.amount !== null && item.amount < 0
+                            ? "#ff8a95"
+                            : "var(--color-text-primary)",
                         fontSize: 13,
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      {formatDate(item.date ?? fallbackLineItemDate)}
-                    </td>
-
-                    <td
-                      style={{
-                        padding: "13px 0 13px 10px",
-                        color: "var(--color-text-primary)",
-                        fontSize: 14,
-                        fontWeight: 800,
+                        fontWeight: 850,
                         textAlign: "right",
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        borderBottom: "1px solid var(--color-border)",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      {formatMoney(item.amount, currency)}
+                      {formatAmount(item.amount, currency)}
                     </td>
                   </tr>
                 ))}
@@ -811,34 +875,40 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
         )}
       </section>
 
-      <section className="alerts-card">
-        <div className="cashflow-header">
-          <div>
-            <p className="section-title">Raw AI extraction</p>
-            <p className="section-hint">
-              Developer view for checking Gemini output. These are the exact
-              values saved in the database.
-            </p>
-          </div>
-        </div>
+      <section
+        className="section-card"
+        style={{
+          display: "grid",
+          gap: 14,
+        }}
+      >
+        <details>
+          <summary
+            style={{
+              cursor: "pointer",
+              color: "var(--color-text-primary)",
+              fontWeight: 900,
+            }}
+          >
+            Raw AI extraction JSON
+          </summary>
 
-        <pre
-          style={{
-            margin: 0,
-            maxHeight: 420,
-            overflow: "auto",
-            border: "1px solid var(--color-border)",
-            borderRadius: 16,
-            background: "rgba(0,0,0,0.22)",
-            color: "var(--color-text-secondary)",
-            padding: 16,
-            fontSize: 12,
-            lineHeight: 1.6,
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {JSON.stringify(data ?? {}, null, 2)}
-        </pre>
+          <pre
+            style={{
+              marginTop: 14,
+              border: "1px solid var(--color-border)",
+              background: "rgba(0,0,0,0.20)",
+              borderRadius: 18,
+              padding: 16,
+              overflowX: "auto",
+              color: "var(--color-text-secondary)",
+              fontSize: 12,
+              lineHeight: 1.55,
+            }}
+          >
+            {JSON.stringify(document.extractedData ?? {}, null, 2)}
+          </pre>
+        </details>
       </section>
     </>
   );

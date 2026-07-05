@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -46,16 +47,19 @@ function TrustStatCard({
         background: toneStyle.background,
         borderRadius: 18,
         padding: 16,
+        minHeight: 116,
+        display: "grid",
+        alignContent: "space-between",
       }}
     >
       <p
         style={{
-          margin: "0 0 8px",
+          margin: 0,
           color: "var(--color-text-secondary)",
           fontSize: 12,
+          fontWeight: 850,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
-          fontWeight: 850,
         }}
       >
         {label}
@@ -63,11 +67,11 @@ function TrustStatCard({
 
       <p
         style={{
-          margin: "0 0 6px",
-          color: toneStyle.color,
+          margin: "10px 0 6px",
+          color: "var(--color-text-primary)",
           fontSize: 30,
-          lineHeight: 1,
           fontWeight: 950,
+          lineHeight: 1,
         }}
       >
         {value}
@@ -76,9 +80,10 @@ function TrustStatCard({
       <p
         style={{
           margin: 0,
-          color: "var(--color-text-secondary)",
-          fontSize: 13,
-          lineHeight: 1.45,
+          color: toneStyle.color,
+          fontSize: 12,
+          fontWeight: 750,
+          lineHeight: 1.4,
         }}
       >
         {hint}
@@ -87,6 +92,119 @@ function TrustStatCard({
   );
 }
 
+function DashboardImpactPanel({
+  trustedDocuments,
+  needsReviewDocuments,
+  rejectedDocuments,
+  processedDocuments,
+}: {
+  trustedDocuments: number;
+  needsReviewDocuments: number;
+  rejectedDocuments: number;
+  processedDocuments: number;
+}) {
+  const hasTrustedData = trustedDocuments > 0;
+  const hasPendingReview = needsReviewDocuments > 0;
+
+  return (
+    <section
+      className="section-card"
+      style={{
+        marginBottom: 24,
+        display: "grid",
+        gap: 20,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 24,
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            maxWidth: 780,
+          }}
+        >
+          <p
+            className="section-title"
+            style={{
+              margin: 0,
+              lineHeight: 1.25,
+            }}
+          >
+            Dashboard data status
+          </p>
+
+          <p
+            className="section-hint"
+            style={{
+              margin: 0,
+              lineHeight: 1.65,
+              maxWidth: 760,
+            }}
+          >
+            Dashboard, AI Team, and Chat update only from approved documents.
+            Processed documents must be reviewed before they become trusted
+            financial data.
+          </p>
+        </div>
+
+        <Link
+          href="/dashboard"
+          className="btn-ghost"
+          style={{
+            flex: "0 0 auto",
+            marginTop: 2,
+          }}
+        >
+          Open dashboard
+        </Link>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 12,
+        }}
+      >
+        <TrustStatCard
+          label="Trusted for dashboard"
+          value={String(trustedDocuments)}
+          hint={hasTrustedData ? "Dashboard can use this data" : "Approve data first"}
+          tone={hasTrustedData ? "green" : "blue"}
+        />
+
+        <TrustStatCard
+          label="Needs review"
+          value={String(needsReviewDocuments)}
+          hint={hasPendingReview ? "Review before dashboard updates" : "No pending review"}
+          tone={hasPendingReview ? "yellow" : "green"}
+        />
+
+        <TrustStatCard
+          label="Processed"
+          value={String(processedDocuments)}
+          hint="AI extraction completed"
+          tone="blue"
+        />
+
+        <TrustStatCard
+          label="Rejected"
+          value={String(rejectedDocuments)}
+          hint={rejectedDocuments > 0 ? "Excluded from dashboard" : "No rejected files"}
+          tone={rejectedDocuments > 0 ? "red" : "green"}
+        />
+      </div>
+    </section>
+  );
+}
 export default async function DocumentsPage() {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -99,117 +217,183 @@ export default async function DocumentsPage() {
   const documents = await getDocumentsForUser(session.user.id);
 
   const totalDocuments = documents.length;
+
   const processedDocuments = documents.filter(
     (doc) => doc.status === "PROCESSED",
   ).length;
+
   const trustedDocuments = documents.filter(
     (doc) => doc.status === "PROCESSED" && doc.reviewStatus === "APPROVED",
   ).length;
+
   const needsReviewDocuments = documents.filter(
     (doc) => doc.reviewStatus === "NEEDS_REVIEW",
   ).length;
+
   const rejectedDocuments = documents.filter(
     (doc) => doc.reviewStatus === "REJECTED",
   ).length;
 
   return (
     <>
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">Document trust center</p>
-          <h1>Upload, review, and approve business data</h1>
-        </div>
-      </header>
-
-      <section
-        className="alerts-card"
+      <header
+        className="dashboard-header"
         style={{
-          display: "grid",
-          gap: 18,
+          alignItems: "flex-start",
           marginBottom: 24,
         }}
       >
-        <div>
-          <p className="section-title">Trusted data workflow</p>
-          <p className="section-hint">
-            Dashboard, AI Team, and chat use only approved documents. Pending
-            and rejected documents stay out of trusted financial analysis.
+        <div
+          style={{
+            display: "grid",
+            gap: 10,
+            maxWidth: 780,
+          }}
+        >
+          <p
+            className="eyebrow"
+            style={{
+              margin: 0,
+            }}
+          >
+            Document trust center
           </p>
+
+          <h1
+            style={{
+              margin: 0,
+              lineHeight: 1.08,
+            }}
+          >
+            Upload, review, and approve business data
+          </h1>
+
+          <p
+            className="page-intro"
+            style={{
+              margin: 0,
+              lineHeight: 1.6,
+              maxWidth: 720,
+            }}
+          >
+            Upload financial documents, let AI extract the numbers, then approve
+            only trusted data before it reaches the dashboard, AI Team, and
+            finance chat.
+          </p>
+        </div>
+
+        <span className="badge-sample">
+          {totalDocuments > 0
+            ? `${totalDocuments} document${totalDocuments === 1 ? "" : "s"}`
+            : "No documents yet"}
+        </span>
+      </header>
+
+      <DashboardImpactPanel
+        trustedDocuments={trustedDocuments}
+        needsReviewDocuments={needsReviewDocuments}
+        rejectedDocuments={rejectedDocuments}
+        processedDocuments={processedDocuments}
+      />
+
+      <section
+        className="section-card"
+        style={{
+          marginBottom: 24,
+        }}
+      >
+        <div className="section-heading">
+          <div>
+            <p className="section-title">Trusted data workflow</p>
+            <p className="section-hint">
+              Dashboard, AI Team, and Chat use only approved documents. Pending
+              and rejected documents stay out of trusted financial analysis.
+            </p>
+          </div>
         </div>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))",
-            gap: 14,
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 12,
+            marginTop: 18,
           }}
         >
           <TrustStatCard
-            label="Trusted"
+            label="Total documents"
+            value={String(totalDocuments)}
+            hint="Uploaded files"
+            tone="blue"
+          />
+
+          <TrustStatCard
+            label="Processed"
+            value={String(processedDocuments)}
+            hint="AI extraction done"
+            tone="blue"
+          />
+
+          <TrustStatCard
+            label="Approved"
             value={String(trustedDocuments)}
-            hint="Approved documents used by dashboard and AI."
+            hint="Used by dashboard"
             tone="green"
           />
 
           <TrustStatCard
             label="Needs review"
             value={String(needsReviewDocuments)}
-            hint="Documents waiting for human verification."
-            tone="yellow"
-          />
-
-          <TrustStatCard
-            label="Rejected"
-            value={String(rejectedDocuments)}
-            hint="Excluded from trusted analysis."
-            tone="red"
-          />
-
-          <TrustStatCard
-            label="Processed"
-            value={`${processedDocuments}/${totalDocuments}`}
-            hint="AI-processed documents out of total uploads."
-            tone="blue"
+            hint="Waiting for approval"
+            tone={needsReviewDocuments > 0 ? "yellow" : "green"}
           />
         </div>
       </section>
 
       <section
-        className="alerts-card"
+        className="section-card"
         style={{
-          display: "grid",
-          gap: 18,
           marginBottom: 24,
         }}
       >
-        <div>
-          <p className="section-title">Upload documents</p>
-          <p className="section-hint">
-            Upload bank statements, invoices, payroll, utility bills, or
-            financial statements. After processing, review and approve the AI
-            extraction before trusting it.
-          </p>
+        <div className="section-heading">
+          <div>
+            <p className="section-title">Upload documents</p>
+            <p className="section-hint">
+              Upload bank statements, invoices, payroll, utility bills, or
+              financial statements. After processing, review and approve the AI
+              extraction before trusting it.
+            </p>
+          </div>
         </div>
 
-        <UploadForm />
+        <div
+          style={{
+            marginTop: 18,
+          }}
+        >
+          <UploadForm />
+        </div>
       </section>
 
-      <section
-        className="alerts-card"
-        style={{
-          display: "grid",
-          gap: 18,
-        }}
-      >
-        <div>
-          <p className="section-title">Document review queue</p>
-          <p className="section-hint">
-            Review status controls whether each document can affect dashboard,
-            agents, and chat answers.
-          </p>
+      <section className="section-card">
+        <div className="section-heading">
+          <div>
+            <p className="section-title">Document review queue</p>
+            <p className="section-hint">
+              Review status controls whether each document can affect dashboard,
+              agents, and chat answers.
+            </p>
+          </div>
         </div>
 
-        <DocumentList documents={documents} />
+        <div
+          style={{
+            marginTop: 18,
+          }}
+        >
+          <DocumentList documents={documents} />
+        </div>
       </section>
     </>
   );

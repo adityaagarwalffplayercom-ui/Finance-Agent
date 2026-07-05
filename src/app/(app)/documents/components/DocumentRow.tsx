@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { DocumentListItem } from "@/lib/documents";
 import { categoryLabel, formatFileSize } from "@/lib/document-categories";
 import type { ExtractedDocumentData } from "@/lib/gemini";
+import { DocumentTimeline } from "./DocumentTimeline";
 
 const STATUS_LABEL: Record<string, string> = {
   UPLOADED: "Uploaded",
@@ -49,9 +50,37 @@ const STATUS_STYLE: Record<
   },
 };
 
+const REVIEW_STYLE: Record<
+  string,
+  {
+    label: string;
+    background: string;
+    color: string;
+    border: string;
+  }
+> = {
+  NEEDS_REVIEW: {
+    label: "Needs review",
+    background: "rgba(255,193,7,0.12)",
+    color: "#ffd166",
+    border: "rgba(255,193,7,0.28)",
+  },
+  APPROVED: {
+    label: "Trusted",
+    background: "rgba(46,213,115,0.12)",
+    color: "#7bed9f",
+    border: "rgba(46,213,115,0.28)",
+  },
+  REJECTED: {
+    label: "Rejected",
+    background: "rgba(255,71,87,0.12)",
+    color: "#ff8a95",
+    border: "rgba(255,71,87,0.28)",
+  },
+};
+
 function formatAmount(amount: number, currency?: string | null) {
   const finalCurrency = currency ?? "INR";
-
   const absoluteValue = Math.abs(amount);
 
   let compactValue = amount;
@@ -73,6 +102,7 @@ function formatAmount(amount: number, currency?: string | null) {
     USD: "$",
     EUR: "€",
     GBP: "£",
+    CHF: "CHF ",
   };
 
   const symbol = currencySymbols[finalCurrency] ?? `${finalCurrency} `;
@@ -82,6 +112,44 @@ function formatAmount(amount: number, currency?: string | null) {
   }).format(compactValue);
 
   return `${symbol}${formattedNumber}${suffix}`;
+}
+
+function getNumberValue(
+  data: ExtractedDocumentData | null,
+  keys: string[],
+): number | null {
+  if (!data) return null;
+
+  const record = data as unknown as Record<string, unknown>;
+
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "number" && !Number.isNaN(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function getStringValue(
+  data: ExtractedDocumentData | null,
+  keys: string[],
+): string | null {
+  if (!data) return null;
+
+  const record = data as unknown as Record<string, unknown>;
+
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return null;
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -106,20 +174,25 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function ProcessingSpinner() {
+function ReviewPill({ reviewStatus }: { reviewStatus: string }) {
+  const style = REVIEW_STYLE[reviewStatus] ?? REVIEW_STYLE.NEEDS_REVIEW;
+
   return (
     <span
-      aria-hidden="true"
       style={{
-        width: 13,
-        height: 13,
-        borderRadius: "50%",
-        border: "2px solid rgba(255,255,255,0.24)",
-        borderTopColor: "var(--color-amber)",
-        display: "inline-block",
-        animation: "spin 0.85s linear infinite",
+        display: "inline-flex",
+        alignItems: "center",
+        border: `1px solid ${style.border}`,
+        background: style.background,
+        color: style.color,
+        borderRadius: 999,
+        padding: "6px 9px",
+        fontSize: 12,
+        fontWeight: 850,
       }}
-    />
+    >
+      {style.label}
+    </span>
   );
 }
 
@@ -165,6 +238,28 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
 
   const extracted = doc.extractedData as ExtractedDocumentData | null;
   const canProcess = doc.status === "UPLOADED" || doc.status === "FAILED";
+
+  const currency = getStringValue(extracted, ["currency"]) ?? "INR";
+  const displayAmount = getNumberValue(extracted, [
+    "totalAmount",
+    "revenue",
+    "totalRevenue",
+    "sales",
+    "profit",
+    "netIncome",
+    "cash",
+    "closingBalance",
+  ]);
+
+  const displayAmountLabel =
+    getStringValue(extracted, ["totalAmountLabel"]) ??
+    (getNumberValue(extracted, ["revenue", "totalRevenue", "sales"]) !== null
+      ? "Revenue"
+      : getNumberValue(extracted, ["profit", "netIncome"]) !== null
+        ? "Profit"
+        : getNumberValue(extracted, ["cash", "closingBalance"]) !== null
+          ? "Cash"
+          : "Key amount");
 
   async function handleDelete() {
     if (isDeleting || isProcessing) return;
@@ -292,8 +387,27 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
           </p>
         </div>
 
-        <StatusPill status={doc.status} />
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
+        >
+          <StatusPill status={doc.status} />
+          <ReviewPill reviewStatus={doc.reviewStatus} />
+        </div>
       </div>
+
+      <DocumentTimeline
+        status={doc.status}
+        reviewStatus={doc.reviewStatus}
+        uploadedAt={doc.uploadedAt}
+        extractedAt={doc.extractedAt}
+        reviewedAt={doc.reviewedAt}
+        processingError={doc.processingError}
+      />
 
       <div
         style={{
@@ -331,28 +445,22 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: 8,
-              border: "none",
-              background: "var(--color-amber)",
-              color: "var(--color-base)",
+              border: "1px solid rgba(245,158,11,0.38)",
+              background: "rgba(245,158,11,0.12)",
+              color: "var(--color-amber)",
               borderRadius: 12,
               padding: "9px 12px",
               cursor: isProcessing || isDeleting ? "not-allowed" : "pointer",
               fontSize: 13,
-              fontWeight: 900,
-              opacity: isProcessing || isDeleting ? 0.7 : 1,
+              fontWeight: 850,
+              opacity: isProcessing || isDeleting ? 0.65 : 1,
             }}
           >
-            {isProcessing ? (
-              <>
-                <ProcessingSpinner />
-                Analyzing...
-              </>
-            ) : doc.status === "FAILED" ? (
-              <>↻ Retry analysis</>
-            ) : (
-              <>✨ Process with AI</>
-            )}
+            {isProcessing
+              ? "Analyzing..."
+              : doc.status === "FAILED"
+                ? "↻ Retry analysis"
+                : "✨ Process with AI"}
           </button>
         )}
 
@@ -372,7 +480,7 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
             cursor: isDeleting || isProcessing ? "not-allowed" : "pointer",
             fontSize: 13,
             fontWeight: 850,
-            opacity: isDeleting || isProcessing ? 0.7 : 1,
+            opacity: isDeleting || isProcessing ? 0.65 : 1,
           }}
         >
           {isDeleting ? "Removing..." : "Delete"}
@@ -382,14 +490,13 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
       {isProcessing && (
         <div
           style={{
-            border: "1px solid rgba(255,193,7,0.24)",
+            border: "1px solid rgba(255,193,7,0.28)",
             background: "rgba(255,193,7,0.08)",
+            color: "#ffd166",
             borderRadius: 14,
             padding: 12,
-            color: "#ffd166",
             fontSize: 13,
             lineHeight: 1.5,
-            fontWeight: 750,
           }}
         >
           Gemini is analyzing this document. If quota is hit, the backend may
@@ -422,7 +529,7 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
             </p>
           )}
 
-          {typeof extracted.totalAmount === "number" && (
+          {typeof displayAmount === "number" && (
             <p
               style={{
                 margin: 0,
@@ -431,8 +538,7 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
                 fontWeight: 850,
               }}
             >
-              {extracted.totalAmountLabel ?? "Total"}:{" "}
-              {formatAmount(extracted.totalAmount, extracted.currency)}
+              {displayAmountLabel}: {formatAmount(displayAmount, currency)}
             </p>
           )}
         </div>
@@ -441,14 +547,13 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
       {doc.status === "FAILED" && doc.processingError && (
         <div
           style={{
-            border: "1px solid rgba(255,71,87,0.26)",
+            border: "1px solid rgba(255,71,87,0.28)",
             background: "rgba(255,71,87,0.08)",
+            color: "#ff8a95",
             borderRadius: 14,
             padding: 12,
-            color: "#ff8a95",
             fontSize: 13,
-            lineHeight: 1.55,
-            whiteSpace: "pre-wrap",
+            lineHeight: 1.5,
           }}
         >
           {doc.processingError}
@@ -458,14 +563,13 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
       {processError && (
         <div
           style={{
-            border: "1px solid rgba(255,71,87,0.26)",
+            border: "1px solid rgba(255,71,87,0.28)",
             background: "rgba(255,71,87,0.08)",
+            color: "#ff8a95",
             borderRadius: 14,
             padding: 12,
-            color: "#ff8a95",
             fontSize: 13,
-            lineHeight: 1.55,
-            whiteSpace: "pre-wrap",
+            lineHeight: 1.5,
           }}
         >
           {processError}
