@@ -1,19 +1,14 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
+import { Prisma, type DocumentCategory } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type SampleDocument = {
   fileName: string;
-  category:
-    | "FINANCIAL_STATEMENT"
-    | "BANK_STATEMENT"
-    | "SALES_INVOICE"
-    | "PURCHASE_INVOICE"
-    | "PAYROLL"
-    | "UTILITY_BILL";
-  extractedData: Record<string, unknown>;
+  category: DocumentCategory;
+  extractedData: Prisma.InputJsonValue;
 };
 
 const DEMO_CONTENT = Buffer.from(
@@ -275,6 +270,7 @@ function revalidateDemoPaths() {
   revalidatePath("/chat");
   revalidatePath("/reports/cfo");
   revalidatePath("/business");
+  revalidatePath("/activity");
 }
 
 export async function POST() {

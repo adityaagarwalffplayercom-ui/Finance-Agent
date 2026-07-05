@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DemoSampleDataButton } from "./components/DemoSampleDataButton";
@@ -280,11 +281,13 @@ export default async function DashboardLayout({
     await getDashboardBusinessContext(session.user.id);
 
   const hasBusinessProfile = Boolean(business?.name?.trim());
+  const hasApprovedDocuments = approvedDocuments > 0;
 
-  const businessName = hasBusinessProfile
-    ? displayValue(business?.name)
-    : "Set up your business profile";
+  if (!hasBusinessProfile || !hasApprovedDocuments) {
+    redirect("/onboarding");
+  }
 
+  const businessName = displayValue(business?.name);
   const industry = displayValue(business?.industry);
   const businessType = displayValue(business?.businessType);
   const country = displayValue(business?.country);
@@ -309,9 +312,7 @@ export default async function DashboardLayout({
       <section
         style={{
           marginBottom: 28,
-          border: hasBusinessProfile
-            ? "1px solid rgba(245,158,11,0.22)"
-            : "1px solid rgba(255,193,7,0.30)",
+          border: "1px solid rgba(245,158,11,0.22)",
           background:
             "radial-gradient(circle at top left, rgba(245,158,11,0.14), transparent 34%), linear-gradient(135deg, rgba(255,255,255,0.062), rgba(255,255,255,0.026))",
           borderRadius: 28,
@@ -408,13 +409,9 @@ export default async function DashboardLayout({
 
               <span
                 style={{
-                  border: hasBusinessProfile
-                    ? "1px solid rgba(46,213,115,0.28)"
-                    : "1px solid rgba(255,193,7,0.30)",
-                  background: hasBusinessProfile
-                    ? "rgba(46,213,115,0.10)"
-                    : "rgba(255,193,7,0.10)",
-                  color: hasBusinessProfile ? "#7bed9f" : "#ffd166",
+                  border: "1px solid rgba(46,213,115,0.28)",
+                  background: "rgba(46,213,115,0.10)",
+                  color: "#7bed9f",
                   borderRadius: 999,
                   padding: "8px 11px",
                   fontSize: 12,
@@ -422,7 +419,7 @@ export default async function DashboardLayout({
                   whiteSpace: "nowrap",
                 }}
               >
-                {hasBusinessProfile ? "Profile connected" : "Profile missing"}
+                Dashboard ready
               </span>
             </div>
 
@@ -473,7 +470,7 @@ export default async function DashboardLayout({
               }}
             >
               <Link href="/business" className="btn-ghost">
-                {hasBusinessProfile ? "Edit business profile" : "Complete profile"}
+                Edit business profile
               </Link>
 
               <Link href="/documents" className="btn-ghost">
@@ -482,6 +479,10 @@ export default async function DashboardLayout({
 
               <Link href="/reports/cfo" className="btn-ghost">
                 Export CFO report
+              </Link>
+
+              <Link href="/onboarding" className="btn-ghost">
+                Setup guide
               </Link>
 
               <DemoSampleDataButton />
@@ -513,7 +514,7 @@ export default async function DashboardLayout({
                 label="Trusted docs"
                 value={String(approvedDocuments)}
                 hint="Used by dashboard"
-                tone={approvedDocuments > 0 ? "green" : "neutral"}
+                tone="green"
               />
 
               <MiniStat
@@ -532,9 +533,9 @@ export default async function DashboardLayout({
 
               <MiniStat
                 label="Context"
-                value={hasBusinessProfile ? "Ready" : "Missing"}
+                value="Ready"
                 hint="AI personalization"
-                tone={hasBusinessProfile ? "green" : "yellow"}
+                tone="green"
               />
             </div>
           </aside>

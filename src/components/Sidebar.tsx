@@ -12,6 +12,7 @@ type SidebarProps = {
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", enabled: true },
+  { label: "Setup Guide", href: "/onboarding", enabled: true },
   { label: "Business Profile", href: "/business", enabled: true },
   { label: "Documents", href: "/documents", enabled: true },
   { label: "AI Team", href: "/ai-team", enabled: true },
