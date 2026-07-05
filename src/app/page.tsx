@@ -1,480 +1,577 @@
 import Link from "next/link";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
 
-const workflowSteps = [
-  {
-    step: "01",
-    title: "Upload business documents",
-    text: "Add financial statements, bank statements, sales invoices, purchase invoices, payroll files, or bills.",
-  },
-  {
-    step: "02",
-    title: "AI extracts financial data",
-    text: "Gemini reads the document, detects accounting units, and converts values into real full currency amounts.",
-  },
-  {
-    step: "03",
-    title: "Owner approves trusted numbers",
-    text: "AI output is not blindly trusted. The business owner reviews extraction and approves only correct data.",
-  },
-  {
-    step: "04",
-    title: "Dashboard and agents update",
-    text: "Approved data powers revenue, expenses, profit, cash, health score, alerts, and AI finance chat.",
-  },
-];
-
-const agentCards = [
-  {
-    icon: "🤖",
-    title: "Overall Finance Team",
-    text: "A complete all-in-one finance assistant for general business decisions.",
-  },
-  {
-    icon: "📊",
-    title: "CFO Agent",
-    text: "Explains financial health, profitability, risk, and next actions.",
-  },
-  {
-    icon: "📚",
-    title: "Accountant Agent",
-    text: "Checks documents, missing records, trust status, and accounting gaps.",
-  },
-  {
-    icon: "📈",
-    title: "Financial Analyst Agent",
-    text: "Analyzes margins, ratios, revenue coverage, and performance signals.",
-  },
-  {
-    icon: "💧",
-    title: "Cash Flow Agent",
-    text: "Looks at liquidity, runway, burn rate, and bank statement readiness.",
-  },
-  {
-    icon: "🛡️",
-    title: "Risk Agent",
-    text: "Surfaces warnings, weak signals, missing data, and financial red flags.",
-  },
-];
-
-const trustCards = [
-  {
-    title: "Real accounting values",
-    text: "The system detects whether statements are in thousands, lakhs, crores, millions, or actual values before saving numbers.",
-  },
-  {
-    title: "Human approval layer",
-    text: "Pending or rejected documents do not affect dashboard, AI team, or chat answers.",
-  },
-  {
-    title: "Approved-data-only AI",
-    text: "Agents answer only from trusted processed documents instead of inventing unsupported numbers.",
-  },
-];
-
-function SectionHeader({
-  eyebrow,
+function FeatureCard({
+  icon,
   title,
-  text,
+  description,
 }: {
-  eyebrow: string;
+  icon: string;
   title: string;
-  text: string;
+  description: string;
+}) {
+  return (
+    <article
+      style={{
+        border: "1px solid rgba(245,158,11,0.14)",
+        background:
+          "linear-gradient(135deg, rgba(245,158,11,0.055), rgba(255,255,255,0.025))",
+        borderRadius: 24,
+        padding: 22,
+        display: "grid",
+        gap: 14,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.055)",
+      }}
+    >
+      <span
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 18,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(245,158,11,0.12)",
+          border: "1px solid rgba(245,158,11,0.28)",
+          fontSize: 22,
+        }}
+      >
+        {icon}
+      </span>
+
+      <div
+        style={{
+          display: "grid",
+          gap: 8,
+        }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            color: "#f8fafc",
+            fontSize: 19,
+            lineHeight: 1.2,
+          }}
+        >
+          {title}
+        </h3>
+
+        <p
+          style={{
+            margin: 0,
+            color: "rgba(226,232,240,0.74)",
+            fontSize: 14,
+            lineHeight: 1.65,
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    </article>
+  );
+}
+
+function StepCard({
+  number,
+  title,
+  description,
+}: {
+  number: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <article
+      style={{
+        border: "1px solid rgba(245,158,11,0.12)",
+        background: "rgba(255,255,255,0.035)",
+        borderRadius: 22,
+        padding: 20,
+        display: "grid",
+        gap: 14,
+      }}
+    >
+      <span
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 16,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(245,158,11,0.12)",
+          border: "1px solid rgba(245,158,11,0.26)",
+          color: "#f59e0b",
+          fontSize: 13,
+          fontWeight: 950,
+        }}
+      >
+        {number}
+      </span>
+
+      <div
+        style={{
+          display: "grid",
+          gap: 7,
+        }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            color: "#f8fafc",
+            fontSize: 18,
+            lineHeight: 1.25,
+          }}
+        >
+          {title}
+        </h3>
+
+        <p
+          style={{
+            margin: 0,
+            color: "rgba(226,232,240,0.72)",
+            fontSize: 13,
+            lineHeight: 1.6,
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    </article>
+  );
+}
+
+function MetricPill({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <span
+      style={{
+        border: "1px solid rgba(245,158,11,0.18)",
+        background: "rgba(245,158,11,0.075)",
+        borderRadius: 999,
+        padding: "9px 12px",
+        display: "inline-flex",
+        gap: 7,
+        alignItems: "center",
+        color: "rgba(226,232,240,0.78)",
+        fontSize: 12,
+        fontWeight: 800,
+      }}
+    >
+      {label}
+      <strong
+        style={{
+          color: "#f8fafc",
+        }}
+      >
+        {value}
+      </strong>
+    </span>
+  );
+}
+
+function AgentCard({
+  name,
+  role,
+  icon,
+}: {
+  name: string;
+  role: string;
+  icon: string;
 }) {
   return (
     <div
       style={{
-        maxWidth: 760,
-        display: "grid",
-        gap: 10,
+        border: "1px solid rgba(245,158,11,0.13)",
+        background: "rgba(245,158,11,0.045)",
+        borderRadius: 18,
+        padding: 14,
+        display: "flex",
+        gap: 12,
+        alignItems: "center",
       }}
     >
-      <p
+      <span
         style={{
-          margin: 0,
-          color: "var(--color-amber)",
-          fontSize: 12,
-          fontWeight: 950,
-          textTransform: "uppercase",
-          letterSpacing: "0.14em",
+          width: 38,
+          height: 38,
+          borderRadius: 14,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(245,158,11,0.11)",
+          border: "1px solid rgba(245,158,11,0.24)",
+          fontSize: 18,
+          flex: "0 0 auto",
         }}
       >
-        {eyebrow}
-      </p>
+        {icon}
+      </span>
 
-      <h2
+      <span
         style={{
-          margin: 0,
-          color: "var(--color-text-primary)",
-          fontSize: "clamp(30px, 5vw, 48px)",
-          lineHeight: 1.05,
-          fontWeight: 950,
-          letterSpacing: "-0.055em",
+          display: "grid",
+          gap: 3,
         }}
       >
-        {title}
-      </h2>
+        <strong
+          style={{
+            color: "#f8fafc",
+            fontSize: 13,
+            lineHeight: 1.2,
+          }}
+        >
+          {name}
+        </strong>
 
-      <p
-        style={{
-          margin: 0,
-          color: "var(--color-text-secondary)",
-          fontSize: 16,
-          lineHeight: 1.7,
-        }}
-      >
-        {text}
-      </p>
+        <span
+          style={{
+            color: "rgba(226,232,240,0.65)",
+            fontSize: 12,
+            lineHeight: 1.35,
+          }}
+        >
+          {role}
+        </span>
+      </span>
     </div>
   );
 }
 
-function PrimaryLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        border: "none",
-        background: "var(--color-amber)",
-        color: "var(--color-base)",
-        borderRadius: 14,
-        padding: "13px 18px",
-        textDecoration: "none",
-        fontSize: 14,
-        fontWeight: 950,
-        boxShadow: "0 18px 45px rgba(245,158,11,0.22)",
-      }}
-    >
-      {children}
-    </Link>
-  );
-}
-
-function SecondaryLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        border: "1px solid var(--color-border)",
-        background: "rgba(255,255,255,0.045)",
-        color: "var(--color-text-primary)",
-        borderRadius: 14,
-        padding: "13px 18px",
-        textDecoration: "none",
-        fontSize: 14,
-        fontWeight: 850,
-      }}
-    >
-      {children}
-    </Link>
-  );
-}
-
-export default async function RootPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  const isLoggedIn = Boolean(session?.user?.id);
-
+export default function HomePage() {
   return (
     <main
       style={{
         minHeight: "100vh",
         background:
-          "radial-gradient(circle at top left, rgba(245,158,11,0.16), transparent 34%), radial-gradient(circle at top right, rgba(255,255,255,0.07), transparent 32%), var(--color-base)",
-        color: "var(--color-text-primary)",
+          "radial-gradient(circle at top left, rgba(245,158,11,0.20), transparent 34%), radial-gradient(circle at bottom right, rgba(46,213,115,0.08), transparent 30%), linear-gradient(135deg, #080d14, #0d1117 48%, #090d13)",
+        color: "#f8fafc",
+        overflow: "hidden",
       }}
     >
-      <nav
+      <style>
+        {`
+          @media (max-width: 980px) {
+            .landing-hero-grid,
+            .landing-final-grid {
+              grid-template-columns: 1fr !important;
+            }
+
+            .landing-nav {
+              justify-content: center !important;
+            }
+
+            .landing-hero-title {
+              font-size: 44px !important;
+            }
+          }
+
+          @media (max-width: 640px) {
+            .landing-page-shell {
+              padding: 18px !important;
+            }
+
+            .landing-hero {
+              padding: 28px !important;
+            }
+
+            .landing-hero-title {
+              font-size: 36px !important;
+            }
+
+            .landing-section {
+              padding: 22px !important;
+            }
+          }
+        `}
+      </style>
+
+      <div
+        className="landing-page-shell"
         style={{
-          width: "min(1180px, calc(100% - 32px))",
+          width: "100%",
+          maxWidth: 1180,
           margin: "0 auto",
-          padding: "24px 0",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 16,
+          padding: 24,
+          display: "grid",
+          gap: 24,
         }}
       >
-        <Link
-          href="/"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 10,
-            textDecoration: "none",
-            color: "var(--color-text-primary)",
-          }}
-        >
-          <span
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 14,
-              display: "grid",
-              placeItems: "center",
-              background: "var(--color-amber)",
-              color: "var(--color-base)",
-              fontWeight: 950,
-              boxShadow: "0 16px 36px rgba(245,158,11,0.22)",
-            }}
-          >
-            L
-          </span>
-
-          <span
-            style={{
-              fontSize: 18,
-              fontWeight: 950,
-              letterSpacing: "-0.04em",
-            }}
-          >
-            Ledger
-          </span>
-        </Link>
-
-        <div
+        <nav
+          className="landing-nav"
           style={{
             display: "flex",
+            justifyContent: "space-between",
+            gap: 18,
             alignItems: "center",
-            gap: 10,
             flexWrap: "wrap",
-            justifyContent: "flex-end",
+            padding: "10px 0",
           }}
         >
-          {isLoggedIn ? (
-            <SecondaryLink href="/dashboard">Open dashboard</SecondaryLink>
-          ) : (
-            <>
-              <SecondaryLink href="/login">Login</SecondaryLink>
-              <PrimaryLink href="/signup">Get started</PrimaryLink>
-            </>
-          )}
-        </div>
-      </nav>
-
-      <section
-        style={{
-          width: "min(1180px, calc(100% - 32px))",
-          margin: "0 auto",
-          padding: "54px 0 72px",
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.05fr) minmax(320px, 0.95fr)",
-          gap: 34,
-          alignItems: "center",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gap: 22,
-          }}
-        >
-          <span
+          <Link
+            href="/"
             style={{
-              justifySelf: "start",
-              border: "1px solid rgba(245,158,11,0.32)",
-              background: "rgba(245,158,11,0.10)",
-              color: "var(--color-amber)",
-              borderRadius: 999,
-              padding: "8px 12px",
-              fontSize: 12,
-              fontWeight: 900,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            AI Executive Finance Team
-          </span>
-
-          <h1
-            style={{
-              margin: 0,
-              color: "var(--color-text-primary)",
-              fontSize: "clamp(46px, 7vw, 82px)",
-              lineHeight: 0.94,
-              fontWeight: 950,
-              letterSpacing: "-0.075em",
-              maxWidth: 780,
-            }}
-          >
-            Turn business documents into financial decisions.
-          </h1>
-
-          <p
-            style={{
-              margin: 0,
-              color: "var(--color-text-secondary)",
-              fontSize: 18,
-              lineHeight: 1.7,
-              maxWidth: 680,
-            }}
-          >
-            Ledger helps small businesses upload financial documents, extract
-            real accounting values, approve trusted data, monitor dashboards,
-            and ask an AI finance team what to do next.
-          </p>
-
-          <div
-            style={{
-              display: "flex",
-              gap: 12,
-              flexWrap: "wrap",
+              display: "inline-flex",
+              gap: 10,
               alignItems: "center",
+              textDecoration: "none",
             }}
           >
-            <PrimaryLink href={isLoggedIn ? "/dashboard" : "/signup"}>
-              {isLoggedIn ? "Go to dashboard" : "Start free"}
-            </PrimaryLink>
+            <span
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 15,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background:
+                  "linear-gradient(135deg, rgba(245,158,11,0.24), rgba(255,255,255,0.06))",
+                border: "1px solid rgba(245,158,11,0.32)",
+                fontSize: 18,
+              }}
+            >
+              📊
+            </span>
 
-            <SecondaryLink href={isLoggedIn ? "/documents" : "/login"}>
-              {isLoggedIn ? "Upload documents" : "Login"}
-            </SecondaryLink>
-          </div>
+            <span
+              style={{
+                color: "#f8fafc",
+                fontSize: 18,
+                fontWeight: 950,
+                letterSpacing: "-0.03em",
+              }}
+            >
+              Ledger
+            </span>
+          </Link>
 
           <div
             style={{
               display: "flex",
               gap: 10,
+              alignItems: "center",
               flexWrap: "wrap",
-              marginTop: 4,
             }}
           >
-            {[
-              "Human-approved data",
-              "Real financial extraction",
-              "AI CFO dashboard",
-              "Specialist finance agents",
-            ].map((item) => (
-              <span
-                key={item}
-                style={{
-                  border: "1px solid var(--color-border)",
-                  background: "rgba(255,255,255,0.035)",
-                  color: "var(--color-text-secondary)",
-                  borderRadius: 999,
-                  padding: "8px 11px",
-                  fontSize: 12,
-                  fontWeight: 800,
-                }}
-              >
-                {item}
-              </span>
-            ))}
-          </div>
-        </div>
+            <Link
+              href="/login"
+              style={{
+                border: "1px solid rgba(245,158,11,0.16)",
+                background: "rgba(255,255,255,0.045)",
+                color: "#f8fafc",
+                borderRadius: 999,
+                padding: "10px 14px",
+                textDecoration: "none",
+                fontSize: 13,
+                fontWeight: 900,
+              }}
+            >
+              Login
+            </Link>
 
-        <div
+            <Link
+              href="/signup"
+              style={{
+                border: "1px solid rgba(245,158,11,0.42)",
+                background:
+                  "linear-gradient(135deg, rgba(245,158,11,0.95), #ffd166)",
+                color: "#090d13",
+                borderRadius: 999,
+                padding: "10px 14px",
+                textDecoration: "none",
+                fontSize: 13,
+                fontWeight: 950,
+                boxShadow: "0 18px 44px rgba(245,158,11,0.18)",
+              }}
+            >
+              Start workspace
+            </Link>
+          </div>
+        </nav>
+
+        <section
+          className="landing-hero"
           style={{
-            border: "1px solid var(--color-border)",
+            border: "1px solid rgba(245,158,11,0.22)",
             background:
-              "linear-gradient(135deg, rgba(255,255,255,0.075), rgba(255,255,255,0.025))",
-            borderRadius: 30,
-            padding: 20,
-            boxShadow: "0 28px 80px rgba(0,0,0,0.28)",
-            position: "relative",
-            overflow: "hidden",
+              "radial-gradient(circle at top left, rgba(245,158,11,0.17), transparent 38%), linear-gradient(135deg, rgba(255,255,255,0.070), rgba(255,255,255,0.026))",
+            borderRadius: 34,
+            padding: 34,
+            display: "grid",
+            gap: 26,
+            boxShadow:
+              "0 30px 100px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)",
           }}
         >
           <div
+            className="landing-hero-grid"
             style={{
-              position: "absolute",
-              width: 230,
-              height: 230,
-              borderRadius: "50%",
-              background: "rgba(245,158,11,0.14)",
-              filter: "blur(45px)",
-              right: -90,
-              top: -90,
-              pointerEvents: "none",
-            }}
-          />
-
-          <div
-            style={{
-              position: "relative",
-              zIndex: 1,
               display: "grid",
-              gap: 14,
+              gridTemplateColumns: "minmax(0, 1.1fr) minmax(340px, 0.9fr)",
+              gap: 30,
+              alignItems: "center",
             }}
           >
             <div
               style={{
-                border: "1px solid var(--color-border)",
+                display: "grid",
+                gap: 22,
+                minWidth: 0,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <MetricPill label="AI CFO" value="24/7" />
+                <MetricPill label="Docs" value="PDF, Excel, CSV" />
+                <MetricPill label="Reports" value="CFO-ready" />
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: 14,
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#f59e0b",
+                    fontSize: 13,
+                    fontWeight: 950,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.12em",
+                  }}
+                >
+                  AI Executive Finance Team
+                </p>
+
+                <h1
+                  className="landing-hero-title"
+                  style={{
+                    margin: 0,
+                    color: "#f8fafc",
+                    fontSize: 62,
+                    lineHeight: 0.98,
+                    letterSpacing: "-0.07em",
+                    maxWidth: 760,
+                  }}
+                >
+                  Turn business documents into CFO-level decisions.
+                </h1>
+
+                <p
+                  style={{
+                    margin: 0,
+                    color: "rgba(226,232,240,0.76)",
+                    fontSize: 17,
+                    lineHeight: 1.75,
+                    maxWidth: 700,
+                  }}
+                >
+                  Ledger understands financial statements, invoices, bank
+                  statements, payroll, and bills — then converts them into a
+                  dashboard, AI finance chat, risk insights, and printable CFO
+                  reports.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                <Link
+                  href="/signup"
+                  style={{
+                    border: "1px solid rgba(245,158,11,0.42)",
+                    background:
+                      "linear-gradient(135deg, rgba(245,158,11,0.98), #ffd166)",
+                    color: "#080d14",
+                    borderRadius: 999,
+                    padding: "13px 17px",
+                    textDecoration: "none",
+                    fontSize: 14,
+                    fontWeight: 950,
+                    boxShadow: "0 18px 50px rgba(245,158,11,0.18)",
+                  }}
+                >
+                  Build my finance workspace
+                </Link>
+
+                <Link
+                  href="/login"
+                  style={{
+                    border: "1px solid rgba(245,158,11,0.16)",
+                    background: "rgba(255,255,255,0.045)",
+                    color: "#f8fafc",
+                    borderRadius: 999,
+                    padding: "13px 17px",
+                    textDecoration: "none",
+                    fontSize: 14,
+                    fontWeight: 900,
+                  }}
+                >
+                  Open existing workspace
+                </Link>
+              </div>
+            </div>
+
+            <div
+              style={{
+                border: "1px solid rgba(245,158,11,0.16)",
                 background: "rgba(0,0,0,0.18)",
-                borderRadius: 22,
+                borderRadius: 30,
                 padding: 18,
                 display: "grid",
                 gap: 14,
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.055)",
               }}
             >
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  gap: 14,
+                  gap: 12,
                   alignItems: "center",
                 }}
               >
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 5px",
-                      color: "var(--color-text-secondary)",
-                      fontSize: 12,
-                      fontWeight: 850,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.10em",
-                    }}
-                  >
-                    Business health
-                  </p>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "var(--color-text-primary)",
-                      fontSize: 30,
-                      fontWeight: 950,
-                      letterSpacing: "-0.04em",
-                    }}
-                  >
-                    82/100
-                  </p>
-                </div>
+                <span
+                  style={{
+                    color: "rgba(226,232,240,0.72)",
+                    fontSize: 12,
+                    fontWeight: 900,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.10em",
+                  }}
+                >
+                  Live dashboard preview
+                </span>
 
                 <span
                   style={{
                     border: "1px solid rgba(46,213,115,0.28)",
-                    background: "rgba(46,213,115,0.10)",
+                    background: "rgba(46,213,115,0.09)",
                     color: "#7bed9f",
                     borderRadius: 999,
-                    padding: "8px 11px",
-                    fontSize: 12,
-                    fontWeight: 900,
+                    padding: "6px 9px",
+                    fontSize: 11,
+                    fontWeight: 950,
                   }}
                 >
-                  Trusted data
+                  AI ready
                 </span>
               </div>
 
@@ -482,461 +579,403 @@ export default async function RootPage() {
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    border: "1px solid rgba(46,213,115,0.25)",
+                    background: "rgba(46,213,115,0.075)",
+                    borderRadius: 20,
+                    padding: 15,
+                    display: "grid",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "rgba(226,232,240,0.66)",
+                      fontSize: 11,
+                      fontWeight: 900,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    Revenue
+                  </span>
+
+                  <strong
+                    style={{
+                      color: "#f8fafc",
+                      fontSize: 25,
+                    }}
+                  >
+                    ₹48.5L
+                  </strong>
+
+                  <span
+                    style={{
+                      color: "#7bed9f",
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Healthy inflow
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    border: "1px solid rgba(245,158,11,0.25)",
+                    background: "rgba(245,158,11,0.075)",
+                    borderRadius: 20,
+                    padding: 15,
+                    display: "grid",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "rgba(226,232,240,0.66)",
+                      fontSize: 11,
+                      fontWeight: 900,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    Health
+                  </span>
+
+                  <strong
+                    style={{
+                      color: "#f8fafc",
+                      fontSize: 25,
+                    }}
+                  >
+                    82/100
+                  </strong>
+
+                  <span
+                    style={{
+                      color: "#ffd166",
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Stable business
+                  </span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  border: "1px solid rgba(245,158,11,0.25)",
+                  background:
+                    "linear-gradient(135deg, rgba(245,158,11,0.09), rgba(255,255,255,0.025))",
+                  borderRadius: 22,
+                  padding: 16,
+                  display: "grid",
                   gap: 10,
                 }}
               >
-                {[
-                  ["Revenue", "₹24.8M"],
-                  ["Expenses", "₹18.2M"],
-                  ["Profit", "₹6.6M"],
-                  ["Cash", "₹9.4M"],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    style={{
-                      border: "1px solid var(--color-border)",
-                      background: "rgba(255,255,255,0.035)",
-                      borderRadius: 16,
-                      padding: 14,
-                      display: "grid",
-                      gap: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "var(--color-text-secondary)",
-                        fontSize: 12,
-                        fontWeight: 800,
-                      }}
-                    >
-                      {label}
-                    </span>
-
-                    <strong
-                      style={{
-                        color: "var(--color-text-primary)",
-                        fontSize: 20,
-                        letterSpacing: "-0.04em",
-                      }}
-                    >
-                      {value}
-                    </strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div
-              style={{
-                border: "1px solid rgba(255,193,7,0.26)",
-                background: "rgba(255,193,7,0.08)",
-                borderRadius: 20,
-                padding: 16,
-              }}
-            >
-              <p
-                style={{
-                  margin: "0 0 7px",
-                  color: "#ffd166",
-                  fontSize: 13,
-                  fontWeight: 900,
-                }}
-              >
-                AI CFO insight
-              </p>
-
-              <p
-                style={{
-                  margin: 0,
-                  color: "var(--color-text-secondary)",
-                  fontSize: 13,
-                  lineHeight: 1.55,
-                }}
-              >
-                Expenses are rising faster than revenue. Review top cost
-                drivers and upload bank statements to improve cash flow
-                visibility.
-              </p>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gap: 10,
-              }}
-            >
-              {["CFO", "Analyst", "Risk"].map((agent) => (
-                <div
-                  key={agent}
+                <span
                   style={{
-                    border: "1px solid var(--color-border)",
-                    background: "rgba(255,255,255,0.035)",
-                    borderRadius: 16,
-                    padding: 12,
-                    color: "var(--color-text-secondary)",
+                    color: "#ffd166",
                     fontSize: 12,
-                    fontWeight: 850,
-                    textAlign: "center",
+                    fontWeight: 950,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
                   }}
                 >
-                  {agent} Agent
-                </div>
-              ))}
+                  CFO insight
+                </span>
+
+                <p
+                  style={{
+                    margin: 0,
+                    color: "rgba(226,232,240,0.78)",
+                    fontSize: 13,
+                    lineHeight: 1.65,
+                  }}
+                >
+                  Profit is positive, but expense ratio is still high. Review
+                  payroll and operating costs before increasing fixed expenses.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
+                <AgentCard
+                  icon="🧠"
+                  name="CFO Agent"
+                  role="Strategy, profit, risk, runway"
+                />
+
+                <AgentCard
+                  icon="🧾"
+                  name="Accountant Agent"
+                  role="Documents, review, trust status"
+                />
+
+                <AgentCard
+                  icon="📈"
+                  name="Analyst Agent"
+                  role="Margins, trends, ratios"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section
-        style={{
-          borderTop: "1px solid var(--color-border)",
-          borderBottom: "1px solid var(--color-border)",
-          background: "rgba(255,255,255,0.025)",
-        }}
-      >
-        <div
+        <section
+          className="landing-section"
           style={{
-            width: "min(1180px, calc(100% - 32px))",
-            margin: "0 auto",
-            padding: "34px 0",
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 14,
-          }}
-        >
-          {[
-            ["Documents", "Upload financial records"],
-            ["Extraction", "AI reads and normalizes"],
-            ["Approval", "Owner verifies data"],
-            ["Dashboard", "Trusted numbers only"],
-            ["AI Team", "Ask business questions"],
-          ].map(([title, text]) => (
-            <div
-              key={title}
-              style={{
-                display: "grid",
-                gap: 5,
-              }}
-            >
-              <strong
-                style={{
-                  color: "var(--color-text-primary)",
-                  fontSize: 14,
-                }}
-              >
-                {title}
-              </strong>
-
-              <span
-                style={{
-                  color: "var(--color-text-secondary)",
-                  fontSize: 13,
-                  lineHeight: 1.4,
-                }}
-              >
-                {text}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section
-        style={{
-          width: "min(1180px, calc(100% - 32px))",
-          margin: "0 auto",
-          padding: "82px 0",
-          display: "grid",
-          gap: 28,
-        }}
-      >
-        <SectionHeader
-          eyebrow="Workflow"
-          title="From raw files to trusted finance intelligence."
-          text="Ledger is designed around a real business workflow. AI helps with speed, but trusted dashboards are created only after the owner approves the extracted numbers."
-        />
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-            gap: 14,
-          }}
-        >
-          {workflowSteps.map((item) => (
-            <article
-              key={item.step}
-              style={{
-                border: "1px solid var(--color-border)",
-                background: "rgba(255,255,255,0.035)",
-                borderRadius: 22,
-                padding: 18,
-                display: "grid",
-                gap: 12,
-              }}
-            >
-              <span
-                style={{
-                  color: "var(--color-amber)",
-                  fontSize: 12,
-                  fontWeight: 950,
-                  letterSpacing: "0.14em",
-                }}
-              >
-                STEP {item.step}
-              </span>
-
-              <h3
-                style={{
-                  margin: 0,
-                  color: "var(--color-text-primary)",
-                  fontSize: 18,
-                  fontWeight: 950,
-                  letterSpacing: "-0.035em",
-                }}
-              >
-                {item.title}
-              </h3>
-
-              <p
-                style={{
-                  margin: 0,
-                  color: "var(--color-text-secondary)",
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                }}
-              >
-                {item.text}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section
-        style={{
-          width: "min(1180px, calc(100% - 32px))",
-          margin: "0 auto",
-          padding: "0 0 82px",
-          display: "grid",
-          gap: 28,
-        }}
-      >
-        <SectionHeader
-          eyebrow="AI finance team"
-          title="Specialist agents for different finance decisions."
-          text="Instead of one generic chatbot, Ledger gives the business owner a complete finance department with role-based agents."
-        />
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 14,
-          }}
-        >
-          {agentCards.map((agent) => (
-            <article
-              key={agent.title}
-              style={{
-                border: "1px solid var(--color-border)",
-                background:
-                  "linear-gradient(135deg, rgba(255,255,255,0.052), rgba(255,255,255,0.022))",
-                borderRadius: 22,
-                padding: 18,
-                display: "grid",
-                gap: 12,
-              }}
-            >
-              <span
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 16,
-                  border: "1px solid var(--color-border)",
-                  background: "rgba(255,255,255,0.04)",
-                  display: "grid",
-                  placeItems: "center",
-                  fontSize: 22,
-                }}
-              >
-                {agent.icon}
-              </span>
-
-              <h3
-                style={{
-                  margin: 0,
-                  color: "var(--color-text-primary)",
-                  fontSize: 18,
-                  fontWeight: 950,
-                  letterSpacing: "-0.035em",
-                }}
-              >
-                {agent.title}
-              </h3>
-
-              <p
-                style={{
-                  margin: 0,
-                  color: "var(--color-text-secondary)",
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                }}
-              >
-                {agent.text}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section
-        style={{
-          width: "min(1180px, calc(100% - 32px))",
-          margin: "0 auto",
-          padding: "0 0 82px",
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 0.9fr) minmax(320px, 1.1fr)",
-          gap: 24,
-          alignItems: "center",
-        }}
-      >
-        <SectionHeader
-          eyebrow="Trust layer"
-          title="AI does the extraction. The owner controls the truth."
-          text="Financial dashboards can be dangerous if wrong data is trusted automatically. Ledger solves this with a human approval layer before data reaches the dashboard or AI agents."
-        />
-
-        <div
-          style={{
-            display: "grid",
-            gap: 14,
-          }}
-        >
-          {trustCards.map((card) => (
-            <article
-              key={card.title}
-              style={{
-                border: "1px solid var(--color-border)",
-                background: "rgba(255,255,255,0.035)",
-                borderRadius: 20,
-                padding: 18,
-                display: "grid",
-                gap: 8,
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  color: "var(--color-text-primary)",
-                  fontSize: 18,
-                  fontWeight: 950,
-                  letterSpacing: "-0.035em",
-                }}
-              >
-                {card.title}
-              </h3>
-
-              <p
-                style={{
-                  margin: 0,
-                  color: "var(--color-text-secondary)",
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                }}
-              >
-                {card.text}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section
-        style={{
-          width: "min(1180px, calc(100% - 32px))",
-          margin: "0 auto",
-          padding: "0 0 86px",
-        }}
-      >
-        <div
-          style={{
-            border: "1px solid rgba(245,158,11,0.28)",
-            background:
-              "linear-gradient(135deg, rgba(245,158,11,0.14), rgba(255,255,255,0.035))",
+            border: "1px solid rgba(245,158,11,0.12)",
+            background: "rgba(255,255,255,0.030)",
             borderRadius: 30,
-            padding: "clamp(24px, 5vw, 42px)",
+            padding: 28,
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto",
-            gap: 22,
-            alignItems: "center",
+            gap: 20,
           }}
         >
           <div
             style={{
               display: "grid",
-              gap: 10,
+              gap: 8,
+              maxWidth: 720,
             }}
           >
             <p
               style={{
                 margin: 0,
-                color: "var(--color-amber)",
+                color: "#f59e0b",
                 fontSize: 12,
                 fontWeight: 950,
                 textTransform: "uppercase",
-                letterSpacing: "0.14em",
+                letterSpacing: "0.12em",
               }}
             >
-              Ready to run finance smarter?
+              What Ledger does
             </p>
 
             <h2
               style={{
                 margin: 0,
-                color: "var(--color-text-primary)",
-                fontSize: "clamp(30px, 5vw, 46px)",
-                lineHeight: 1.05,
-                fontWeight: 950,
-                letterSpacing: "-0.055em",
+                color: "#f8fafc",
+                fontSize: 36,
+                lineHeight: 1.08,
+                letterSpacing: "-0.045em",
               }}
             >
-              Build your AI finance command center.
+              Not just accounting reports. Actual business intelligence.
+            </h2>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <FeatureCard
+              icon="📁"
+              title="Upload finance documents"
+              description="Upload statements, invoices, payroll sheets, bills, and financial reports in common formats."
+            />
+
+            <FeatureCard
+              icon="🤖"
+              title="AI extracts key numbers"
+              description="The AI reads the documents and extracts revenue, expenses, cash, profit, assets, liabilities, and line items."
+            />
+
+            <FeatureCard
+              icon="✅"
+              title="Approve trusted data"
+              description="Review extracted results before they power the dashboard, chat, and reports."
+            />
+
+            <FeatureCard
+              icon="📊"
+              title="Executive dashboard"
+              description="See health score, revenue, expenses, profit, cash, trends, alerts, and recommendations."
+            />
+
+            <FeatureCard
+              icon="💬"
+              title="AI finance chat"
+              description="Ask your AI finance team questions like what to fix first, why losses happened, or how to improve cash flow."
+            />
+
+            <FeatureCard
+              icon="📄"
+              title="CFO report export"
+              description="Generate a printable CFO-style report for reviews, demos, or business decision meetings."
+            />
+          </div>
+        </section>
+
+        <section
+          className="landing-section"
+          style={{
+            border: "1px solid rgba(245,158,11,0.18)",
+            background:
+              "radial-gradient(circle at top right, rgba(245,158,11,0.12), transparent 34%), rgba(255,255,255,0.030)",
+            borderRadius: 30,
+            padding: 28,
+            display: "grid",
+            gap: 20,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+              maxWidth: 720,
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                color: "#f59e0b",
+                fontSize: 12,
+                fontWeight: 950,
+                textTransform: "uppercase",
+                letterSpacing: "0.12em",
+              }}
+            >
+              Workflow
+            </p>
+
+            <h2
+              style={{
+                margin: 0,
+                color: "#f8fafc",
+                fontSize: 36,
+                lineHeight: 1.08,
+                letterSpacing: "-0.045em",
+              }}
+            >
+              From raw documents to executive decisions.
+            </h2>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <StepCard
+              number="01"
+              title="Set business profile"
+              description="Add company name, industry, country, currency, and financial year."
+            />
+
+            <StepCard
+              number="02"
+              title="Upload documents"
+              description="Add the financial files that describe how the business actually works."
+            />
+
+            <StepCard
+              number="03"
+              title="Review AI extraction"
+              description="Approve only the documents you trust for dashboard and chat intelligence."
+            />
+
+            <StepCard
+              number="04"
+              title="Use AI finance team"
+              description="Open dashboard, ask finance questions, and export CFO-style reports."
+            />
+          </div>
+        </section>
+
+        <section
+          className="landing-section landing-final-grid"
+          style={{
+            border: "1px solid rgba(46,213,115,0.20)",
+            background:
+              "radial-gradient(circle at top left, rgba(46,213,115,0.13), transparent 34%), linear-gradient(135deg, rgba(255,255,255,0.060), rgba(255,255,255,0.024))",
+            borderRadius: 30,
+            padding: 28,
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto",
+            gap: 20,
+            alignItems: "center",
+            marginBottom: 24,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gap: 9,
+              maxWidth: 760,
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                color: "#7bed9f",
+                fontSize: 12,
+                fontWeight: 950,
+                textTransform: "uppercase",
+                letterSpacing: "0.12em",
+              }}
+            >
+              Ready to start
+            </p>
+
+            <h2
+              style={{
+                margin: 0,
+                color: "#f8fafc",
+                fontSize: 34,
+                lineHeight: 1.08,
+                letterSpacing: "-0.045em",
+              }}
+            >
+              Build your AI finance workspace.
             </h2>
 
             <p
               style={{
                 margin: 0,
-                color: "var(--color-text-secondary)",
-                fontSize: 15,
-                lineHeight: 1.7,
-                maxWidth: 720,
+                color: "rgba(226,232,240,0.72)",
+                fontSize: 14,
+                lineHeight: 1.65,
               }}
             >
-              Upload documents, approve trusted numbers, and ask your AI finance
-              team what to fix next.
+              Create your profile, upload documents, approve trusted data, and
+              let the AI finance team explain what is happening in the business.
             </p>
           </div>
 
-          <div
+          <Link
+            href="/signup"
             style={{
-              display: "flex",
-              gap: 12,
-              flexWrap: "wrap",
-              justifyContent: "flex-end",
+              border: "1px solid rgba(46,213,115,0.32)",
+              background: "rgba(46,213,115,0.10)",
+              color: "#7bed9f",
+              borderRadius: 999,
+              padding: "13px 17px",
+              textDecoration: "none",
+              fontSize: 14,
+              fontWeight: 950,
+              whiteSpace: "nowrap",
             }}
           >
-            <PrimaryLink href={isLoggedIn ? "/dashboard" : "/signup"}>
-              {isLoggedIn ? "Open dashboard" : "Create account"}
-            </PrimaryLink>
-
-            <SecondaryLink href={isLoggedIn ? "/chat" : "/login"}>
-              {isLoggedIn ? "Ask AI team" : "Login"}
-            </SecondaryLink>
-          </div>
-        </div>
-      </section>
+            Start now
+          </Link>
+        </section>
+      </div>
     </main>
   );
 }
