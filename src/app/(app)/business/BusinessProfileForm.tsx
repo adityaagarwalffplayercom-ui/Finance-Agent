@@ -1,7 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import {
+  useState,
+  type CSSProperties,
+  type FocusEvent,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 type BusinessProfileFields = {
   name: string;
@@ -17,32 +23,37 @@ type BusinessProfileFormProps = {
   hasBusinessProfile: boolean;
 };
 
-const INDUSTRY_OPTIONS = [
-  "Retail",
-  "Manufacturing",
-  "Services",
-  "Technology",
-  "Healthcare",
-  "Education",
-  "Food & Beverage",
-  "Construction",
-  "Logistics",
-  "Finance",
-  "Other",
+type SelectOption = {
+  value: string;
+  label: string;
+};
+
+const INDUSTRY_OPTIONS: SelectOption[] = [
+  { value: "Retail", label: "Retail" },
+  { value: "Manufacturing", label: "Manufacturing" },
+  { value: "Services", label: "Services" },
+  { value: "Technology", label: "Technology" },
+  { value: "Healthcare", label: "Healthcare" },
+  { value: "Education", label: "Education" },
+  { value: "Food & Beverage", label: "Food & Beverage" },
+  { value: "Construction", label: "Construction" },
+  { value: "Logistics", label: "Logistics" },
+  { value: "Finance", label: "Finance" },
+  { value: "Other", label: "Other" },
 ];
 
-const BUSINESS_TYPE_OPTIONS = [
-  "Sole Proprietorship",
-  "Partnership",
-  "LLP",
-  "Private Limited",
-  "Public Limited",
-  "Startup",
-  "Non-profit",
-  "Other",
+const BUSINESS_TYPE_OPTIONS: SelectOption[] = [
+  { value: "Sole Proprietorship", label: "Sole Proprietorship" },
+  { value: "Partnership", label: "Partnership" },
+  { value: "LLP", label: "LLP" },
+  { value: "Private Limited", label: "Private Limited" },
+  { value: "Public Limited", label: "Public Limited" },
+  { value: "Startup", label: "Startup" },
+  { value: "Non-profit", label: "Non-profit" },
+  { value: "Other", label: "Other" },
 ];
 
-const CURRENCY_OPTIONS = [
+const CURRENCY_OPTIONS: SelectOption[] = [
   { value: "INR", label: "INR — Indian Rupee" },
   { value: "USD", label: "USD — US Dollar" },
   { value: "EUR", label: "EUR — Euro" },
@@ -52,16 +63,16 @@ const CURRENCY_OPTIONS = [
   { value: "SGD", label: "SGD — Singapore Dollar" },
 ];
 
-const COUNTRY_OPTIONS = [
-  "India",
-  "United States",
-  "United Kingdom",
-  "Switzerland",
-  "United Arab Emirates",
-  "Singapore",
-  "Germany",
-  "France",
-  "Other",
+const COUNTRY_OPTIONS: SelectOption[] = [
+  { value: "India", label: "India" },
+  { value: "United States", label: "United States" },
+  { value: "United Kingdom", label: "United Kingdom" },
+  { value: "Switzerland", label: "Switzerland" },
+  { value: "United Arab Emirates", label: "United Arab Emirates" },
+  { value: "Singapore", label: "Singapore" },
+  { value: "Germany", label: "Germany" },
+  { value: "France", label: "France" },
+  { value: "Other", label: "Other" },
 ];
 
 function readErrorMessage(error: unknown) {
@@ -93,7 +104,7 @@ function FieldLabel({
 }: {
   label: string;
   hint: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <label
@@ -127,17 +138,214 @@ function FieldLabel({
   );
 }
 
-function inputStyle() {
+function FieldShell({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 8,
+      }}
+    >
+      <span
+        style={{
+          color: "var(--color-text-primary)",
+          fontSize: 13,
+          fontWeight: 900,
+        }}
+      >
+        {label}
+      </span>
+
+      {children}
+
+      <span
+        style={{
+          color: "var(--color-text-muted)",
+          fontSize: 12,
+          lineHeight: 1.4,
+        }}
+      >
+        {hint}
+      </span>
+    </div>
+  );
+}
+
+function inputStyle(): CSSProperties {
   return {
     border: "1px solid var(--color-border)",
-    background: "rgba(255,255,255,0.04)",
+    background:
+      "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025))",
     color: "var(--color-text-primary)",
     borderRadius: 14,
     padding: "12px 13px",
     outline: "none",
     fontSize: 14,
     width: "100%",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
   };
+}
+
+function ThemedSelect({
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  options: SelectOption[];
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const selectedOption = options.find((option) => option.value === value);
+
+  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+    const nextFocusedElement = event.relatedTarget as Node | null;
+
+    if (
+      nextFocusedElement &&
+      event.currentTarget.contains(nextFocusedElement)
+    ) {
+      return;
+    }
+
+    setIsOpen(false);
+  }
+
+  return (
+    <div
+      onBlur={handleBlur}
+      style={{
+        position: "relative",
+      }}
+    >
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+        style={{
+          width: "100%",
+          border: isOpen
+            ? "1px solid rgba(245,158,11,0.55)"
+            : "1px solid var(--color-border)",
+          background: isOpen
+            ? "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(255,255,255,0.04))"
+            : "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025))",
+          color: selectedOption
+            ? "var(--color-text-primary)"
+            : "var(--color-text-muted)",
+          borderRadius: 14,
+          padding: "12px 13px",
+          outline: "none",
+          fontSize: 14,
+          cursor: "pointer",
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "center",
+          textAlign: "left",
+          boxShadow: isOpen
+            ? "0 0 0 1px rgba(245,158,11,0.16), 0 18px 45px rgba(0,0,0,0.20)"
+            : "inset 0 1px 0 rgba(255,255,255,0.04)",
+        }}
+      >
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {selectedOption?.label ?? placeholder}
+        </span>
+
+        <span
+          style={{
+            color: "var(--color-amber)",
+            fontSize: 13,
+            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "0.18s ease",
+          }}
+        >
+          ▼
+        </span>
+      </button>
+
+      {isOpen && (
+        <div
+          role="listbox"
+          style={{
+            position: "absolute",
+            zIndex: 40,
+            top: "calc(100% + 8px)",
+            left: 0,
+            right: 0,
+            border: "1px solid rgba(245,158,11,0.28)",
+            background:
+              "linear-gradient(180deg, rgba(18,24,33,0.98), rgba(10,15,22,0.98))",
+            color: "var(--color-text-primary)",
+            borderRadius: 16,
+            padding: 8,
+            display: "grid",
+            gap: 5,
+            maxHeight: 260,
+            overflowY: "auto",
+            boxShadow:
+              "0 22px 70px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)",
+            backdropFilter: "blur(16px)",
+          }}
+        >
+          {options.map((option) => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                style={{
+                  border: isSelected
+                    ? "1px solid rgba(245,158,11,0.42)"
+                    : "1px solid transparent",
+                  background: isSelected
+                    ? "rgba(245,158,11,0.14)"
+                    : "rgba(255,255,255,0.025)",
+                  color: isSelected
+                    ? "var(--color-amber)"
+                    : "var(--color-text-primary)",
+                  borderRadius: 12,
+                  padding: "10px 11px",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: isSelected ? 900 : 700,
+                  lineHeight: 1.35,
+                }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function BusinessProfileForm({
@@ -225,43 +433,29 @@ export function BusinessProfileForm({
           />
         </FieldLabel>
 
-        <FieldLabel
+        <FieldShell
           label="Industry"
           hint="Helps AI understand revenue, cost, and risk patterns."
         >
-          <select
+          <ThemedSelect
             value={values.industry}
-            onChange={(event) => updateField("industry", event.target.value)}
-            style={inputStyle()}
-          >
-            <option value="">Select industry</option>
-            {INDUSTRY_OPTIONS.map((industry) => (
-              <option key={industry} value={industry}>
-                {industry}
-              </option>
-            ))}
-          </select>
-        </FieldLabel>
+            options={INDUSTRY_OPTIONS}
+            placeholder="Select industry"
+            onChange={(value) => updateField("industry", value)}
+          />
+        </FieldShell>
 
-        <FieldLabel
+        <FieldShell
           label="Business type"
           hint="Useful for financial profile and compliance context."
         >
-          <select
+          <ThemedSelect
             value={values.businessType}
-            onChange={(event) =>
-              updateField("businessType", event.target.value)
-            }
-            style={inputStyle()}
-          >
-            <option value="">Select business type</option>
-            {BUSINESS_TYPE_OPTIONS.map((businessType) => (
-              <option key={businessType} value={businessType}>
-                {businessType}
-              </option>
-            ))}
-          </select>
-        </FieldLabel>
+            options={BUSINESS_TYPE_OPTIONS}
+            placeholder="Select business type"
+            onChange={(value) => updateField("businessType", value)}
+          />
+        </FieldShell>
 
         <FieldLabel
           label="Financial year"
@@ -277,40 +471,29 @@ export function BusinessProfileForm({
           />
         </FieldLabel>
 
-        <FieldLabel
+        <FieldShell
           label="Currency"
           hint="Default currency for dashboard and reports."
         >
-          <select
+          <ThemedSelect
             value={values.currency}
-            onChange={(event) => updateField("currency", event.target.value)}
-            style={inputStyle()}
-          >
-            {CURRENCY_OPTIONS.map((currency) => (
-              <option key={currency.value} value={currency.value}>
-                {currency.label}
-              </option>
-            ))}
-          </select>
-        </FieldLabel>
+            options={CURRENCY_OPTIONS}
+            placeholder="Select currency"
+            onChange={(value) => updateField("currency", value)}
+          />
+        </FieldShell>
 
-        <FieldLabel
+        <FieldShell
           label="Country"
           hint="Helps AI understand taxes, filings, and business context."
         >
-          <select
+          <ThemedSelect
             value={values.country}
-            onChange={(event) => updateField("country", event.target.value)}
-            style={inputStyle()}
-          >
-            <option value="">Select country</option>
-            {COUNTRY_OPTIONS.map((country) => (
-              <option key={country} value={country}>
-                {country}
-              </option>
-            ))}
-          </select>
-        </FieldLabel>
+            options={COUNTRY_OPTIONS}
+            placeholder="Select country"
+            onChange={(value) => updateField("country", value)}
+          />
+        </FieldShell>
       </div>
 
       {message && (

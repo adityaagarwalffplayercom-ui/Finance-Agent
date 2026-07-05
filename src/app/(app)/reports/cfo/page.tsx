@@ -13,6 +13,10 @@ function formatDateTime(value: Date) {
   }).format(value);
 }
 
+function displayValue(value?: string | null) {
+  return value && value.trim().length > 0 ? value : "Not set";
+}
+
 function ReportMetric({
   label,
   value,
@@ -101,16 +105,46 @@ function InfoBox({
   label,
   value,
   hint,
+  tone = "neutral",
 }: {
   label: string;
   value: string | number;
   hint: string;
+  tone?: "green" | "yellow" | "blue" | "red" | "neutral";
 }) {
+  const toneStyle = {
+    green: {
+      color: "#7bed9f",
+      border: "rgba(46,213,115,0.26)",
+      background: "rgba(46,213,115,0.08)",
+    },
+    yellow: {
+      color: "#ffd166",
+      border: "rgba(255,193,7,0.28)",
+      background: "rgba(255,193,7,0.08)",
+    },
+    blue: {
+      color: "#8abfff",
+      border: "rgba(88,166,255,0.28)",
+      background: "rgba(88,166,255,0.08)",
+    },
+    red: {
+      color: "#ff8a95",
+      border: "rgba(255,71,87,0.28)",
+      background: "rgba(255,71,87,0.08)",
+    },
+    neutral: {
+      color: "var(--color-text-muted)",
+      border: "var(--color-border)",
+      background: "rgba(255,255,255,0.035)",
+    },
+  }[tone];
+
   return (
     <div
       style={{
-        border: "1px solid var(--color-border)",
-        background: "rgba(255,255,255,0.035)",
+        border: `1px solid ${toneStyle.border}`,
+        background: toneStyle.background,
         borderRadius: 16,
         padding: 14,
         display: "grid",
@@ -134,6 +168,8 @@ function InfoBox({
         style={{
           color: "var(--color-text-primary)",
           fontSize: 22,
+          lineHeight: 1.15,
+          wordBreak: "break-word",
         }}
       >
         {value}
@@ -142,9 +178,10 @@ function InfoBox({
       <p
         style={{
           margin: 0,
-          color: "var(--color-text-muted)",
+          color: toneStyle.color,
           fontSize: 12,
           lineHeight: 1.4,
+          fontWeight: 700,
         }}
       >
         {hint}
@@ -214,6 +251,7 @@ export default async function CfoReportPage() {
   const profile = await getFinancialProfile(session.user.id);
 
   const [
+    business,
     totalDocuments,
     approvedDocuments,
     needsReviewDocuments,
@@ -221,6 +259,20 @@ export default async function CfoReportPage() {
     failedDocuments,
     latestApprovedDocument,
   ] = await Promise.all([
+    prisma.business.findUnique({
+      where: {
+        userId: session.user.id,
+      },
+      select: {
+        name: true,
+        industry: true,
+        businessType: true,
+        financialYear: true,
+        currency: true,
+        country: true,
+        updatedAt: true,
+      },
+    }),
     prisma.document.count({
       where: {
         userId: session.user.id,
@@ -280,13 +332,26 @@ export default async function CfoReportPage() {
 
   const reportDate = new Date();
 
+  const businessName =
+    displayValue(business?.name) !== "Not set"
+      ? displayValue(business?.name)
+      : "Your Business";
+
+  const businessIndustry = displayValue(business?.industry);
+  const businessType = displayValue(business?.businessType);
+  const businessFinancialYear = displayValue(business?.financialYear);
+  const businessCurrency = displayValue(business?.currency);
+  const businessCountry = displayValue(business?.country);
+
+  const hasBusinessProfile = Boolean(business?.name);
+
   const lastTrustedUpdate =
     latestApprovedDocument?.reviewedAt ??
     latestApprovedDocument?.extractedAt ??
     latestApprovedDocument?.uploadedAt ??
     null;
 
-  const healthTone =
+  const healthTone: "green" | "yellow" | "red" =
     profile.healthScore >= 70
       ? "green"
       : profile.healthScore >= 45
@@ -377,7 +442,7 @@ export default async function CfoReportPage() {
           style={{
             display: "grid",
             gap: 10,
-            maxWidth: 820,
+            maxWidth: 840,
           }}
         >
           <Link
@@ -416,12 +481,12 @@ export default async function CfoReportPage() {
             style={{
               margin: 0,
               lineHeight: 1.6,
-              maxWidth: 760,
+              maxWidth: 780,
             }}
           >
-            A printable CFO-style summary generated from approved financial
-            documents. Pending and rejected documents are excluded from the core
-            financial intelligence.
+            For <strong>{businessName}</strong>. This printable CFO-style
+            summary is generated from approved financial documents. Pending and
+            rejected documents are excluded from the core financial intelligence.
           </p>
         </div>
 
@@ -435,11 +500,113 @@ export default async function CfoReportPage() {
         >
           <ExportCfoReportButton />
 
+          <Link href="/business" className="btn-ghost no-print">
+            Edit business profile
+          </Link>
+
           <Link href="/documents" className="btn-ghost no-print">
             Review documents
           </Link>
         </div>
       </header>
+
+      {!hasBusinessProfile && (
+        <section
+          className="section-card no-print"
+          style={{
+            marginBottom: 24,
+            border: "1px solid rgba(255,193,7,0.28)",
+            background: "rgba(255,193,7,0.08)",
+            display: "grid",
+            gap: 12,
+          }}
+        >
+          <p
+            className="section-title"
+            style={{
+              margin: 0,
+            }}
+          >
+            Business profile missing
+          </p>
+
+          <p
+            className="section-hint"
+            style={{
+              margin: 0,
+              lineHeight: 1.55,
+            }}
+          >
+            Add your company name, industry, currency, country, and financial
+            year to make this report more professional.
+          </p>
+
+          <div>
+            <Link href="/business" className="btn-ghost">
+              Complete business profile
+            </Link>
+          </div>
+        </section>
+      )}
+
+      <Section
+        title="Business profile"
+        hint="Company context used to personalize this CFO report."
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+            gap: 12,
+          }}
+        >
+          <InfoBox
+            label="Business name"
+            value={businessName}
+            hint={
+              hasBusinessProfile
+                ? "Company profile connected"
+                : "Default report name"
+            }
+            tone={hasBusinessProfile ? "green" : "yellow"}
+          />
+
+          <InfoBox
+            label="Industry"
+            value={businessIndustry}
+            hint="Used for finance interpretation"
+            tone={businessIndustry !== "Not set" ? "blue" : "yellow"}
+          />
+
+          <InfoBox
+            label="Business type"
+            value={businessType}
+            hint="Ownership and structure context"
+            tone={businessType !== "Not set" ? "blue" : "yellow"}
+          />
+
+          <InfoBox
+            label="Country"
+            value={businessCountry}
+            hint="Tax and compliance context"
+            tone={businessCountry !== "Not set" ? "green" : "yellow"}
+          />
+
+          <InfoBox
+            label="Currency"
+            value={businessCurrency}
+            hint="Default reporting currency"
+            tone={businessCurrency !== "Not set" ? "green" : "yellow"}
+          />
+
+          <InfoBox
+            label="Financial year"
+            value={businessFinancialYear}
+            hint="Period context for analysis"
+            tone={businessFinancialYear !== "Not set" ? "green" : "yellow"}
+          />
+        </div>
+      </Section>
 
       <Section
         title="Report summary"
@@ -456,33 +623,39 @@ export default async function CfoReportPage() {
             label="Generated on"
             value={formatDateTime(reportDate)}
             hint="Current report timestamp"
+            tone="blue"
           />
 
           <InfoBox
             label="Trusted documents"
             value={approvedDocuments}
             hint="Approved and included in analysis"
+            tone={approvedDocuments > 0 ? "green" : "yellow"}
           />
 
           <InfoBox
             label="Health score"
             value={`${profile.healthScore}/100`}
             hint={profile.healthLabel}
+            tone={healthTone}
           />
 
           <InfoBox
             label="Last trusted update"
             value={
-              lastTrustedUpdate ? formatDateTime(lastTrustedUpdate) : "Not available"
+              lastTrustedUpdate
+                ? formatDateTime(lastTrustedUpdate)
+                : "Not available"
             }
             hint={latestApprovedDocument?.fileName ?? "No approved document yet"}
+            tone={lastTrustedUpdate ? "green" : "yellow"}
           />
         </div>
       </Section>
 
       <Section
         title="Financial overview"
-        hint="Core finance metrics detected from approved documents."
+        hint={`Core finance metrics detected from approved documents for ${businessName}.`}
       >
         <div
           style={{
@@ -550,12 +723,14 @@ export default async function CfoReportPage() {
               lineHeight: 1.7,
             }}
           >
+            <strong>{businessName}</strong>
+            {businessIndustry !== "Not set"
+              ? ` operates in the ${businessIndustry} industry`
+              : ""}
+            {businessCountry !== "Not set" ? ` in ${businessCountry}` : ""}.
             The business currently has a financial health score of{" "}
             <strong>{profile.healthScore}/100</strong>, classified as{" "}
-            <strong>{profile.healthLabel}</strong>. The current dashboard
-            reflects only approved financial documents, so this report should be
-            treated as a trusted summary of reviewed data rather than all
-            uploaded files.
+            <strong>{profile.healthLabel}</strong>.
           </p>
 
           <p
@@ -569,8 +744,9 @@ export default async function CfoReportPage() {
             Revenue is reported as <strong>{profile.revenue.value}</strong>,
             expenses as <strong>{profile.expenses.value}</strong>, profit as{" "}
             <strong>{profile.profit.value}</strong>, and cash as{" "}
-            <strong>{profile.cash.value}</strong>. Any pending or rejected
-            document is excluded until reviewed and approved.
+            <strong>{profile.cash.value}</strong>. This report reflects only
+            approved financial documents, so pending and rejected documents stay
+            excluded until reviewed.
           </p>
         </div>
       </Section>
@@ -590,30 +766,35 @@ export default async function CfoReportPage() {
             label="Total uploads"
             value={totalDocuments}
             hint="All documents uploaded"
+            tone="blue"
           />
 
           <InfoBox
             label="Approved"
             value={approvedDocuments}
             hint="Used by dashboard and AI"
+            tone={approvedDocuments > 0 ? "green" : "yellow"}
           />
 
           <InfoBox
             label="Needs review"
             value={needsReviewDocuments}
             hint="Processed but not trusted yet"
+            tone={needsReviewDocuments > 0 ? "yellow" : "green"}
           />
 
           <InfoBox
             label="Rejected"
             value={rejectedDocuments}
             hint="Excluded from analysis"
+            tone={rejectedDocuments > 0 ? "yellow" : "green"}
           />
 
           <InfoBox
             label="Failed"
             value={failedDocuments}
             hint="Needs retry or replacement"
+            tone={failedDocuments > 0 ? "yellow" : "green"}
           />
         </div>
       </Section>
@@ -708,10 +889,10 @@ export default async function CfoReportPage() {
             lineHeight: 1.65,
           }}
         >
-          This report is generated by Ledger from AI-extracted financial data.
-          It is designed for decision support and hackathon/demo review. Final
-          accounting, tax, and audit decisions should be verified against source
-          documents and professional advice.
+          This report is generated by Ledger from AI-extracted financial data
+          for {businessName}. It is designed for decision support and
+          hackathon/demo review. Final accounting, tax, and audit decisions
+          should be verified against source documents and professional advice.
         </p>
       </section>
     </>

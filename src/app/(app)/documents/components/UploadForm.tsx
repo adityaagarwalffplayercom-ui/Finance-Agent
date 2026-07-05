@@ -4,7 +4,9 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
   type DragEvent,
+  type FocusEvent,
   type FormEvent,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -181,6 +183,265 @@ async function readUploadError(response: Response) {
   }
 }
 
+function dropdownButtonStyle(isOpen: boolean, hasValue: boolean): CSSProperties {
+  return {
+    width: "100%",
+    border: isOpen
+      ? "1px solid rgba(245,158,11,0.55)"
+      : "1px solid var(--color-border)",
+    background: isOpen
+      ? "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(255,255,255,0.04))"
+      : "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025))",
+    color: hasValue ? "var(--color-text-primary)" : "var(--color-text-muted)",
+    borderRadius: 16,
+    padding: "13px 14px",
+    outline: "none",
+    fontSize: 14,
+    cursor: "pointer",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    textAlign: "left",
+    boxShadow: isOpen
+      ? "0 0 0 1px rgba(245,158,11,0.16), 0 18px 45px rgba(0,0,0,0.20)"
+      : "inset 0 1px 0 rgba(255,255,255,0.04)",
+  };
+}
+
+function DocumentTypeSelect({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: DocumentCategoryValue;
+  disabled: boolean;
+  onChange: (value: DocumentCategoryValue) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const selectedOption =
+    DOCUMENT_CATEGORIES.find((option) => option.value === value) ??
+    DOCUMENT_CATEGORIES[0];
+
+  const selectedStyle = CATEGORY_STYLES[selectedOption.value];
+
+  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+    const nextFocusedElement = event.relatedTarget as Node | null;
+
+    if (
+      nextFocusedElement &&
+      event.currentTarget.contains(nextFocusedElement)
+    ) {
+      return;
+    }
+
+    setIsOpen(false);
+  }
+
+  return (
+    <div
+      onBlur={handleBlur}
+      style={{
+        position: "relative",
+      }}
+    >
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        disabled={disabled}
+        onClick={() => setIsOpen((current) => !current)}
+        style={{
+          ...dropdownButtonStyle(isOpen, Boolean(selectedOption)),
+          opacity: disabled ? 0.65 : 1,
+          cursor: disabled ? "not-allowed" : "pointer",
+        }}
+      >
+        <span
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 11,
+            minWidth: 0,
+          }}
+        >
+          <span
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 13,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: selectedStyle.soft,
+              border: `1px solid ${selectedStyle.border}`,
+              fontSize: 17,
+              flex: "0 0 auto",
+            }}
+          >
+            {selectedStyle.icon}
+          </span>
+
+          <span
+            style={{
+              display: "grid",
+              gap: 3,
+              minWidth: 0,
+            }}
+          >
+            <strong
+              style={{
+                color: "var(--color-text-primary)",
+                fontSize: 14,
+                lineHeight: 1.2,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {selectedOption.label}
+            </strong>
+
+            <span
+              style={{
+                color: "var(--color-text-secondary)",
+                fontSize: 12,
+                lineHeight: 1.25,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {selectedStyle.hint}
+            </span>
+          </span>
+        </span>
+
+        <span
+          style={{
+            color: "var(--color-amber)",
+            fontSize: 13,
+            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "0.18s ease",
+            flex: "0 0 auto",
+          }}
+        >
+          ▼
+        </span>
+      </button>
+
+      {isOpen && (
+        <div
+          role="listbox"
+          style={{
+            position: "absolute",
+            zIndex: 50,
+            top: "calc(100% + 8px)",
+            left: 0,
+            right: 0,
+            border: "1px solid rgba(245,158,11,0.28)",
+            background:
+              "linear-gradient(180deg, rgba(18,24,33,0.98), rgba(10,15,22,0.98))",
+            color: "var(--color-text-primary)",
+            borderRadius: 18,
+            padding: 8,
+            display: "grid",
+            gap: 6,
+            maxHeight: 320,
+            overflowY: "auto",
+            boxShadow:
+              "0 22px 70px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)",
+            backdropFilter: "blur(16px)",
+          }}
+        >
+          {DOCUMENT_CATEGORIES.map((option) => {
+            const style = CATEGORY_STYLES[option.value];
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                style={{
+                  border: isSelected
+                    ? `1px solid ${style.border}`
+                    : "1px solid transparent",
+                  background: isSelected
+                    ? `linear-gradient(135deg, ${style.soft}, rgba(255,255,255,0.035))`
+                    : "rgba(255,255,255,0.025)",
+                  color: isSelected ? style.accent : "var(--color-text-primary)",
+                  borderRadius: 14,
+                  padding: 11,
+                  textAlign: "left",
+                  cursor: "pointer",
+                  display: "flex",
+                  gap: 11,
+                  alignItems: "center",
+                }}
+              >
+                <span
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 12,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: style.soft,
+                    border: `1px solid ${style.border}`,
+                    fontSize: 16,
+                    flex: "0 0 auto",
+                  }}
+                >
+                  {style.icon}
+                </span>
+
+                <span
+                  style={{
+                    display: "grid",
+                    gap: 3,
+                    minWidth: 0,
+                  }}
+                >
+                  <strong
+                    style={{
+                      color: isSelected
+                        ? style.accent
+                        : "var(--color-text-primary)",
+                      fontSize: 13,
+                      fontWeight: isSelected ? 950 : 800,
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    {option.label}
+                  </strong>
+
+                  <span
+                    style={{
+                      color: "var(--color-text-secondary)",
+                      fontSize: 12,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {style.hint}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function UploadForm() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -347,8 +608,8 @@ export function UploadForm() {
 
           <span
             style={{
-              border: "1px solid var(--color-border)",
-              background: "rgba(255,255,255,0.04)",
+              border: `1px solid ${CATEGORY_STYLES[category].border}`,
+              background: CATEGORY_STYLES[category].soft,
               color: CATEGORY_STYLES[category].accent,
               borderRadius: 999,
               padding: "6px 10px",
@@ -361,114 +622,11 @@ export function UploadForm() {
           </span>
         </div>
 
-        <div
-          role="radiogroup"
-          aria-label="Document category"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {DOCUMENT_CATEGORIES.map((option) => {
-            const style = CATEGORY_STYLES[option.value];
-            const isSelected = category === option.value;
-
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={isSelected}
-                disabled={isUploading}
-                onClick={() => setCategory(option.value)}
-                style={{
-                  border: isSelected
-                    ? `1px solid ${style.accent}`
-                    : `1px solid ${style.border}`,
-                  background: isSelected
-                    ? `linear-gradient(135deg, ${style.soft}, rgba(255,255,255,0.045))`
-                    : "rgba(255,255,255,0.035)",
-                  borderRadius: 18,
-                  padding: 14,
-                  display: "grid",
-                  gap: 10,
-                  textAlign: "left",
-                  cursor: isUploading ? "not-allowed" : "pointer",
-                  opacity: isUploading ? 0.7 : 1,
-                  boxShadow: isSelected
-                    ? `0 0 0 1px ${style.border}, 0 18px 50px rgba(0,0,0,0.18)`
-                    : "none",
-                  transition: "0.18s ease",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 14,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: style.soft,
-                      border: `1px solid ${style.border}`,
-                      fontSize: 18,
-                    }}
-                  >
-                    {style.icon}
-                  </span>
-
-                  {isSelected && (
-                    <span
-                      style={{
-                        color: style.accent,
-                        fontSize: 12,
-                        fontWeight: 950,
-                      }}
-                    >
-                      Selected
-                    </span>
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gap: 5,
-                  }}
-                >
-                  <strong
-                    style={{
-                      color: "var(--color-text-primary)",
-                      fontSize: 14,
-                      lineHeight: 1.25,
-                    }}
-                  >
-                    {option.label}
-                  </strong>
-
-                  <span
-                    style={{
-                      color: "var(--color-text-secondary)",
-                      fontSize: 12,
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    {style.hint}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        <DocumentTypeSelect
+          value={category}
+          disabled={isUploading}
+          onChange={setCategory}
+        />
       </div>
 
       <label
