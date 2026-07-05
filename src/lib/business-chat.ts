@@ -11,7 +11,16 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+
+export type AiAgentId =
+  | "team"
+  | "cfo"
+  | "accountant"
+  | "analyst"
+  | "cashflow"
+  | "consultant"
+  | "risk";
 
 export type StoredBusinessChatMessage = {
   role: "user" | "assistant";
@@ -22,188 +31,47 @@ export type StoredBusinessChatMessage = {
 export type BusinessChatResult = {
   answer: string;
   suggestions: string[];
+  agentId: AiAgentId;
+  agentName: string;
 };
-
-export type AiAgentId =
-  | "overall"
-  | "cfo"
-  | "accountant"
-  | "analyst"
-  | "cashflow"
-  | "consultant"
-  | "risk";
-
-type AgentProfile = {
-  id: AiAgentId;
-  name: string;
-  role: string;
-  greeting: string;
-  focus: string;
-  defaultSuggestions: string[];
-};
-
-export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
-  overall: {
-    id: "overall",
-    name: "Overall Finance Team",
-    role: "Complete AI Finance Team",
-    greeting:
-      "I will answer like your complete finance team: CFO, accountant, analyst, cash flow manager, consultant, and risk manager together.",
-    focus:
-      "Give a complete business-owner friendly answer by combining CFO-level decisions, accounting reliability, financial analysis, cash flow, business strategy, and risk warnings. This is the general all-in-one finance chat.",
-    defaultSuggestions: [
-      "Give me an overall summary of my business.",
-      "What is the current financial condition of my business?",
-      "What should I fix first?",
-      "What are my biggest risks and opportunities?",
-      "Give me a complete action plan.",
-    ],
-  },
-
-  cfo: {
-    id: "cfo",
-    name: "CFO Agent",
-    role: "Chief Financial Officer",
-    greeting:
-      "I will answer like your CFO: financial health, profit, cash, risk, and business decisions.",
-    focus:
-      "Focus on executive decisions, profitability, financial health, funding readiness, and what action the owner should take next.",
-    defaultSuggestions: [
-      "Give me a CFO summary of my business.",
-      "Why is my profit margin low?",
-      "What should I fix first financially?",
-      "Is my business financially healthy?",
-      "What are my top 3 next actions?",
-    ],
-  },
-
-  accountant: {
-    id: "accountant",
-    name: "Accountant Agent",
-    role: "Accountant",
-    greeting:
-      "I will answer like your accountant: documents, bookkeeping, missing records, and data quality.",
-    focus:
-      "Focus on accounting data quality, missing documents, document classification, totals, reconciliation, and whether the data is reliable.",
-    defaultSuggestions: [
-      "Which documents are missing?",
-      "Is my uploaded financial data reliable?",
-      "What should I upload next?",
-      "Which document affects my dashboard most?",
-      "Are there any accounting gaps?",
-    ],
-  },
-
-  analyst: {
-    id: "analyst",
-    name: "Financial Analyst Agent",
-    role: "Financial Analyst",
-    greeting:
-      "I will answer like your financial analyst: ratios, margins, trends, and performance signals.",
-    focus:
-      "Focus on ratios, margin analysis, expense ratio, revenue coverage, trends, and performance interpretation.",
-    defaultSuggestions: [
-      "Analyze my profit margin.",
-      "Which financial ratio needs attention?",
-      "Compare revenue and expenses.",
-      "What does my expense ratio mean?",
-      "What trend should I watch?",
-    ],
-  },
-
-  cashflow: {
-    id: "cashflow",
-    name: "Cash Flow Agent",
-    role: "Cash Flow Manager",
-    greeting:
-      "I will answer like your cash flow manager: liquidity, runway, bank data, and cash risk.",
-    focus:
-      "Focus on cash balance, cash runway, monthly burn, bank statements, liquidity risk, and whether enough cash data exists.",
-    defaultSuggestions: [
-      "Can you calculate my cash runway?",
-      "What data is missing for cash flow?",
-      "How can I improve cash flow?",
-      "Do I need a bank statement?",
-      "What is my burn rate?",
-    ],
-  },
-
-  consultant: {
-    id: "consultant",
-    name: "Business Consultant Agent",
-    role: "Business Consultant",
-    greeting:
-      "I will answer like your business consultant: growth, cost control, pricing, and strategic decisions.",
-    focus:
-      "Focus on practical business strategy, cost control, pricing, operational improvement, growth actions, and founder-friendly recommendations.",
-    defaultSuggestions: [
-      "How can I improve profitability?",
-      "What business decision should I take next?",
-      "How can I reduce costs without hurting growth?",
-      "Should I focus on revenue or expenses first?",
-      "Give me a 7-day action plan.",
-    ],
-  },
-
-  risk: {
-    id: "risk",
-    name: "Risk & Compliance Agent",
-    role: "Risk Manager",
-    greeting:
-      "I will answer like your risk manager: warnings, weak signals, missing data, and financial risk.",
-    focus:
-      "Focus on risk alerts, low margins, high expenses, missing bank statements, weak evidence, unreliable data, and red flags.",
-    defaultSuggestions: [
-      "What is my biggest financial risk?",
-      "What warnings should I care about?",
-      "Is any data missing before I trust this dashboard?",
-      "What could go wrong financially?",
-      "How do I reduce business risk?",
-    ],
-  },
-};
-
-const DEFAULT_AGENT_ID: AiAgentId = "overall";
-
-const DEFAULT_SUGGESTIONS = [
-  "Give me an overall summary of my business.",
-  "What is the current financial condition of my business?",
-  "What should I fix first?",
-  "What are my biggest risks and opportunities?",
-  "Give me a complete action plan.",
-];
 
 type ChatExtractedData = ExtractedDocumentData & {
-  revenue?: number | null;
-  totalRevenue?: number | null;
-  sales?: number | null;
-  expenses?: number | null;
-  totalExpenses?: number | null;
-  netIncome?: number | null;
-  profit?: number | null;
-  loss?: number | null;
-  assets?: number | null;
-  liabilities?: number | null;
-  equity?: number | null;
-  cash?: number | null;
-  closingBalance?: number | null;
-  openingBalance?: number | null;
-  balance?: number | null;
-  totalAmount?: number | null;
-  totalAmountLabel?: string | null;
-  currency?: string | null;
-  documentDate?: string | null;
-  periodStart?: string | null;
-  periodEnd?: string | null;
-  vendorOrCounterparty?: string | null;
-  reportedUnit?: string | null;
-  scaleMultiplier?: number | null;
-  unitDetectionEvidence?: string | null;
+  revenue?: number;
+  totalRevenue?: number;
+  sales?: number;
+  income?: number;
+  expenses?: number;
+  totalExpenses?: number;
+  expenditure?: number;
+  netIncome?: number;
+  netProfit?: number;
+  netLoss?: number;
+  profit?: number;
+  loss?: number;
+  cash?: number;
+  closingBalance?: number;
+  bankBalance?: number;
+  assets?: number;
+  totalAssets?: number;
+  liabilities?: number;
+  totalLiabilities?: number;
+  equity?: number;
+  totalEquity?: number;
+  totalAmount?: number;
+  totalAmountLabel?: string;
+  currency?: string;
+  documentDate?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  vendorOrCounterparty?: string;
+  summary?: string;
+  reportedUnit?: string;
+  scaleMultiplier?: number;
+  unitDetectionEvidence?: string;
   lineItems?: Array<{
     description?: string;
     amount?: number;
-    category?: string | null;
-    date?: string | null;
+    category?: string;
   }>;
   transactions?: Array<{
     date: string;
@@ -213,20 +81,232 @@ type ChatExtractedData = ExtractedDocumentData & {
   }>;
 };
 
-function normalizeAgentId(agentId?: string | null): AiAgentId {
+type BusinessProfileContext = {
+  name: string;
+  industry: string;
+  businessType: string;
+  financialYear: string;
+  currency: string;
+  country: string;
+  hasProfile: boolean;
+};
+
+type ChatMessageRow = {
+  role: string;
+  content: string;
+  createdAt: Date;
+};
+
+type AgentProfile = {
+  id: AiAgentId;
+  name: string;
+  title: string;
+  systemRole: string;
+  styleRules: string[];
+  defaultSuggestions: string[];
+  emptyDataSuggestions: string[];
+};
+
+export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
+  team: {
+    id: "team",
+    name: "AI Finance Team",
+    title: "Executive finance team",
+    systemRole:
+      "You are the complete AI Executive Finance Team for a small or medium business. You combine CFO, accountant, analyst, cash-flow, risk, and business consultant thinking.",
+    styleRules: [
+      "Give a balanced finance answer.",
+      "Mention the most important numbers first.",
+      "Consider the user's business profile before giving advice.",
+      "End with 2-3 practical next actions.",
+    ],
+    defaultSuggestions: [
+      "Why is my health score low?",
+      "Why is my business running at a loss?",
+      "What expenses should I reduce first?",
+      "How can I improve my cash flow?",
+      "Can I afford to hire another employee?",
+    ],
+    emptyDataSuggestions: [
+      "Which documents should I upload and approve first?",
+      "What can you analyze from an approved financial statement?",
+      "What documents are needed to calculate cash runway?",
+    ],
+  },
+  cfo: {
+    id: "cfo",
+    name: "CFO Agent",
+    title: "Executive finance decision maker",
+    systemRole:
+      "You are the CFO Agent. Your job is to guide executive decisions, business health, profitability, risk, runway, and strategic priorities.",
+    styleRules: [
+      "Think like a CFO speaking to a founder or business owner.",
+      "Use the business profile to make the answer industry-aware.",
+      "Focus on profit, loss, risk, runway, and decision-making.",
+      "Do not go too deep into bookkeeping unless it affects business decisions.",
+    ],
+    defaultSuggestions: [
+      "What is my biggest financial risk?",
+      "What should I fix first as the owner?",
+      "Is the business financially healthy?",
+      "Can I afford a major expense right now?",
+      "What are my top 3 executive priorities?",
+    ],
+    emptyDataSuggestions: [
+      "What documents should I approve for CFO analysis?",
+      "What data is needed for a CFO-level view?",
+      "What can a CFO Agent analyze from financial statements?",
+    ],
+  },
+  accountant: {
+    id: "accountant",
+    name: "Accountant Agent",
+    title: "Books and document control",
+    systemRole:
+      "You are the Accountant Agent. Your job is to check document quality, data completeness, categorization, missing records, and whether the financial data is reliable.",
+    styleRules: [
+      "Focus on records, documents, categories, missing data, and verification.",
+      "Use business profile fields to explain what records may be expected.",
+      "Be careful with numbers and tell the user what needs review.",
+      "Do not give final tax or audit advice.",
+    ],
+    defaultSuggestions: [
+      "Which documents are missing?",
+      "Is my uploaded data reliable?",
+      "What should I review before approving documents?",
+      "Which entries look important?",
+      "What should I upload next for cleaner books?",
+    ],
+    emptyDataSuggestions: [
+      "Which documents should I upload first?",
+      "How should I review AI extractions?",
+      "What makes a document reliable for accounting?",
+    ],
+  },
+  analyst: {
+    id: "analyst",
+    name: "Financial Analyst Agent",
+    title: "Margins, ratios, and trends",
+    systemRole:
+      "You are the Financial Analyst Agent. Your job is to analyze revenue, expenses, profit margin, expense ratio, revenue coverage, trends, and business performance.",
+    styleRules: [
+      "Use ratios and comparisons where possible.",
+      "Connect the analysis to the user's industry when the business profile is available.",
+      "Explain what the numbers mean in simple language.",
+      "Highlight trends, margins, and performance drivers.",
+    ],
+    defaultSuggestions: [
+      "What is my profit margin?",
+      "Why are expenses high?",
+      "How is my revenue coverage?",
+      "What trend should I watch?",
+      "Which financial ratio matters most right now?",
+    ],
+    emptyDataSuggestions: [
+      "What documents are needed for ratio analysis?",
+      "Can you analyze margins from a financial statement?",
+      "What data is needed to compare trends?",
+    ],
+  },
+  cashflow: {
+    id: "cashflow",
+    name: "Cash Flow Agent",
+    title: "Runway and liquidity monitor",
+    systemRole:
+      "You are the Cash Flow Agent. Your job is to analyze cash position, cash runway, burn rate, inflows, outflows, and liquidity risk.",
+    styleRules: [
+      "Focus on cash, bank statements, burn rate, runway, and payment timing.",
+      "Use the business profile to make cash-flow advice more relevant.",
+      "If cash data is missing, clearly ask for bank statements.",
+      "Give short-term survival and liquidity actions.",
+    ],
+    defaultSuggestions: [
+      "What is my cash runway?",
+      "How can I improve cash flow?",
+      "Do I have a liquidity problem?",
+      "What cash data is missing?",
+      "How can I reduce monthly burn?",
+    ],
+    emptyDataSuggestions: [
+      "What documents are needed for cash runway?",
+      "Why do you need bank statements?",
+      "How can I track cash flow better?",
+    ],
+  },
+  consultant: {
+    id: "consultant",
+    name: "Business Consultant Agent",
+    title: "Growth and cost-control advisor",
+    systemRole:
+      "You are the Business Consultant Agent. Your job is to convert finance signals into practical business actions around revenue growth, pricing, cost control, operations, and hiring decisions.",
+    styleRules: [
+      "Focus on practical business actions.",
+      "Translate financial numbers into owner-friendly decisions.",
+      "Use the business profile to make advice industry-aware.",
+      "Suggest experiments, cost-control steps, and growth opportunities.",
+    ],
+    defaultSuggestions: [
+      "How can I grow revenue?",
+      "What costs should I cut first?",
+      "Should I increase prices?",
+      "Can I hire someone right now?",
+      "What are my best next business actions?",
+    ],
+    emptyDataSuggestions: [
+      "What data do you need to give business advice?",
+      "What documents help with pricing decisions?",
+      "What can you suggest after I approve documents?",
+    ],
+  },
+  risk: {
+    id: "risk",
+    name: "Risk & Compliance Agent",
+    title: "Financial risk guardrail",
+    systemRole:
+      "You are the Risk & Compliance Agent. Your job is to flag financial risks, trust issues, missing approvals, rejected documents, suspicious gaps, and areas needing human verification.",
+    styleRules: [
+      "Focus on risks, missing data, verification, and guardrails.",
+      "Use business country, industry, and business type only as context.",
+      "Be careful and conservative.",
+      "Do not give final legal, tax, audit, or compliance advice.",
+    ],
+    defaultSuggestions: [
+      "What risks should I worry about?",
+      "What data is not trustworthy yet?",
+      "Which documents need verification?",
+      "What should I not rely on yet?",
+      "What are the biggest red flags?",
+    ],
+    emptyDataSuggestions: [
+      "What documents reduce financial risk?",
+      "How do approvals improve trust?",
+      "What data should not be trusted yet?",
+    ],
+  },
+};
+
+export const DEFAULT_AGENT_ID: AiAgentId = "team";
+
+function normalizeAgentId(value: unknown): AiAgentId {
+  if (typeof value !== "string") return DEFAULT_AGENT_ID;
+
   if (
-    agentId === "overall" ||
-    agentId === "cfo" ||
-    agentId === "accountant" ||
-    agentId === "analyst" ||
-    agentId === "cashflow" ||
-    agentId === "consultant" ||
-    agentId === "risk"
+    value === "team" ||
+    value === "cfo" ||
+    value === "accountant" ||
+    value === "analyst" ||
+    value === "cashflow" ||
+    value === "consultant" ||
+    value === "risk"
   ) {
-    return agentId;
+    return value;
   }
 
   return DEFAULT_AGENT_ID;
+}
+
+function getAgentProfile(agentId?: unknown) {
+  return AGENT_PROFILES[normalizeAgentId(agentId)];
 }
 
 function safeNumber(value: number | null | undefined) {
@@ -241,6 +321,33 @@ function formatPct(value: number | null) {
 
 function normalizeRole(role: string): "user" | "assistant" {
   return role === "user" ? "user" : "assistant";
+}
+
+function displayValue(value?: string | null) {
+  return value && value.trim().length > 0 ? value.trim() : "Not set";
+}
+
+function buildBusinessProfileContext(
+  business:
+    | {
+        name: string;
+        industry: string | null;
+        businessType: string | null;
+        financialYear: string | null;
+        currency: string | null;
+        country: string | null;
+      }
+    | null,
+): BusinessProfileContext {
+  return {
+    name: business?.name?.trim() || "Business",
+    industry: displayValue(business?.industry),
+    businessType: displayValue(business?.businessType),
+    financialYear: displayValue(business?.financialYear),
+    currency: displayValue(business?.currency) === "Not set" ? "INR" : displayValue(business?.currency),
+    country: displayValue(business?.country),
+    hasProfile: Boolean(business?.name?.trim()),
+  };
 }
 
 function sleep(ms: number) {
@@ -281,7 +388,7 @@ async function generateGeminiAnswer(prompt: string) {
   return "";
 }
 
-function fixHistoryOrder<T extends { role: string; createdAt: Date }>(rows: T[]) {
+function fixHistoryOrder<T extends ChatMessageRow>(rows: T[]) {
   const ordered = [...rows].sort(
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
   );
@@ -295,11 +402,7 @@ function fixHistoryOrder<T extends { role: string; createdAt: Date }>(rows: T[])
     const sameTimestamp =
       next && current.createdAt.getTime() === next.createdAt.getTime();
 
-    if (
-      sameTimestamp &&
-      current.role === "assistant" &&
-      next.role === "user"
-    ) {
+    if (sameTimestamp && current.role === "assistant" && next.role === "user") {
       fixed.push(next);
       fixed.push(current);
       index += 1;
@@ -320,53 +423,44 @@ function buildDocumentSummary(documents: IntelligenceDocument[]) {
       category: doc.category,
       uploadedAt: doc.uploadedAt.toISOString(),
       summary: data?.summary ?? null,
-
       documentDate: data?.documentDate ?? null,
       periodStart: data?.periodStart ?? null,
       periodEnd: data?.periodEnd ?? null,
-
       currency: data?.currency ?? null,
       reportedUnit: data?.reportedUnit ?? null,
       scaleMultiplier: data?.scaleMultiplier ?? null,
       unitDetectionEvidence: data?.unitDetectionEvidence ?? null,
-
       totalAmount: data?.totalAmount ?? null,
       totalAmountLabel: data?.totalAmountLabel ?? null,
-
       revenue: data?.revenue ?? data?.totalRevenue ?? data?.sales ?? null,
       expenses: data?.expenses ?? data?.totalExpenses ?? null,
-      profit: data?.profit ?? null,
-      loss: data?.loss ?? null,
-      netIncome: data?.netIncome ?? null,
-
-      assets: data?.assets ?? null,
-      liabilities: data?.liabilities ?? null,
-      equity: data?.equity ?? null,
-      cash:
-        data?.cash ??
-        data?.closingBalance ??
-        data?.balance ??
-        data?.openingBalance ??
+      netIncome:
+        data?.netIncome ??
+        data?.netProfit ??
+        data?.profit ??
+        data?.netLoss ??
+        data?.loss ??
         null,
-
+      cash: data?.cash ?? data?.closingBalance ?? data?.bankBalance ?? null,
+      assets: data?.assets ?? data?.totalAssets ?? null,
+      liabilities: data?.liabilities ?? data?.totalLiabilities ?? null,
+      equity: data?.equity ?? data?.totalEquity ?? null,
       vendorOrCounterparty: data?.vendorOrCounterparty ?? null,
-
-      lineItems: data?.lineItems?.slice(0, 12) ?? [],
-      transactions: data?.transactions?.slice(0, 16) ?? [],
+      lineItems: data?.lineItems?.slice(0, 8) ?? [],
+      transactions: data?.transactions?.slice(0, 12) ?? [],
     };
   });
 }
 
 function buildFinancialContext(params: {
-  businessName?: string | null;
-  businessCurrency?: string | null;
+  businessProfile: BusinessProfileContext;
   documents: IntelligenceDocument[];
 }) {
-  const { businessName, businessCurrency, documents } = params;
+  const { businessProfile, documents } = params;
 
   const intelligence = buildFinancialIntelligence(
     documents,
-    businessCurrency ?? "INR",
+    businessProfile.currency,
   );
 
   const currency = intelligence.currency;
@@ -384,20 +478,21 @@ function buildFinancialContext(params: {
 
   return {
     business: {
-      name: businessName ?? "Business",
+      name: businessProfile.name,
+      industry: businessProfile.industry,
+      businessType: businessProfile.businessType,
+      financialYear: businessProfile.financialYear,
       currency,
-      approvedDocuments: documents.length,
-      dataTrustRule:
-        "Only processed and approved documents are included in this context.",
+      country: businessProfile.country,
+      hasProfile: businessProfile.hasProfile,
+      trustedApprovedDocuments: documents.length,
     },
-
     totals: {
       revenue:
         revenue !== null ? formatMoney(revenue, currency) : "not available",
       expenses:
         expenses !== null ? formatMoney(expenses, currency) : "not available",
-      profit:
-        profit !== null ? formatMoney(profit, currency) : "not available",
+      profit: profit !== null ? formatMoney(profit, currency) : "not available",
       cash: cash !== null ? formatMoney(cash, currency) : "not available",
       assets:
         intelligence.totals.assets !== null
@@ -412,7 +507,6 @@ function buildFinancialContext(params: {
           ? formatMoney(intelligence.totals.equity, currency)
           : "not available",
     },
-
     rawNumbers: {
       revenue: intelligence.totals.revenue,
       expenses: intelligence.totals.expenses,
@@ -430,7 +524,6 @@ function buildFinancialContext(params: {
       debtToAssetPct: intelligence.ratios.debtToAssetPct,
       revenueCoveragePct: revenueCoverage,
     },
-
     ratios: {
       healthScore: `${intelligence.risk.healthScore}/100`,
       riskLevel: intelligence.risk.riskLevel,
@@ -439,7 +532,6 @@ function buildFinancialContext(params: {
       debtToAsset: formatPct(intelligence.ratios.debtToAssetPct),
       revenueCoverage: formatPct(revenueCoverage),
     },
-
     cashFlow: {
       monthlyBurnRate:
         monthlyBurnRate !== null
@@ -457,26 +549,22 @@ function buildFinancialContext(params: {
         net: formatMoney(point.net, currency),
       })),
     },
-
     executiveSummary: intelligence.executiveSummary,
-
     alerts: intelligence.alerts.map((alert) => ({
       severity: alert.severity,
       title: alert.title,
       message: alert.message,
     })),
-
     recommendations: intelligence.recommendations.map((recommendation) => ({
       priority: recommendation.priority,
       title: recommendation.title,
       action: recommendation.action,
     })),
-
     documents: buildDocumentSummary(documents),
   };
 }
 
-type FinancialChatContext = ReturnType<typeof buildFinancialContext>;
+type BusinessFinancialContext = ReturnType<typeof buildFinancialContext>;
 
 async function loadBusinessContext(userId: string) {
   const business = await prisma.business.findUnique({
@@ -485,9 +573,15 @@ async function loadBusinessContext(userId: string) {
     },
     select: {
       name: true,
+      industry: true,
+      businessType: true,
+      financialYear: true,
       currency: true,
+      country: true,
     },
   });
+
+  const businessProfile = buildBusinessProfileContext(business);
 
   const rawDocuments = await prisma.document.findMany({
     where: {
@@ -516,16 +610,16 @@ async function loadBusinessContext(userId: string) {
   }));
 
   return {
-    business,
+    businessProfile,
     documents,
   };
 }
 
 function buildSuggestedQuestions(
-  context: FinancialChatContext,
-  agentId: AiAgentId,
+  context: BusinessFinancialContext,
+  agentId?: AiAgentId,
 ) {
-  const profile = AGENT_PROFILES[agentId];
+  const agent = getAgentProfile(agentId);
   const suggestions: string[] = [];
 
   const riskLevel = context.rawNumbers.riskLevel;
@@ -534,16 +628,60 @@ function buildSuggestedQuestions(
   const runway = context.rawNumbers.cashRunwayDays;
   const revenueCoverage = context.rawNumbers.revenueCoveragePct;
   const expenseRatio = context.rawNumbers.expenseRatioPct;
+  const industry = context.business.industry;
 
-  suggestions.push(...profile.defaultSuggestions);
-
-  if (agentId === "overall") {
-    suggestions.push("Give me a complete finance team review.");
-    suggestions.push("Summarize dashboard, risks, and next actions together.");
+  if (!context.business.hasProfile) {
+    suggestions.push("How will adding my business profile improve answers?");
   }
 
-  if (riskLevel === "high" || riskLevel === "critical") {
-    suggestions.push("What should I fix first to reduce financial risk?");
+  if (agent.id === "team") {
+    suggestions.push("What is the overall financial condition of my business?");
+    suggestions.push("What should I do next as the owner?");
+  }
+
+  if (agent.id === "cfo") {
+    if (riskLevel === "high" || riskLevel === "critical") {
+      suggestions.push("What should I fix first to reduce financial risk?");
+    }
+
+    suggestions.push("What are my top 3 executive priorities?");
+    suggestions.push("Is my business financially healthy?");
+  }
+
+  if (agent.id === "accountant") {
+    suggestions.push("Which documents are missing?");
+    suggestions.push("Is my uploaded data reliable?");
+    suggestions.push("What should I approve next?");
+  }
+
+  if (agent.id === "analyst") {
+    suggestions.push("What is my profit margin?");
+    suggestions.push("Why are expenses high?");
+    suggestions.push("How is my revenue coverage?");
+  }
+
+  if (agent.id === "cashflow") {
+    if (cash === null) {
+      suggestions.push("What data is missing to calculate cash runway?");
+    }
+
+    if (typeof runway === "number" && runway < 90) {
+      suggestions.push("How can I extend my cash runway?");
+    }
+
+    suggestions.push("How can I improve cash flow?");
+  }
+
+  if (agent.id === "consultant") {
+    suggestions.push("What costs should I cut first?");
+    suggestions.push("How can I grow revenue?");
+    suggestions.push("Can I hire someone right now?");
+  }
+
+  if (agent.id === "risk") {
+    suggestions.push("What risks should I worry about?");
+    suggestions.push("What data is not trustworthy yet?");
+    suggestions.push("What should I verify first?");
   }
 
   if (typeof profit === "number" && profit < 0) {
@@ -551,66 +689,68 @@ function buildSuggestedQuestions(
     suggestions.push("How much should I reduce expenses to break even?");
   }
 
-  if (typeof revenueCoverage === "number" && revenueCoverage < 100) {
+  if (typeof revenueCoverage === "number" && revenueCoverage < 70) {
     suggestions.push("How can I improve my revenue coverage?");
   }
 
-  if (typeof expenseRatio === "number" && expenseRatio > 90) {
+  if (typeof expenseRatio === "number" && expenseRatio > 100) {
     suggestions.push("Which costs should I control first?");
   }
 
-  if (cash === null) {
-    suggestions.push("What data is missing to calculate cash runway?");
+  if (industry !== "Not set") {
+    suggestions.push(`What should a ${industry} business improve first?`);
   }
 
-  if (typeof runway === "number" && runway < 90) {
-    suggestions.push("How can I extend my cash runway?");
-  }
+  suggestions.push("What are my top 3 next actions?");
 
-  suggestions.push("What documents should I upload next for better analysis?");
-
-  return [...new Set(suggestions)].slice(0, 6);
+  return [...new Set(suggestions)].slice(0, 5);
 }
 
-function buildPrompt(
-  question: string,
-  context: FinancialChatContext,
-  agentId: AiAgentId,
-) {
-  const profile = AGENT_PROFILES[agentId];
+function buildPrompt(params: {
+  question: string;
+  context: BusinessFinancialContext;
+  agentId?: AiAgentId;
+}) {
+  const { question, context, agentId } = params;
+  const agent = getAgentProfile(agentId);
 
   return `
-You are the ${profile.name}, acting as a ${profile.role} for a small or medium business.
+${agent.systemRole}
 
-Agent focus:
-${profile.focus}
+You are answering inside a finance SaaS product where the user selected:
+Agent: ${agent.name}
+Agent title: ${agent.title}
 
-You are part of an AI Executive Finance Team.
+Agent behavior rules:
+${agent.styleRules.map((rule) => `- ${rule}`).join("\n")}
 
-If you are the Overall Finance Team:
-- Combine the viewpoint of CFO, accountant, financial analyst, cash flow manager, business consultant, and risk manager.
-- Give a complete answer, not only one specialist angle.
-- Cover financial condition, trusted data, risks, and next actions.
-- Keep it easy for a business owner to understand.
+Business profile:
+- Business name: ${context.business.name}
+- Industry: ${context.business.industry}
+- Business type: ${context.business.businessType}
+- Country: ${context.business.country}
+- Currency: ${context.business.currency}
+- Financial year: ${context.business.financialYear}
+- Business profile completed: ${context.business.hasProfile ? "yes" : "no"}
 
-Important rules:
-1. Use ONLY the approved financial data provided below.
+Business-profile usage rules:
+1. Use the business profile to make advice specific and practical.
+2. If industry is available, connect advice to that type of business.
+3. If country is available, mention tax/compliance only as a general reminder, not final legal/tax advice.
+4. If business profile is incomplete, briefly say which profile field would improve the answer.
+5. Do not invent business details that are not in the profile.
+
+Universal finance rules:
+1. Use ONLY the approved trusted financial data below.
 2. Do not invent numbers.
-3. If data is missing, clearly say exactly what is missing.
-4. Use the same currency shown in the data.
-5. Mention exact numbers when useful.
-6. Keep the answer practical and business-owner friendly.
-7. Do not give legal, tax, or investment advice as certainty.
-8. Do not pretend unapproved or missing documents exist.
-9. If cash runway cannot be calculated, say which document is needed.
-10. End with 2-4 recommended next actions when relevant.
-
-Answer style:
-- Start with a direct answer.
-- Use short paragraphs.
-- Use bullets only when it improves clarity.
-- Be specific, not generic.
-- Explain what the number means in real business language.
+3. If data is missing, clearly say what is missing.
+4. Use simple language.
+5. Use the same currency shown in the data.
+6. Use exact numbers when useful.
+7. Do not give legal, tax, audit, or investment advice as certainty.
+8. Keep the answer concise but useful.
+9. Mention that the answer is based on approved documents when helpful.
+10. End with practical next actions when relevant.
 
 Approved company financial context:
 ${JSON.stringify(context, null, 2)}
@@ -667,7 +807,6 @@ export async function saveBusinessChatExchange(params: {
         createdAt: questionTime,
       },
     }),
-
     prisma.businessChatMessage.create({
       data: {
         userId: params.userId,
@@ -681,42 +820,47 @@ export async function saveBusinessChatExchange(params: {
 
 export async function getBusinessChatSuggestions(
   userId: string,
-  agentId?: string | null,
+  agentId?: unknown,
 ) {
-  const normalizedAgentId = normalizeAgentId(agentId);
-  const { business, documents } = await loadBusinessContext(userId);
+  const agent = getAgentProfile(agentId);
+  const { businessProfile, documents } = await loadBusinessContext(userId);
 
   if (documents.length === 0) {
+    if (!businessProfile.hasProfile) {
+      return [
+        "How do I set up my business profile?",
+        ...agent.emptyDataSuggestions,
+      ].slice(0, 5);
+    }
+
     return [
-      "Which documents should I upload first?",
-      "What can you analyze from a financial statement?",
-      "What documents are needed to calculate cash runway?",
-      "How does approval affect dashboard data?",
-    ];
+      `What documents should a ${businessProfile.industry} business upload first?`,
+      ...agent.emptyDataSuggestions,
+    ].slice(0, 5);
   }
 
   const context = buildFinancialContext({
-    businessName: business?.name,
-    businessCurrency: business?.currency,
+    businessProfile,
     documents,
   });
 
-  return buildSuggestedQuestions(context, normalizedAgentId);
+  return buildSuggestedQuestions(context, agent.id);
 }
 
 export async function answerBusinessQuestion(params: {
   userId: string;
   question: string;
-  agentId?: string | null;
+  agentId?: unknown;
 }): Promise<BusinessChatResult> {
   const question = params.question.trim();
-  const agentId = normalizeAgentId(params.agentId);
-  const profile = AGENT_PROFILES[agentId];
+  const agent = getAgentProfile(params.agentId);
 
   if (!question) {
     return {
       answer: "Please ask a finance question about your business.",
-      suggestions: profile.defaultSuggestions,
+      suggestions: agent.defaultSuggestions,
+      agentId: agent.id,
+      agentName: agent.name,
     };
   }
 
@@ -725,32 +869,48 @@ export async function answerBusinessQuestion(params: {
       answer:
         "Gemini API key is missing. Add GEMINI_API_KEY to your environment variables first.",
       suggestions: [],
+      agentId: agent.id,
+      agentName: agent.name,
     };
   }
 
-  const { business, documents } = await loadBusinessContext(params.userId);
+  const { businessProfile, documents } = await loadBusinessContext(
+    params.userId,
+  );
 
   if (documents.length === 0) {
+    const profileLine = businessProfile.hasProfile
+      ? `I can see your business profile for ${businessProfile.name}, but I do not have approved financial documents yet.`
+      : "I do not have a completed business profile or approved financial documents yet.";
+
     return {
-      answer:
-        "I do not have approved financial documents yet. Upload a financial statement, bank statement, invoices, or bills, then approve the AI extraction. After that, I can answer using trusted business data.",
-      suggestions: [
-        "Which documents should I upload first?",
-        "What can you analyze from a financial statement?",
-        "What documents are needed to calculate cash runway?",
-        "How does approval affect dashboard data?",
-      ],
+      answer: `${profileLine} Upload documents, process them with AI, then approve the extractions before I use them for financial answers.`,
+      suggestions: businessProfile.hasProfile
+        ? [
+            `Which documents should a ${businessProfile.industry} business upload first?`,
+            ...agent.emptyDataSuggestions,
+          ].slice(0, 5)
+        : [
+            "How do I set up my business profile?",
+            ...agent.emptyDataSuggestions,
+          ].slice(0, 5),
+      agentId: agent.id,
+      agentName: agent.name,
     };
   }
 
   const context = buildFinancialContext({
-    businessName: business?.name,
-    businessCurrency: business?.currency,
+    businessProfile,
     documents,
   });
 
-  const suggestions = buildSuggestedQuestions(context, agentId);
-  const prompt = buildPrompt(question, context, agentId);
+  const suggestions = buildSuggestedQuestions(context, agent.id);
+
+  const prompt = buildPrompt({
+    question,
+    context,
+    agentId: agent.id,
+  });
 
   try {
     const answer = await generateGeminiAnswer(prompt);
@@ -760,16 +920,18 @@ export async function answerBusinessQuestion(params: {
         answer ||
         "I could not generate an answer from the AI model. Please try again.",
       suggestions,
+      agentId: agent.id,
+      agentName: agent.name,
     };
   } catch (error) {
     console.error("Gemini chat generation failed:", error);
 
     return {
       answer:
-        "The AI finance model is temporarily busy or unavailable. Your approved financial data and chat history are working correctly. Please try the same question again in a few seconds.",
+        "The AI finance model is temporarily busy due to high demand. Your approved financial data, business profile, and chat history are working correctly. Please try the same question again in a few seconds.",
       suggestions,
+      agentId: agent.id,
+      agentName: agent.name,
     };
   }
 }
-
-export { DEFAULT_SUGGESTIONS };
