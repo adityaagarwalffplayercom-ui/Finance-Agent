@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import type { Prisma } from "@prisma/client";
+import { DocumentStatus, type Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { extractDocumentData, type ExtractedDocumentData } from "@/lib/gemini";
+import { USAGE_LIMITS, formatUsageSize } from "@/lib/usage-limits";
 import {
-  USAGE_LIMITS,
-  checkAndConsumeRateLimit,
-  formatUsageSize,
-  getProcessDailyRateLimitKey,
-  getProcessHourlyRateLimitKey,
+  checkAndRecordAiProcessUsage,
   releaseProcessingLock,
   tryAcquireProcessingLock,
-} from "@/lib/usage-limits";
+} from "@/lib/usage-events";
 
 const XLSX_MIME_TYPES = [
   "application/vnd.ms-excel",
@@ -82,7 +79,7 @@ export async function POST(
     return NextResponse.json({ error: "Document not found." }, { status: 404 });
   }
 
-  if (document.status === "PROCESSING") {
+  if (document.status === DocumentStatus.PROCESSING) {
     return NextResponse.json(
       {
         error:
@@ -104,12 +101,25 @@ export async function POST(
         id,
       },
       data: {
-        status: "FAILED",
+        status: DocumentStatus.FAILED,
         processingError: message,
       },
     });
 
     return NextResponse.json({ error: message }, { status: 413 });
+  }
+
+  const usage = await checkAndRecordAiProcessUsage(userId);
+
+  if (!usage.allowed) {
+    return NextResponse.json(
+      {
+        error:
+          usage.message ??
+          "AI processing limit reached. Try again later.",
+      },
+      { status: 429 },
+    );
   }
 
   const lockAcquired = tryAcquireProcessingLock(userId);
@@ -125,51 +135,29 @@ export async function POST(
   }
 
   try {
-    const hourlyLimit = checkAndConsumeRateLimit({
-      key: getProcessHourlyRateLimitKey(userId),
-      limit: USAGE_LIMITS.MAX_AI_PROCESSES_PER_HOUR,
-      windowMs: 60 * 60 * 1000,
-      label: "Hourly AI processing",
-    });
-
-    if (!hourlyLimit.allowed) {
-      return NextResponse.json(
-        {
-          error:
-            hourlyLimit.message ??
-            "Hourly AI processing limit reached. Try again later.",
-        },
-        { status: 429 },
-      );
-    }
-
-    const dailyLimit = checkAndConsumeRateLimit({
-      key: getProcessDailyRateLimitKey(userId),
-      limit: USAGE_LIMITS.MAX_AI_PROCESSES_PER_DAY,
-      windowMs: 24 * 60 * 60 * 1000,
-      label: "Daily AI processing",
-    });
-
-    if (!dailyLimit.allowed) {
-      return NextResponse.json(
-        {
-          error:
-            dailyLimit.message ??
-            "Daily AI processing limit reached. Try again later.",
-        },
-        { status: 429 },
-      );
-    }
-
-    await prisma.document.update({
+    const markProcessing = await prisma.document.updateMany({
       where: {
         id,
+        userId,
+        status: {
+          not: DocumentStatus.PROCESSING,
+        },
       },
       data: {
-        status: "PROCESSING",
+        status: DocumentStatus.PROCESSING,
         processingError: null,
       },
     });
+
+    if (markProcessing.count === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "This document is already being processed. Wait for it to finish before retrying.",
+        },
+        { status: 409 },
+      );
+    }
 
     let extracted: ExtractedDocumentData;
 
@@ -227,7 +215,7 @@ export async function POST(
         id,
       },
       data: {
-        status: "PROCESSED",
+        status: DocumentStatus.PROCESSED,
         extractedData: extracted as unknown as Prisma.InputJsonValue,
         extractedAt: new Date(),
         processingError: null,
@@ -235,7 +223,7 @@ export async function POST(
     });
 
     return NextResponse.json({
-      status: "PROCESSED",
+      status: DocumentStatus.PROCESSED,
       extractedData: extracted,
     });
   } catch (error) {
@@ -258,7 +246,7 @@ export async function POST(
         id,
       },
       data: {
-        status: "FAILED",
+        status: DocumentStatus.FAILED,
         processingError: cleanProcessingError(friendlyMessage),
       },
     });

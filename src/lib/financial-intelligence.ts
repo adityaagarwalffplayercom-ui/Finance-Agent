@@ -1,7 +1,7 @@
 import type { DocumentCategory } from "@prisma/client";
 import type { ExtractedDocumentData } from "./gemini";
 
-type MoneyUnit = "base" | "millions";
+type MoneyUnit = "base";
 
 export type IntelligenceDocument = {
   id: string;
@@ -11,20 +11,55 @@ export type IntelligenceDocument = {
   uploadedAt: Date;
 };
 
+type FlexibleLineItem = {
+  description?: string;
+  label?: string;
+  name?: string;
+  amount?: number;
+  value?: number;
+};
+
 type IntelligenceExtractedData = ExtractedDocumentData & {
-  revenue?: number;
-  expenses?: number;
-  netIncome?: number;
-  profit?: number;
-  assets?: number;
-  liabilities?: number;
-  equity?: number;
-  totalAmount?: number;
-  currency?: string;
-  documentDate?: string;
-  periodStart?: string;
-  periodEnd?: string;
-  vendorOrCounterparty?: string;
+  revenue?: number | null;
+  totalRevenue?: number | null;
+  turnover?: number | null;
+  sales?: number | null;
+  income?: number | null;
+
+  expenses?: number | null;
+  totalExpenses?: number | null;
+  expenditure?: number | null;
+
+  netIncome?: number | null;
+  profit?: number | null;
+  loss?: number | null;
+
+  cash?: number | null;
+  cashBalance?: number | null;
+  closingBalance?: number | null;
+  endingBalance?: number | null;
+  bankBalance?: number | null;
+  cashAndCashEquivalents?: number | null;
+
+  assets?: number | null;
+  totalAssets?: number | null;
+  liabilities?: number | null;
+  totalLiabilities?: number | null;
+  equity?: number | null;
+  netWorth?: number | null;
+
+  totalAmount?: number | null;
+  totalAmountLabel?: string | null;
+
+  currency?: string | null;
+  documentDate?: string | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+
+  vendorOrCounterparty?: string | null;
+
+  lineItems?: FlexibleLineItem[];
+
   transactions?: Array<{
     date: string;
     description?: string;
@@ -57,7 +92,6 @@ export type Recommendation = {
 export type FinancialIntelligence = {
   currency: string;
   moneyUnit: MoneyUnit;
-
   totals: {
     revenue: number;
     expenses: number;
@@ -67,20 +101,17 @@ export type FinancialIntelligence = {
     liabilities: number | null;
     equity: number | null;
   };
-
   ratios: {
     profitMarginPct: number | null;
     expenseRatioPct: number | null;
     debtToAssetPct: number | null;
   };
-
   trends: {
     monthly: MonthlyPoint[];
     revenueGrowthPct: number | null;
     expenseGrowthPct: number | null;
     latestMonthlyNet: number | null;
   };
-
   risk: {
     healthScore: number;
     riskScore: number;
@@ -88,14 +119,17 @@ export type FinancialIntelligence = {
     cashRunwayDays: number | null;
     monthlyBurnRate: number | null;
   };
-
   executiveSummary: string;
   alerts: IntelligenceAlert[];
   recommendations: Recommendation[];
 };
 
 const REVENUE_CATEGORIES: DocumentCategory[] = ["SALES_INVOICE"];
-const EXPENSE_CATEGORIES: DocumentCategory[] = ["PURCHASE_INVOICE", "PAYROLL", "UTILITY_BILL"];
+const EXPENSE_CATEGORIES: DocumentCategory[] = [
+  "PURCHASE_INVOICE",
+  "PAYROLL",
+  "UTILITY_BILL",
+];
 
 const CURRENCY_LOCALES: Record<string, string> = {
   INR: "en-IN",
@@ -122,10 +156,16 @@ function round(value: number, digits = 2) {
 }
 
 function monthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}`;
 }
 
-function resolveDocDate(data: IntelligenceExtractedData | null, uploadedAt: Date): Date {
+function resolveDocDate(
+  data: IntelligenceExtractedData | null,
+  uploadedAt: Date,
+): Date {
   const raw = data?.periodEnd || data?.documentDate || data?.periodStart;
 
   if (raw) {
@@ -159,23 +199,188 @@ function addMonthlyValue(
   monthly.set(key, existing);
 }
 
-function normalizeAmountForCategory(amount: number, category: DocumentCategory) {
-  if (!isValidNumber(amount)) return 0;
+function getFirstNumber(
+  data: IntelligenceExtractedData,
+  keys: Array<keyof IntelligenceExtractedData>,
+) {
+  for (const key of keys) {
+    const value = data[key];
 
-  // Financial statements often store values as "INR in millions".
-  // Example: 75.18 means ₹75.18M, so we convert it to ₹75,180,000.
-  if (category === "FINANCIAL_STATEMENT" && Math.abs(amount) < 1_000_000) {
-    return amount * 1_000_000;
+    if (isValidNumber(value)) {
+      return value;
+    }
   }
 
-  return amount;
+  return null;
 }
 
-function formatMoney(amount: number, currency = "INR") {
+function getLineItemText(item: FlexibleLineItem) {
+  return String(item.description ?? item.label ?? item.name ?? "").toLowerCase();
+}
+
+function getLineItemAmount(item: FlexibleLineItem) {
+  if (isValidNumber(item.amount)) return item.amount;
+  if (isValidNumber(item.value)) return item.value;
+  return null;
+}
+
+function findLineItemAmount(
+  data: IntelligenceExtractedData,
+  includePatterns: string[],
+  excludePatterns: string[] = [],
+) {
+  const items = data.lineItems ?? [];
+
+  for (const item of items) {
+    const text = getLineItemText(item);
+    const amount = getLineItemAmount(item);
+
+    if (!isValidNumber(amount)) continue;
+
+    const included = includePatterns.some((pattern) => text.includes(pattern));
+    const excluded = excludePatterns.some((pattern) => text.includes(pattern));
+
+    if (included && !excluded) {
+      return amount;
+    }
+  }
+
+  return null;
+}
+
+function resolveRevenue(data: IntelligenceExtractedData) {
+  return (
+    getFirstNumber(data, [
+      "revenue",
+      "totalRevenue",
+      "turnover",
+      "sales",
+      "income",
+    ]) ??
+    findLineItemAmount(
+      data,
+      [
+        "revenue from operations",
+        "total revenue",
+        "operating revenue",
+        "turnover",
+        "sales",
+        "total income",
+        "income",
+      ],
+      ["other comprehensive", "expense", "loss"],
+    )
+  );
+}
+
+function resolveExpenses(data: IntelligenceExtractedData) {
+  return (
+    getFirstNumber(data, ["expenses", "totalExpenses", "expenditure"]) ??
+    findLineItemAmount(
+      data,
+      [
+        "total expenses",
+        "total expense",
+        "expenses",
+        "expenditure",
+        "employee benefit",
+        "finance cost",
+        "cost of material",
+        "purchase",
+      ],
+      ["income", "revenue", "profit"],
+    )
+  );
+}
+
+function resolveNetIncome(data: IntelligenceExtractedData) {
+  const profit = getFirstNumber(data, ["netIncome", "profit"]);
+
+  if (profit !== null) {
+    return profit;
+  }
+
+  const directLoss = getFirstNumber(data, ["loss"]);
+
+  if (directLoss !== null) {
+    return directLoss > 0 ? -directLoss : directLoss;
+  }
+
+  const lineProfit =
+    findLineItemAmount(data, [
+      "profit for the year",
+      "profit after tax",
+      "net profit",
+      "net income",
+    ]) ??
+    findLineItemAmount(data, ["loss for the year", "net loss"]);
+
+  if (lineProfit !== null) {
+    const lossLine = findLineItemAmount(data, ["loss for the year", "net loss"]);
+
+    if (lossLine !== null && lineProfit > 0) {
+      return -lineProfit;
+    }
+
+    return lineProfit;
+  }
+
+  return null;
+}
+
+function resolveCash(data: IntelligenceExtractedData) {
+  return (
+    getFirstNumber(data, [
+      "cash",
+      "cashBalance",
+      "closingBalance",
+      "endingBalance",
+      "bankBalance",
+      "cashAndCashEquivalents",
+    ]) ??
+    findLineItemAmount(data, [
+      "cash and cash equivalents",
+      "cash equivalents",
+      "cash balance",
+      "bank balance",
+      "closing balance",
+      "ending balance",
+    ])
+  );
+}
+
+function resolveAssets(data: IntelligenceExtractedData) {
+  return (
+    getFirstNumber(data, ["assets", "totalAssets"]) ??
+    findLineItemAmount(data, ["total assets", "assets"], ["liabilities"])
+  );
+}
+
+function resolveLiabilities(data: IntelligenceExtractedData) {
+  return (
+    getFirstNumber(data, ["liabilities", "totalLiabilities"]) ??
+    findLineItemAmount(data, ["total liabilities", "liabilities"], ["assets"])
+  );
+}
+
+function resolveEquity(data: IntelligenceExtractedData) {
+  return (
+    getFirstNumber(data, ["equity", "netWorth"]) ??
+    findLineItemAmount(data, [
+      "total equity",
+      "shareholders equity",
+      "shareholder equity",
+      "net worth",
+      "other equity",
+    ])
+  );
+}
+
+export function formatMoney(amount: number, currency = "INR") {
   const normalizedCurrency = normalizeCurrency(currency) ?? "INR";
   const locale = CURRENCY_LOCALES[normalizedCurrency] ?? "en-IN";
-
   const absAmount = Math.abs(amount);
+
   let displayAmount = amount;
   let suffix = "";
 
@@ -198,7 +403,9 @@ function formatMoney(amount: number, currency = "INR") {
     );
   } catch {
     return suffix
-      ? `${displayAmount.toLocaleString(locale, { maximumFractionDigits: 2 })}${suffix}`
+      ? `${displayAmount.toLocaleString(locale, {
+          maximumFractionDigits: 2,
+        })}${suffix}`
       : amount.toLocaleString(locale);
   }
 }
@@ -213,38 +420,28 @@ function calculateMonthlyBurnRate(monthly: MonthlyPoint[]) {
 
   if (negativeMonths.length === 0) return null;
 
-  const totalBurn = negativeMonths.reduce((sum, point) => sum + Math.abs(point.net), 0);
+  const totalBurn = negativeMonths.reduce(
+    (sum, point) => sum + Math.abs(point.net),
+    0,
+  );
+
   return round(totalBurn / negativeMonths.length);
 }
 
 function calculateRisk(params: {
   revenue: number;
   expenses: number;
-  profit: number;
   cash: number | null;
   monthlyBurnRate: number | null;
-  profitMarginPct: number | null;
-  expenseRatioPct: number | null;
 }) {
   const { revenue, expenses, cash, monthlyBurnRate } = params;
 
   let healthScore = 50;
 
-  // Actual revenue coverage formula:
-  // Health Score = Revenue / Expenses * 100
-  //
-  // Example:
-  // Revenue  = ₹15.15M
-  // Expenses = ₹42.50M
-  // Score    = 15.15 / 42.50 * 100 = 35.64 ≈ 36/100
-  //
-  // This is not a forced minimum. It tells how much of expenses are covered by revenue.
   if (expenses > 0) {
     healthScore = (revenue / expenses) * 100;
   } else if (revenue > 0 && expenses === 0) {
     healthScore = 100;
-  } else {
-    healthScore = 50;
   }
 
   let cashRunwayDays: number | null = null;
@@ -257,14 +454,14 @@ function calculateRisk(params: {
 
   const riskScore = 100 - healthScore;
 
-  const riskLevel =
-    healthScore >= 70
-      ? "low"
-      : healthScore >= 45
-        ? "medium"
-        : healthScore >= 25
-          ? "high"
-          : "critical";
+  const riskLevel: FinancialIntelligence["risk"]["riskLevel"] =
+  healthScore >= 70
+    ? "low"
+    : healthScore >= 45
+      ? "medium"
+      : healthScore >= 25
+        ? "high"
+        : "critical";
 
   return {
     healthScore,
@@ -282,19 +479,28 @@ function buildExecutiveSummary(params: {
   riskLevel: FinancialIntelligence["risk"]["riskLevel"];
   currency: string;
 }) {
-  const { revenue, expenses, profit, profitMarginPct, riskLevel, currency } = params;
+  const { revenue, expenses, profit, profitMarginPct, riskLevel, currency } =
+    params;
 
-  if (revenue === 0 && expenses === 0) {
+  if (revenue === 0 && expenses === 0 && profit === 0) {
     return "Not enough financial data is available yet. Upload more documents to generate executive-level insights.";
   }
 
   const profitText =
     profit >= 0
-      ? `The business is currently profitable with estimated profit of ${formatMoney(profit, currency)}.`
-      : `The business is currently running a loss of ${formatMoney(Math.abs(profit), currency)}.`;
+      ? `The business is currently profitable with estimated profit of ${formatMoney(
+          profit,
+          currency,
+        )}.`
+      : `The business is currently running a loss of ${formatMoney(
+          Math.abs(profit),
+          currency,
+        )}.`;
 
   const marginText =
-    profitMarginPct !== null ? ` Profit margin is approximately ${profitMarginPct.toFixed(2)}%.` : "";
+    profitMarginPct !== null
+      ? ` Profit margin is approximately ${profitMarginPct.toFixed(2)}%.`
+      : "";
 
   const riskText =
     riskLevel === "critical"
@@ -303,9 +509,9 @@ function buildExecutiveSummary(params: {
         ? " The business shows high financial risk and should control expenses carefully."
         : riskLevel === "medium"
           ? " The business is stable but needs monitoring."
-          : " The business appears financially stable based on the processed documents.";
+          : " The business appears financially stable based on approved documents.";
 
-  return `Based on processed documents, revenue is ${formatMoney(
+  return `Based on approved documents, revenue is ${formatMoney(
     revenue,
     currency,
   )}, expenses are ${formatMoney(expenses, currency)}. ${profitText}${marginText}${riskText}`;
@@ -345,7 +551,18 @@ function buildAlerts(params: {
       id: "no-revenue",
       severity: "info",
       title: "Revenue data missing",
-      message: "No revenue was found in the processed documents yet.",
+      message:
+        "No revenue was found yet. Upload or approve a sales invoice, bank statement, or financial statement containing revenue.",
+    });
+  }
+
+  if (expenses === 0) {
+    alerts.push({
+      id: "no-expenses",
+      severity: "info",
+      title: "Expense data missing",
+      message:
+        "No expenses were found yet. Upload or approve purchase invoices, payroll, utility bills, or a financial statement.",
     });
   }
 
@@ -354,10 +571,10 @@ function buildAlerts(params: {
       id: "expenses-above-revenue",
       severity: "warning",
       title: "Expenses exceed revenue",
-      message: `Expenses are ${formatMoney(expenses, currency)}, which is higher than revenue of ${formatMoney(
-        revenue,
+      message: `Expenses are ${formatMoney(
+        expenses,
         currency,
-      )}.`,
+      )}, which is higher than revenue of ${formatMoney(revenue, currency)}.`,
     });
   }
 
@@ -366,7 +583,10 @@ function buildAlerts(params: {
       id: "loss-detected",
       severity: "warning",
       title: "Business is running at a loss",
-      message: `Current estimated loss is ${formatMoney(Math.abs(profit), currency)} based on processed documents.`,
+      message: `Current estimated loss is ${formatMoney(
+        Math.abs(profit),
+        currency,
+      )} based on approved documents.`,
     });
   }
 
@@ -375,7 +595,9 @@ function buildAlerts(params: {
       id: "low-margin",
       severity: "warning",
       title: "Low profit margin",
-      message: `Profit margin is only ${profitMarginPct.toFixed(2)}%. The business may need cost control or better pricing.`,
+      message: `Profit margin is only ${profitMarginPct.toFixed(
+        2,
+      )}%. The business may need cost control or better pricing.`,
     });
   }
 
@@ -388,12 +610,22 @@ function buildAlerts(params: {
     });
   }
 
+  if (cash === null) {
+    alerts.push({
+      id: "cash-missing",
+      severity: "info",
+      title: "Cash data missing",
+      message:
+        "Cash on hand is not available yet. Upload or approve a bank statement or balance sheet with cash and cash equivalents.",
+    });
+  }
+
   if (cash !== null && cash < 0) {
     alerts.push({
       id: "negative-cash",
       severity: "critical",
       title: "Negative cash balance",
-      message: "The latest processed bank statement shows negative cash.",
+      message: "The latest approved cash signal shows negative cash.",
     });
   }
 
@@ -426,7 +658,9 @@ function buildAlerts(params: {
       id: "revenue-decline",
       severity: "warning",
       title: "Revenue declined",
-      message: `Revenue decreased by ${Math.abs(revenueGrowthPct).toFixed(2)}% compared with the previous period.`,
+      message: `Revenue decreased by ${Math.abs(revenueGrowthPct).toFixed(
+        2,
+      )}% compared with the previous period.`,
     });
   }
 
@@ -435,7 +669,9 @@ function buildAlerts(params: {
       id: "expense-spike",
       severity: "warning",
       title: "Expenses increased sharply",
-      message: `Expenses increased by ${expenseGrowthPct.toFixed(2)}% compared with the previous period.`,
+      message: `Expenses increased by ${expenseGrowthPct.toFixed(
+        2,
+      )}% compared with the previous period.`,
     });
   }
 
@@ -444,12 +680,19 @@ function buildAlerts(params: {
       id: "stable",
       severity: "info",
       title: "Business looks stable",
-      message: "No major financial risk was detected from the processed documents.",
+      message: "No major financial risk was detected from approved documents.",
     });
   }
 
-  const severityOrder = { critical: 0, warning: 1, info: 2 };
-  return alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+  const severityOrder = {
+    critical: 0,
+    warning: 1,
+    info: 2,
+  };
+
+  return alerts.sort(
+    (a, b) => severityOrder[a.severity] - severityOrder[b.severity],
+  );
 }
 
 function buildRecommendations(params: {
@@ -480,7 +723,28 @@ function buildRecommendations(params: {
       id: "reduce-loss",
       priority: "high",
       title: "Reduce losses first",
-      action: "Review the top expense categories and pause non-essential spending until profit becomes positive.",
+      action:
+        "Review the top expense categories and pause non-essential spending until profit becomes positive.",
+    });
+  }
+
+  if (revenue === 0) {
+    recommendations.push({
+      id: "add-revenue-data",
+      priority: "high",
+      title: "Add revenue documents",
+      action:
+        "Upload sales invoices, bank credits, or a P&L statement so the platform can calculate revenue health accurately.",
+    });
+  }
+
+  if (expenses === 0) {
+    recommendations.push({
+      id: "add-expense-data",
+      priority: "medium",
+      title: "Add expense documents",
+      action:
+        "Upload purchase invoices, payroll, utility bills, or expense statements to complete the dashboard.",
     });
   }
 
@@ -489,7 +753,8 @@ function buildRecommendations(params: {
       id: "protect-cash",
       priority: cashRunwayDays < 30 ? "high" : "medium",
       title: "Protect cash runway",
-      action: "Delay large purchases, collect pending receivables faster, and reduce recurring expenses to extend cash runway.",
+      action:
+        "Delay large purchases, collect pending receivables faster, and reduce recurring expenses to extend cash runway.",
     });
   }
 
@@ -498,7 +763,8 @@ function buildRecommendations(params: {
       id: "expense-control",
       priority: "medium",
       title: "Control expense ratio",
-      action: "Set a monthly expense ceiling and compare each vendor's cost against previous months.",
+      action:
+        "Set a monthly expense ceiling and compare each vendor's cost against previous months.",
     });
   }
 
@@ -507,7 +773,8 @@ function buildRecommendations(params: {
       id: "improve-margin",
       priority: "medium",
       title: "Improve profit margin",
-      action: "Increase pricing, reduce low-value costs, or focus on higher-margin customers and products.",
+      action:
+        "Increase pricing, reduce low-value costs, or focus on higher-margin customers and products.",
     });
   }
 
@@ -516,7 +783,8 @@ function buildRecommendations(params: {
       id: "restore-revenue",
       priority: "medium",
       title: "Recover revenue trend",
-      action: "Identify which customers or revenue sources declined and create a follow-up plan for them.",
+      action:
+        "Identify which customers or revenue sources declined and create a follow-up plan for them.",
     });
   }
 
@@ -525,7 +793,8 @@ function buildRecommendations(params: {
       id: "check-expense-spike",
       priority: "medium",
       title: "Investigate expense spike",
-      action: "Check whether the expense increase is one-time or recurring. If recurring, renegotiate vendor terms.",
+      action:
+        "Check whether the expense increase is one-time or recurring. If recurring, renegotiate vendor terms.",
     });
   }
 
@@ -534,12 +803,20 @@ function buildRecommendations(params: {
       id: "keep-monitoring",
       priority: "low",
       title: "Keep monitoring",
-      action: "Continue uploading new documents so the system can detect risks earlier and improve recommendations.",
+      action:
+        "Continue uploading new documents so the system can detect risks earlier and improve recommendations.",
     });
   }
 
-  const priorityOrder = { high: 0, medium: 1, low: 2 };
-  return recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+  const priorityOrder = {
+    high: 0,
+    medium: 1,
+    low: 2,
+  };
+
+  return recommendations.sort(
+    (a, b) => priorityOrder[a.priority] - priorityOrder[b.priority],
+  );
 }
 
 export function buildFinancialIntelligence(
@@ -551,13 +828,18 @@ export function buildFinancialIntelligence(
   for (const doc of documents) {
     const data = doc.extractedData as IntelligenceExtractedData | null;
     const currency = normalizeCurrency(data?.currency);
+
     if (currency) currenciesSeen.add(currency);
   }
 
-  const currency = [...currenciesSeen][0] ?? normalizeCurrency(businessCurrency) ?? "INR";
+  const currency =
+    [...currenciesSeen][0] ?? normalizeCurrency(businessCurrency) ?? "INR";
 
   let revenue = 0;
   let expenses = 0;
+  let directProfitTotal = 0;
+  let hasDirectProfit = false;
+
   let latestCash: number | null = null;
   let latestCashDate: Date | null = null;
 
@@ -573,63 +855,109 @@ export function buildFinancialIntelligence(
 
     const docDate = resolveDocDate(data, doc.uploadedAt);
 
-    if (doc.category === "FINANCIAL_STATEMENT") {
-      const statementRevenue = isValidNumber(data.revenue)
-        ? normalizeAmountForCategory(data.revenue, doc.category)
-        : 0;
+    const detectedRevenue = resolveRevenue(data);
+    const detectedExpenses = resolveExpenses(data);
+    const detectedNetIncome = resolveNetIncome(data);
+    const detectedCash = resolveCash(data);
+    const detectedAssets = resolveAssets(data);
+    const detectedLiabilities = resolveLiabilities(data);
+    const detectedEquity = resolveEquity(data);
 
-      const statementExpenses = isValidNumber(data.expenses)
-        ? normalizeAmountForCategory(data.expenses, doc.category)
-        : 0;
+    if (detectedCash !== null) {
+      if (!latestCashDate || docDate >= latestCashDate) {
+        latestCash = detectedCash;
+        latestCashDate = docDate;
+      }
+    }
+
+    if (detectedAssets !== null) assets = detectedAssets;
+    if (detectedLiabilities !== null) liabilities = detectedLiabilities;
+    if (detectedEquity !== null) equity = detectedEquity;
+
+    if (doc.category === "FINANCIAL_STATEMENT") {
+      let statementRevenue = detectedRevenue ?? 0;
+      let statementExpenses = detectedExpenses ?? 0;
+      const statementProfit =
+        detectedNetIncome ?? statementRevenue - statementExpenses;
+
+      if (statementRevenue === 0 && statementExpenses > 0 && detectedNetIncome !== null) {
+        const inferredRevenue = statementExpenses + detectedNetIncome;
+
+        if (inferredRevenue > 0) {
+          statementRevenue = inferredRevenue;
+        }
+      }
+
+      if (statementExpenses === 0 && statementRevenue > 0 && detectedNetIncome !== null) {
+        const inferredExpenses = statementRevenue - detectedNetIncome;
+
+        if (inferredExpenses > 0) {
+          statementExpenses = inferredExpenses;
+        }
+      }
 
       revenue += statementRevenue;
       expenses += statementExpenses;
+      directProfitTotal += statementProfit;
+      hasDirectProfit = true;
 
       addMonthlyValue(monthly, docDate, {
         revenue: statementRevenue,
         expenses: statementExpenses,
-        net: statementRevenue - statementExpenses,
+        net: statementProfit,
       });
-
-      if (isValidNumber(data.assets)) {
-        assets = normalizeAmountForCategory(data.assets, doc.category);
-      }
-
-      if (isValidNumber(data.liabilities)) {
-        liabilities = normalizeAmountForCategory(data.liabilities, doc.category);
-      }
-
-      if (isValidNumber(data.equity)) {
-        equity = normalizeAmountForCategory(data.equity, doc.category);
-      }
 
       continue;
     }
 
-    if (REVENUE_CATEGORIES.includes(doc.category) && isValidNumber(data.totalAmount)) {
-      const amount = normalizeAmountForCategory(data.totalAmount, doc.category);
+    if (REVENUE_CATEGORIES.includes(doc.category)) {
+      const amount =
+        detectedRevenue ??
+        getFirstNumber(data, ["totalAmount"]) ??
+        detectedNetIncome ??
+        0;
+
       revenue += amount;
 
       addMonthlyValue(monthly, docDate, {
         revenue: amount,
         net: amount,
       });
+
+      continue;
     }
 
-    if (EXPENSE_CATEGORIES.includes(doc.category) && isValidNumber(data.totalAmount)) {
-      const amount = normalizeAmountForCategory(data.totalAmount, doc.category);
+    if (EXPENSE_CATEGORIES.includes(doc.category)) {
+      const amount =
+        detectedExpenses ??
+        getFirstNumber(data, ["totalAmount"]) ??
+        Math.abs(detectedNetIncome ?? 0);
+
       expenses += amount;
 
       addMonthlyValue(monthly, docDate, {
         expenses: amount,
         net: -amount,
       });
+
+      continue;
     }
 
     if (doc.category === "BANK_STATEMENT") {
-      if (isValidNumber(data.totalAmount) && (!latestCashDate || doc.uploadedAt > latestCashDate)) {
-        latestCash = data.totalAmount;
-        latestCashDate = doc.uploadedAt;
+      const totalAmount = getFirstNumber(data, ["totalAmount"]);
+      const totalAmountLabel = String(data.totalAmountLabel ?? "").toLowerCase();
+
+      if (
+        totalAmount !== null &&
+        (totalAmountLabel.includes("closing") ||
+          totalAmountLabel.includes("ending") ||
+          totalAmountLabel.includes("balance") ||
+          latestCash === null)
+      ) {
+        if (!latestCashDate || docDate >= latestCashDate) {
+          latestCash = totalAmount;
+          latestCashDate = docDate;
+        }
       }
 
       for (const txn of data.transactions ?? []) {
@@ -642,21 +970,38 @@ export function buildFinancialIntelligence(
           net: signedAmount,
         });
       }
+
+      continue;
+    }
+
+    const generalAmount = getFirstNumber(data, ["totalAmount"]);
+
+    if (generalAmount !== null) {
+      addMonthlyValue(monthly, docDate, {
+        net: generalAmount,
+      });
     }
   }
 
-  const profit = revenue - expenses;
+  const calculatedProfit = revenue - expenses;
+  const profit = hasDirectProfit ? directProfitTotal : calculatedProfit;
 
-  const monthlyPoints = [...monthly.values()].sort((a, b) => a.month.localeCompare(b.month));
+  const monthlyPoints = [...monthly.values()].sort((a, b) =>
+    a.month.localeCompare(b.month),
+  );
 
   const latestMonth = monthlyPoints[monthlyPoints.length - 1] ?? null;
   const previousMonth = monthlyPoints[monthlyPoints.length - 2] ?? null;
 
   const revenueGrowthPct =
-    latestMonth && previousMonth ? calculateGrowthPct(previousMonth.revenue, latestMonth.revenue) : null;
+    latestMonth && previousMonth
+      ? calculateGrowthPct(previousMonth.revenue, latestMonth.revenue)
+      : null;
 
   const expenseGrowthPct =
-    latestMonth && previousMonth ? calculateGrowthPct(previousMonth.expenses, latestMonth.expenses) : null;
+    latestMonth && previousMonth
+      ? calculateGrowthPct(previousMonth.expenses, latestMonth.expenses)
+      : null;
 
   const latestMonthlyNet = latestMonth ? latestMonth.net : null;
 
@@ -664,18 +1009,17 @@ export function buildFinancialIntelligence(
   const expenseRatioPct = revenue > 0 ? round((expenses / revenue) * 100) : null;
 
   const debtToAssetPct =
-    assets !== null && assets > 0 && liabilities !== null ? round((liabilities / assets) * 100) : null;
+    assets !== null && assets > 0 && liabilities !== null
+      ? round((liabilities / assets) * 100)
+      : null;
 
   const monthlyBurnRate = calculateMonthlyBurnRate(monthlyPoints);
 
   const risk = calculateRisk({
     revenue,
     expenses,
-    profit,
     cash: latestCash,
     monthlyBurnRate,
-    profitMarginPct,
-    expenseRatioPct,
   });
 
   const alerts = buildAlerts({
@@ -708,14 +1052,13 @@ export function buildFinancialIntelligence(
     expenses,
     profit,
     profitMarginPct,
-    riskLevel: risk.riskLevel as "critical" | "high" | "medium" | "low",
+    riskLevel: risk.riskLevel,
     currency,
   });
 
   return {
     currency,
     moneyUnit: "base",
-
     totals: {
       revenue: round(revenue),
       expenses: round(expenses),
@@ -725,13 +1068,11 @@ export function buildFinancialIntelligence(
       liabilities,
       equity,
     },
-
     ratios: {
       profitMarginPct,
       expenseRatioPct,
       debtToAssetPct,
     },
-
     trends: {
       monthly: monthlyPoints.map((point) => ({
         month: point.month,
@@ -743,19 +1084,15 @@ export function buildFinancialIntelligence(
       expenseGrowthPct,
       latestMonthlyNet: latestMonthlyNet !== null ? round(latestMonthlyNet) : null,
     },
-
     risk: {
       healthScore: risk.healthScore,
       riskScore: risk.riskScore,
-      riskLevel: risk.riskLevel as "critical" | "high" | "medium" | "low",
+      riskLevel: risk.riskLevel,
       cashRunwayDays: risk.cashRunwayDays,
       monthlyBurnRate,
     },
-
     executiveSummary,
     alerts,
     recommendations,
   };
 }
-
-export { formatMoney };

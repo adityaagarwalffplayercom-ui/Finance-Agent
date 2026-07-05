@@ -7,11 +7,7 @@ import {
   formatFileSize,
   isValidCategory,
 } from "@/lib/document-categories";
-import {
-  USAGE_LIMITS,
-  checkAndConsumeRateLimit,
-  getUploadRateLimitKey,
-} from "@/lib/usage-limits";
+import { checkAndRecordUploadUsage } from "@/lib/usage-events";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,18 +19,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Not signed in." }, { status: 401 });
     }
 
-    const uploadLimit = checkAndConsumeRateLimit({
-      key: getUploadRateLimitKey(session.user.id),
-      limit: USAGE_LIMITS.MAX_UPLOADS_PER_DAY,
-      windowMs: 24 * 60 * 60 * 1000,
-      label: "Daily upload",
-    });
+    const userId = session.user.id;
 
-    if (!uploadLimit.allowed) {
+    const uploadUsage = await checkAndRecordUploadUsage(userId);
+
+    if (!uploadUsage.allowed) {
       return NextResponse.json(
         {
           error:
-            uploadLimit.message ??
+            uploadUsage.message ??
             "Daily upload limit reached. Try again later.",
         },
         { status: 429 },
@@ -97,7 +90,7 @@ export async function POST(request: NextRequest) {
         fileSize: file.size,
         category,
         content,
-        userId: session.user.id,
+        userId,
       },
       select: {
         id: true,
