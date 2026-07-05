@@ -865,3 +865,476 @@ button {
   text-decoration: none;
   font-weight: 600;
 }
+/* =========================================================
+   Ledger Premium UI Refresh
+   Dark + Amber + Sage design language
+   Paste this at the bottom of globals.css
+   ========================================================= */
+
+:root {
+  --color-base: #070b10;
+  --color-base-elevated: #0b1118;
+  --color-surface: rgba(255, 255, 255, 0.045);
+  --color-surface-strong: rgba(255, 255, 255, 0.065);
+  --color-panel: rgba(255, 255, 255, 0.04);
+  --color-panel-hover: rgba(245, 158, 11, 0.075);
+
+  --color-border: rgba(255, 255, 255, 0.10);
+  --color-border-strong: rgba(245, 158, 11, 0.24);
+
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: rgba(226, 232, 240, 0.74);
+  --color-text-muted: rgba(148, 163, 184, 0.78);
+
+  --color-amber: #f59e0b;
+  --color-gold: #ffd166;
+  --color-sage: #7bed9f;
+  --color-danger: #ff8a95;
+
+  --shadow-soft: 0 22px 70px rgba(0, 0, 0, 0.22);
+  --shadow-amber: 0 22px 70px rgba(245, 158, 11, 0.10);
+  --shadow-sage: 0 22px 70px rgba(46, 213, 115, 0.10);
+
+  --radius-xl: 30px;
+  --radius-lg: 24px;
+  --radius-md: 18px;
+  --radius-sm: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-base);
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.13), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(46, 213, 115, 0.055), transparent 30%),
+    linear-gradient(135deg, #070b10, #0b1118 48%, #080d13);
+  color: var(--color-text-primary);
+}
+
+/* Main app shell */
+
+.dashboard-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.13), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(46, 213, 115, 0.055), transparent 30%),
+    linear-gradient(135deg, #070b10, #0b1118 48%, #080d13);
+}
+
+.dashboard-main {
+  background: transparent;
+}
+
+/* Sidebar */
+
+.sidebar {
+  border-right: 1px solid rgba(245, 158, 11, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.10), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.022));
+  box-shadow:
+    18px 0 70px rgba(0, 0, 0, 0.24),
+    inset -1px 0 0 rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(16px);
+}
+
+.brand {
+  color: var(--color-text-primary);
+}
+
+.brand svg {
+  color: var(--color-amber);
+  filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.22));
+}
+
+.brand-word {
+  letter-spacing: -0.04em;
+}
+
+.sidebar-nav {
+  gap: 8px;
+}
+
+.sidebar-link {
+  border: 1px solid transparent;
+  border-radius: 16px;
+  color: var(--color-text-secondary);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.sidebar-link:hover {
+  background: rgba(245, 158, 11, 0.075);
+  border-color: rgba(245, 158, 11, 0.16);
+  color: var(--color-text-primary);
+  transform: translateX(2px);
+}
+
+.sidebar-link-active {
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(255, 255, 255, 0.035));
+  border-color: rgba(245, 158, 11, 0.30);
+  color: var(--color-gold);
+  box-shadow:
+    0 16px 36px rgba(245, 158, 11, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.sidebar-footer {
+  border-top: 1px solid rgba(245, 158, 11, 0.12);
+  background: rgba(0, 0, 0, 0.10);
+  border-radius: 20px;
+}
+
+.sidebar-user-name {
+  color: var(--color-text-primary);
+}
+
+.sidebar-user-email {
+  color: var(--color-text-muted);
+}
+
+/* Page headers */
+
+.dashboard-header {
+  border: 1px solid rgba(245, 158, 11, 0.20);
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.13), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.060), rgba(255, 255, 255, 0.024));
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.060);
+}
+
+.dashboard-header h1,
+.dashboard-header h2 {
+  letter-spacing: -0.055em;
+}
+
+.eyebrow {
+  color: var(--color-amber);
+  font-weight: 950;
+  letter-spacing: 0.12em;
+}
+
+.page-intro {
+  color: var(--color-text-secondary);
+}
+
+/* Shared cards */
+
+.section-card,
+.alerts-card,
+.cashflow-card,
+.health-gauge,
+.stat-card,
+.documents-empty {
+  border: 1px solid rgba(245, 158, 11, 0.13);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.024));
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 20px 70px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.052);
+}
+
+.section-card:hover,
+.alerts-card:hover,
+.cashflow-card:hover,
+.stat-card:hover {
+  border-color: rgba(245, 158, 11, 0.20);
+}
+
+.section-title,
+.stat-label {
+  color: var(--color-text-secondary);
+}
+
+.section-hint {
+  color: var(--color-text-muted);
+}
+
+/* Stats */
+
+.stat-grid {
+  gap: 14px;
+}
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.08), transparent 42%);
+  pointer-events: none;
+}
+
+.stat-value {
+  color: var(--color-text-primary);
+  letter-spacing: -0.05em;
+}
+
+.stat-delta-positive {
+  color: var(--color-sage);
+}
+
+.stat-delta-warning {
+  color: var(--color-gold);
+}
+
+.stat-delta-neutral {
+  color: var(--color-text-muted);
+}
+
+/* Badges */
+
+.badge-sample,
+.badge-live,
+.badge-trusted,
+.badge-approved {
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.10);
+  color: var(--color-gold);
+  border-radius: 999px;
+  font-weight: 950;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+/* Buttons */
+
+.btn-ghost,
+button.btn-ghost,
+a.btn-ghost {
+  border: 1px solid rgba(245, 158, 11, 0.20);
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.09), rgba(255, 255, 255, 0.030));
+  color: var(--color-gold);
+  border-radius: 999px;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow:
+    0 12px 34px rgba(245, 158, 11, 0.075),
+    inset 0 1px 0 rgba(255, 255, 255, 0.050);
+  transition:
+    transform 170ms ease,
+    border-color 170ms ease,
+    background 170ms ease,
+    box-shadow 170ms ease;
+}
+
+.btn-ghost:hover,
+button.btn-ghost:hover,
+a.btn-ghost:hover {
+  transform: translateY(-1px);
+  border-color: rgba(245, 158, 11, 0.36);
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(255, 255, 255, 0.045));
+  box-shadow:
+    0 18px 46px rgba(245, 158, 11, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.065);
+}
+
+.btn-ghost:active {
+  transform: translateY(0);
+}
+
+/* Forms */
+
+input,
+textarea,
+select {
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+  color: var(--color-text-primary);
+  border-radius: 16px;
+  outline: none;
+  transition:
+    border-color 170ms ease,
+    box-shadow 170ms ease,
+    background 170ms ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(245, 158, 11, 0.38);
+  box-shadow:
+    0 0 0 4px rgba(245, 158, 11, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(148, 163, 184, 0.70);
+}
+
+label {
+  color: var(--color-text-secondary);
+}
+
+/* Tables */
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+thead th {
+  color: var(--color-text-muted);
+  background: rgba(245, 158, 11, 0.055);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.12);
+}
+
+tbody tr {
+  transition: background 160ms ease;
+}
+
+tbody tr:hover {
+  background: rgba(245, 158, 11, 0.045);
+}
+
+td {
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+/* Alerts */
+
+.alert-item {
+  border: 1px solid rgba(245, 158, 11, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 18px;
+}
+
+.alert-warning {
+  border-color: rgba(245, 158, 11, 0.26);
+  background: rgba(245, 158, 11, 0.075);
+}
+
+.alert-info {
+  border-color: rgba(46, 213, 115, 0.20);
+  background: rgba(46, 213, 115, 0.055);
+}
+
+.alert-dot {
+  background: var(--color-amber);
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.28);
+}
+
+.alert-severity {
+  color: var(--color-gold);
+}
+
+/* Document cards / rows */
+
+.document-row,
+.document-card,
+.upload-card {
+  border: 1px solid rgba(245, 158, 11, 0.13);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.050), rgba(255, 255, 255, 0.022));
+  border-radius: 22px;
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.050);
+}
+
+.document-row:hover,
+.document-card:hover,
+.upload-card:hover {
+  border-color: rgba(245, 158, 11, 0.24);
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.070), rgba(255, 255, 255, 0.028));
+}
+
+/* Empty states */
+
+.documents-empty {
+  border-style: dashed;
+  border-color: rgba(245, 158, 11, 0.20);
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.08), transparent 34%),
+    rgba(255, 255, 255, 0.030);
+}
+
+/* Charts */
+
+.cashflow-chart,
+.chart-card {
+  border: 1px solid rgba(245, 158, 11, 0.13);
+  background: rgba(255, 255, 255, 0.030);
+  border-radius: 22px;
+}
+
+/* Scrollbar */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(245, 158, 11, 0.38) rgba(255, 255, 255, 0.035);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.38);
+  border-radius: 999px;
+  border: 2px solid rgba(7, 11, 16, 0.9);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.55);
+}
+
+/* Mobile polish */
+
+@media (max-width: 980px) {
+  .dashboard-header {
+    border-radius: 24px;
+    padding: 20px;
+  }
+
+  .section-card,
+  .alerts-card,
+  .cashflow-card,
+  .health-gauge,
+  .stat-card {
+    border-radius: 22px;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-header {
+    padding: 18px;
+  }
+
+  .btn-ghost,
+  button.btn-ghost,
+  a.btn-ghost {
+    width: 100%;
+    justify-content: center;
+  }
+}
