@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { DocumentStatus, type Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 import { extractDocumentData, type ExtractedDocumentData } from "@/lib/gemini";
 import { USAGE_LIMITS, formatUsageSize } from "@/lib/usage-limits";
@@ -80,13 +81,23 @@ export async function POST(
   }
 
   if (document.status === DocumentStatus.PROCESSING) {
-    return NextResponse.json(
-      {
-        error:
-          "This document is already being processed. Wait for it to finish before retrying.",
+    const message =
+      "This document is already being processed. Wait for it to finish before retrying.";
+
+    await createAuditEvent({
+      userId,
+      eventType: "PROCESSING_BLOCKED",
+      title: "Processing blocked",
+      description: message,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: {
+        reason: "already_processing",
+        status: document.status,
       },
-      { status: 409 },
-    );
+    });
+
+    return NextResponse.json({ error: message }, { status: 409 });
   }
 
   if (document.fileSize > USAGE_LIMITS.MAX_AI_PROCESS_FILE_SIZE_BYTES) {
@@ -106,32 +117,62 @@ export async function POST(
       },
     });
 
+    await createAuditEvent({
+      userId,
+      eventType: "PROCESSING_BLOCKED",
+      title: "AI processing blocked",
+      description: message,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: {
+        reason: "file_too_large",
+        fileSize: document.fileSize,
+        maxSize: USAGE_LIMITS.MAX_AI_PROCESS_FILE_SIZE_BYTES,
+      },
+    });
+
     return NextResponse.json({ error: message }, { status: 413 });
   }
 
   const usage = await checkAndRecordAiProcessUsage(userId);
 
   if (!usage.allowed) {
-    return NextResponse.json(
-      {
-        error:
-          usage.message ??
-          "AI processing limit reached. Try again later.",
+    const message = usage.message ?? "AI processing limit reached. Try again later.";
+
+    await createAuditEvent({
+      userId,
+      eventType: "PROCESSING_BLOCKED",
+      title: "AI processing limit reached",
+      description: message,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: {
+        reason: "usage_limit",
       },
-      { status: 429 },
-    );
+    });
+
+    return NextResponse.json({ error: message }, { status: 429 });
   }
 
   const lockAcquired = tryAcquireProcessingLock(userId);
 
   if (!lockAcquired) {
-    return NextResponse.json(
-      {
-        error:
-          "Another document is already being processed. Finish that first, then retry this one.",
+    const message =
+      "Another document is already being processed. Finish that first, then retry this one.";
+
+    await createAuditEvent({
+      userId,
+      eventType: "PROCESSING_BLOCKED",
+      title: "AI processing blocked",
+      description: message,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: {
+        reason: "active_processing_lock",
       },
-      { status: 429 },
-    );
+    });
+
+    return NextResponse.json({ error: message }, { status: 429 });
   }
 
   try {
@@ -150,14 +191,37 @@ export async function POST(
     });
 
     if (markProcessing.count === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "This document is already being processed. Wait for it to finish before retrying.",
+      const message =
+        "This document is already being processed. Wait for it to finish before retrying.";
+
+      await createAuditEvent({
+        userId,
+        eventType: "PROCESSING_BLOCKED",
+        title: "AI processing blocked",
+        description: message,
+        documentId: document.id,
+        fileName: document.fileName,
+        metadata: {
+          reason: "race_condition_processing",
         },
-        { status: 409 },
-      );
+      });
+
+      return NextResponse.json({ error: message }, { status: 409 });
     }
+
+    await createAuditEvent({
+      userId,
+      eventType: "DOCUMENT_PROCESSING_STARTED",
+      title: "AI processing started",
+      description: `${document.fileName} is being processed by AI.`,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: {
+        category: document.category,
+        fileSize: document.fileSize,
+        mimeType: document.mimeType,
+      },
+    });
 
     let extracted: ExtractedDocumentData;
 
@@ -222,6 +286,22 @@ export async function POST(
       },
     });
 
+    await createAuditEvent({
+      userId,
+      eventType: "DOCUMENT_PROCESSING_COMPLETED",
+      title: "AI processing completed",
+      description: `${document.fileName} was processed successfully and is ready for review.`,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: {
+        category: document.category,
+        status: DocumentStatus.PROCESSED,
+        currency: extracted.currency ?? null,
+        reportedUnit: extracted.reportedUnit ?? null,
+        scaleMultiplier: extracted.scaleMultiplier ?? null,
+      },
+    });
+
     return NextResponse.json({
       status: DocumentStatus.PROCESSED,
       extractedData: extracted,
@@ -248,6 +328,21 @@ export async function POST(
       data: {
         status: DocumentStatus.FAILED,
         processingError: cleanProcessingError(friendlyMessage),
+      },
+    });
+
+    await createAuditEvent({
+      userId,
+      eventType: "DOCUMENT_PROCESSING_FAILED",
+      title: "AI processing failed",
+      description: cleanProcessingError(friendlyMessage),
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: {
+        category: document.category,
+        fileSize: document.fileSize,
+        mimeType: document.mimeType,
+        quotaError: isQuotaErrorMessage(message),
       },
     });
 

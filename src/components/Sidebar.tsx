@@ -31,6 +31,11 @@ const NAV_ITEMS = [
     href: "/chat",
     enabled: true,
   },
+  {
+    label: "Activity",
+    href: "/activity",
+    enabled: true,
+  },
 ];
 
 export function Sidebar({ userName, userEmail }: SidebarProps) {
@@ -39,49 +44,44 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
   async function handleSignOut() {
     await authClient.signOut();
-
     router.push("/login");
     router.refresh();
   }
 
   return (
     <aside className="sidebar">
-      <div>
-        <Brand />
+      <Brand />
 
-        <nav className="sidebar-nav" aria-label="Main navigation">
-          {NAV_ITEMS.map((item) => {
-            if (!item.enabled) {
-              return (
-                <span
-                  key={item.label}
-                  className="sidebar-link sidebar-link-disabled"
-                >
-                  {item.label}
-                  <span className="soon-tag">Soon</span>
-                </span>
-              );
-            }
-
-            const isActive =
-              pathname === item.href || pathname?.startsWith(`${item.href}/`);
-
+      <nav className="sidebar-nav">
+        {NAV_ITEMS.map((item) => {
+          if (!item.enabled) {
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={
-                  isActive
-                    ? "sidebar-link sidebar-link-active"
-                    : "sidebar-link"
-                }
+              <span
+                key={item.label}
+                className="sidebar-link sidebar-link-disabled"
               >
                 {item.label}
-              </Link>
+                <span className="soon-tag">Soon</span>
+              </span>
             );
-          })}
-        </nav>
-      </div>
+          }
+
+          const isActive =
+            pathname === item.href || pathname?.startsWith(`${item.href}/`);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`sidebar-link ${
+                isActive ? "sidebar-link-active" : ""
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
 
       <div className="sidebar-footer">
         <div>

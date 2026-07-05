@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { DocumentReviewStatus, DocumentStatus } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = {
@@ -9,7 +11,11 @@ type RouteContext = {
   }>;
 };
 
-const VALID_REVIEW_STATUSES = ["NEEDS_REVIEW", "APPROVED", "REJECTED"] as const;
+const VALID_REVIEW_STATUSES = [
+  DocumentReviewStatus.NEEDS_REVIEW,
+  DocumentReviewStatus.APPROVED,
+  DocumentReviewStatus.REJECTED,
+] as const;
 
 type ReviewStatus = (typeof VALID_REVIEW_STATUSES)[number];
 
@@ -18,6 +24,30 @@ function isReviewStatus(value: unknown): value is ReviewStatus {
     typeof value === "string" &&
     VALID_REVIEW_STATUSES.includes(value as ReviewStatus)
   );
+}
+
+function getReviewAuditType(reviewStatus: ReviewStatus) {
+  if (reviewStatus === DocumentReviewStatus.APPROVED) {
+    return "DOCUMENT_APPROVED" as const;
+  }
+
+  if (reviewStatus === DocumentReviewStatus.REJECTED) {
+    return "DOCUMENT_REJECTED" as const;
+  }
+
+  return "DOCUMENT_REVIEW_RESET" as const;
+}
+
+function getReviewAuditTitle(reviewStatus: ReviewStatus) {
+  if (reviewStatus === DocumentReviewStatus.APPROVED) {
+    return "Document approved";
+  }
+
+  if (reviewStatus === DocumentReviewStatus.REJECTED) {
+    return "Document rejected";
+  }
+
+  return "Document moved back to review";
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -32,7 +62,6 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const { id } = await context.params;
     const body = await request.json().catch(() => null);
-
     const reviewStatus = body?.reviewStatus;
 
     if (!isReviewStatus(reviewStatus)) {
@@ -52,7 +81,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       },
       select: {
         id: true,
+        fileName: true,
         status: true,
+        reviewStatus: true,
       },
     });
 
@@ -63,7 +94,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
-    if (reviewStatus === "APPROVED" && document.status !== "PROCESSED") {
+    if (
+      reviewStatus === DocumentReviewStatus.APPROVED &&
+      document.status !== DocumentStatus.PROCESSED
+    ) {
       return NextResponse.json(
         { error: "Only processed documents can be approved." },
         { status: 400 },
@@ -81,9 +115,29 @@ export async function PATCH(request: Request, context: RouteContext) {
       },
       select: {
         id: true,
+        fileName: true,
         reviewStatus: true,
         reviewedAt: true,
         reviewNote: true,
+      },
+    });
+
+    await createAuditEvent({
+      userId: session.user.id,
+      eventType: getReviewAuditType(reviewStatus),
+      title: getReviewAuditTitle(reviewStatus),
+      description:
+        reviewStatus === DocumentReviewStatus.APPROVED
+          ? `${document.fileName} is now trusted and can update the dashboard and AI team.`
+          : reviewStatus === DocumentReviewStatus.REJECTED
+            ? `${document.fileName} was rejected and will not affect financial intelligence.`
+            : `${document.fileName} was moved back to review state.`,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: {
+        previousReviewStatus: document.reviewStatus,
+        newReviewStatus: reviewStatus,
+        reviewNote: reviewNote || null,
       },
     });
 

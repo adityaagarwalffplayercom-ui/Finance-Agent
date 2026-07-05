@@ -18,6 +18,7 @@ model User {
   updatedAt     DateTime              @updatedAt
 
   accounts      Account[]
+  auditEvents   AuditEvent[]
   business      Business?
   chatMessages  BusinessChatMessage[]
   documents     Document[]
@@ -138,6 +139,24 @@ model UsageEvent {
 
   @@index([userId, eventType, createdAt])
   @@map("usage_event")
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  eventType   String
+  title       String
+  description String?
+  documentId  String?
+  fileName    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, eventType, createdAt])
+  @@map("audit_event")
 }
 
 enum DocumentCategory {

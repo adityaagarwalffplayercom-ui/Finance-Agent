@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 import {
   ALLOWED_MIME_TYPES,
@@ -20,19 +21,6 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = session.user.id;
-
-    const uploadUsage = await checkAndRecordUploadUsage(userId);
-
-    if (!uploadUsage.allowed) {
-      return NextResponse.json(
-        {
-          error:
-            uploadUsage.message ??
-            "Daily upload limit reached. Try again later.",
-        },
-        { status: 429 },
-      );
-    }
 
     const formData = await request.formData();
 
@@ -61,23 +49,65 @@ export async function POST(request: NextRequest) {
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return NextResponse.json(
-        {
-          error: `Files must be ${formatFileSize(
-            MAX_FILE_SIZE_BYTES,
-          )} or smaller. This protects AI quota and prevents large annual reports from exhausting Gemini.`,
+      const message = `Files must be ${formatFileSize(
+        MAX_FILE_SIZE_BYTES,
+      )} or smaller. This protects AI quota and prevents large annual reports from exhausting Gemini.`;
+
+      await createAuditEvent({
+        userId,
+        eventType: "UPLOAD_BLOCKED",
+        title: "Upload blocked",
+        description: message,
+        fileName: file.name,
+        metadata: {
+          fileSize: file.size,
+          mimeType: file.type,
+          category,
         },
-        { status: 413 },
-      );
+      });
+
+      return NextResponse.json({ error: message }, { status: 413 });
     }
 
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      return NextResponse.json(
-        {
-          error: "Use a PDF, image (JPG/PNG/WebP), CSV, or Excel file.",
+      const message = "Use a PDF, image (JPG/PNG/WebP), CSV, or Excel file.";
+
+      await createAuditEvent({
+        userId,
+        eventType: "UPLOAD_BLOCKED",
+        title: "Upload blocked",
+        description: message,
+        fileName: file.name,
+        metadata: {
+          fileSize: file.size,
+          mimeType: file.type,
+          category,
         },
-        { status: 400 },
-      );
+      });
+
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    const uploadUsage = await checkAndRecordUploadUsage(userId);
+
+    if (!uploadUsage.allowed) {
+      const message =
+        uploadUsage.message ?? "Daily upload limit reached. Try again later.";
+
+      await createAuditEvent({
+        userId,
+        eventType: "UPLOAD_BLOCKED",
+        title: "Upload limit reached",
+        description: message,
+        fileName: file.name,
+        metadata: {
+          fileSize: file.size,
+          mimeType: file.type,
+          category,
+        },
+      });
+
+      return NextResponse.json({ error: message }, { status: 429 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -100,6 +130,21 @@ export async function POST(request: NextRequest) {
         category: true,
         status: true,
         uploadedAt: true,
+      },
+    });
+
+    await createAuditEvent({
+      userId,
+      eventType: "DOCUMENT_UPLOADED",
+      title: "Document uploaded",
+      description: `${document.fileName} was uploaded and is ready for AI processing.`,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: {
+        category: document.category,
+        fileSize: document.fileSize,
+        mimeType: document.mimeType,
+        status: document.status,
       },
     });
 
