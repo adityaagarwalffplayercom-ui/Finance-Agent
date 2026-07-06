@@ -201,34 +201,47 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           }
 
           .sidebar-top {
-            display: flex !important;
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) auto !important;
             align-items: center !important;
-            justify-content: space-between !important;
             gap: 10px !important;
             width: 100% !important;
+            min-width: 0 !important;
           }
 
           .sidebar .brand {
             width: auto !important;
+            max-width: 100% !important;
             min-width: 0 !important;
             padding: 0 !important;
+            overflow: hidden !important;
           }
 
-          .sidebar .brand > span {
+          .sidebar .brand .aureli-logo {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
             gap: 8px !important;
           }
 
-          .sidebar .brand span[style*="width"] {
+          .sidebar .brand .aureli-logo-mark {
             width: 32px !important;
             height: 32px !important;
           }
 
-          .sidebar .brand span[style*="font-size: 20px"] {
-            font-size: 16px !important;
+          .sidebar .brand .aureli-logo-wordmark {
+            min-width: 0 !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
           }
 
-          .sidebar .brand span[style*="font-size: 10px"] {
-            font-size: 8px !important;
+          .sidebar .brand .aureli-logo-name {
+            font-size: 16px !important;
+            white-space: nowrap !important;
+          }
+
+          .sidebar .brand .aureli-logo-tagline {
+            display: none !important;
           }
 
           .sidebar-nav {
@@ -271,6 +284,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
             border-radius: 999px !important;
             font-size: 11px !important;
             white-space: nowrap !important;
+            flex: 0 0 auto !important;
           }
 
           main,
@@ -327,6 +341,15 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           .sidebar {
             padding: 9px !important;
             border-radius: 18px !important;
+          }
+
+          .sidebar .brand .aureli-logo-mark {
+            width: 30px !important;
+            height: 30px !important;
+          }
+
+          .sidebar .brand .aureli-logo-name {
+            font-size: 15px !important;
           }
 
           .sidebar-link {

@@ -11,14 +11,17 @@ export function AureliLogo({
 }: AureliLogoProps) {
   return (
     <span
+      className="aureli-logo"
       style={{
         display: "inline-flex",
         alignItems: "center",
         gap: 11,
         minWidth: 0,
+        maxWidth: "100%",
       }}
     >
       <span
+        className="aureli-logo-mark"
         style={{
           width: size,
           height: size,
@@ -99,21 +102,26 @@ export function AureliLogo({
 
       {showWordmark ? (
         <span
+          className="aureli-logo-wordmark"
           style={{
             display: "grid",
-            gap: 2,
+            gap: 3,
             minWidth: 0,
+            maxWidth: "100%",
             lineHeight: 1,
           }}
         >
           <span
-            className="brand-word"
+            className="aureli-logo-name brand-word"
             style={{
               color: "var(--color-text-primary)",
               fontSize: 20,
               fontWeight: 950,
               letterSpacing: "-0.05em",
               lineHeight: 1,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
             Aureli
@@ -121,13 +129,17 @@ export function AureliLogo({
 
           {tagline ? (
             <span
+              className="aureli-logo-tagline"
               style={{
                 color: "var(--color-text-secondary)",
                 fontSize: 10,
                 fontWeight: 800,
                 letterSpacing: "0.02em",
                 lineHeight: 1.2,
-                overflowWrap: "anywhere",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: 130,
               }}
             >
               {tagline}
