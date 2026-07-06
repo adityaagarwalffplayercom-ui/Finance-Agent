@@ -15,6 +15,8 @@ type BusinessProfile = {
 type BusinessProfileFormProps = {
   business?: BusinessProfile | null;
   initialBusiness?: BusinessProfile | null;
+  initialValues?: BusinessProfile | null;
+  hasBusinessProfile?: boolean;
 };
 
 type FormState = {
@@ -658,9 +660,12 @@ function TextInput({
 export function BusinessProfileForm({
   business,
   initialBusiness,
+  initialValues,
+  hasBusinessProfile,
 }: BusinessProfileFormProps) {
   const router = useRouter();
-  const currentBusiness = business ?? initialBusiness ?? null;
+  const currentBusiness = business ?? initialBusiness ?? initialValues ?? null;
+  const profileExists = hasBusinessProfile ?? Boolean(currentBusiness?.name);
 
   const [name, setName] = useState(currentBusiness?.name ?? "");
   const [industry, setIndustry] = useState(
@@ -730,7 +735,9 @@ export function BusinessProfileForm({
           type: "success",
           message:
             data?.message ??
-            "Business profile saved. Aureli will use this context for dashboard, AI chat, and CFO reports.",
+            (profileExists
+              ? "Business profile updated successfully."
+              : "Business profile saved successfully."),
         });
 
         router.refresh();
@@ -917,7 +924,11 @@ export function BusinessProfileForm({
             opacity: isPending ? 0.7 : 1,
           }}
         >
-          {isPending ? "Saving profile..." : "Save business profile"}
+          {isPending
+            ? "Saving profile..."
+            : profileExists
+              ? "Update business profile"
+              : "Save business profile"}
         </button>
 
         <span
