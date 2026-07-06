@@ -1,188 +1,200 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 
-async function readApiError(response: Response) {
-  try {
-    const data = await response.json();
+type ActionState = {
+  type: "idle" | "success" | "error";
+  message: string;
+};
 
-    if (typeof data?.error === "string") {
-      return data.error;
-    }
+function SampleWorkspaceButton({
+  children,
+  onClick,
+  disabled,
+  tone,
+}: {
+  children: string;
+  onClick: () => void;
+  disabled: boolean;
+  tone: "gold" | "danger";
+}) {
+  const isDanger = tone === "danger";
 
-    return "Request failed.";
-  } catch {
-    return "Request failed.";
-  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="btn-ghost"
+      style={{
+        border: isDanger
+          ? "1px solid rgba(255,138,149,0.28)"
+          : "1px solid rgba(255,209,102,0.30)",
+        background: isDanger
+          ? "rgba(255,138,149,0.085)"
+          : "rgba(245,158,11,0.10)",
+        color: isDanger ? "var(--color-danger)" : "var(--color-gold)",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.7 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function DemoSampleDataButton() {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [state, setState] = useState<ActionState>({
+    type: "idle",
+    message: "",
+  });
 
-  const [isCreating, setIsCreating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  function loadSampleWorkspace() {
+    setState({
+      type: "idle",
+      message: "",
+    });
 
-  async function handleCreateSampleData() {
-    if (isCreating || isDeleting) return;
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/demo/sample-data", {
+          method: "POST",
+        });
 
-    setIsCreating(true);
-    setMessage(null);
-    setError(null);
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+        } | null;
 
-    try {
-      const response = await fetch("/api/demo/sample-data", {
-        method: "POST",
-      });
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Sample workspace could not be loaded.");
+        }
 
-      if (!response.ok) {
-        const apiError = await readApiError(response);
-        setError(apiError);
-        return;
+        setState({
+          type: "success",
+          message:
+            data?.message ??
+            "Sample workspace loaded. You can now explore dashboard, charts, AI chat, and reports.",
+        });
+
+        router.refresh();
+      } catch (error) {
+        setState({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Sample workspace could not be loaded.",
+        });
       }
-
-      const data = await response.json();
-
-      setMessage(
-        typeof data?.message === "string"
-          ? data.message
-          : "Demo data created. Dashboard is ready.",
-      );
-
-      router.refresh();
-    } catch (createError) {
-      setError(
-        createError instanceof Error
-          ? createError.message
-          : "Could not create demo sample data.",
-      );
-    } finally {
-      setIsCreating(false);
-    }
+    });
   }
 
-  async function handleDeleteSampleData() {
-    if (isCreating || isDeleting) return;
+  function clearSampleWorkspace() {
+    setState({
+      type: "idle",
+      message: "",
+    });
 
-    const confirmed = window.confirm(
-      "Delete demo sample data? This will remove only [Sample] documents. Your real uploaded documents will stay safe.",
-    );
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/demo/sample-data", {
+          method: "DELETE",
+        });
 
-    if (!confirmed) return;
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+        } | null;
 
-    setIsDeleting(true);
-    setMessage(null);
-    setError(null);
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Sample workspace could not be cleared.");
+        }
 
-    try {
-      const response = await fetch("/api/demo/sample-data", {
-        method: "DELETE",
-      });
+        setState({
+          type: "success",
+          message:
+            data?.message ??
+            "Sample workspace cleared. Your real uploaded documents remain unchanged.",
+        });
 
-      if (!response.ok) {
-        const apiError = await readApiError(response);
-        setError(apiError);
-        return;
+        router.refresh();
+      } catch (error) {
+        setState({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Sample workspace could not be cleared.",
+        });
       }
-
-      const data = await response.json();
-
-      const deletedDocuments =
-        typeof data?.deletedDocuments === "number"
-          ? data.deletedDocuments
-          : 0;
-
-      setMessage(`Deleted ${deletedDocuments} demo sample document(s).`);
-
-      router.refresh();
-    } catch (deleteError) {
-      setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "Could not delete demo sample data.",
-      );
-    } finally {
-      setIsDeleting(false);
-    }
+    });
   }
-
-  const isBusy = isCreating || isDeleting;
 
   return (
     <div
       style={{
         display: "grid",
-        gap: 8,
+        gap: 10,
+        minWidth: 0,
       }}
     >
       <div
         style={{
           display: "flex",
-          gap: 8,
+          gap: 10,
           flexWrap: "wrap",
           alignItems: "center",
         }}
       >
-        <button
-          type="button"
-          onClick={handleCreateSampleData}
-          disabled={isBusy}
-          className="btn-ghost"
-          style={{
-            border: "1px solid rgba(245,158,11,0.38)",
-            background: "rgba(245,158,11,0.10)",
-            color: "var(--color-amber)",
-            cursor: isBusy ? "not-allowed" : "pointer",
-            opacity: isBusy ? 0.7 : 1,
-          }}
+        <SampleWorkspaceButton
+          onClick={loadSampleWorkspace}
+          disabled={isPending}
+          tone="gold"
         >
-          {isCreating ? "Creating demo data..." : "Create demo data"}
-        </button>
+          {isPending ? "Working..." : "Load sample workspace"}
+        </SampleWorkspaceButton>
 
-        <button
-          type="button"
-          onClick={handleDeleteSampleData}
-          disabled={isBusy}
-          className="btn-ghost"
-          style={{
-            border: "1px solid rgba(255,71,87,0.30)",
-            background: "rgba(255,71,87,0.08)",
-            color: "#ff8a95",
-            cursor: isBusy ? "not-allowed" : "pointer",
-            opacity: isBusy ? 0.7 : 1,
-          }}
+        <SampleWorkspaceButton
+          onClick={clearSampleWorkspace}
+          disabled={isPending}
+          tone="danger"
         >
-          {isDeleting ? "Deleting demo data..." : "Delete demo data"}
-        </button>
+          Clear sample workspace
+        </SampleWorkspaceButton>
       </div>
 
-      {message && (
-        <span
+      {state.type !== "idle" ? (
+        <div
           style={{
-            color: "#7bed9f",
+            border:
+              state.type === "success"
+                ? "1px solid rgba(46,213,115,0.28)"
+                : "1px solid rgba(255,138,149,0.30)",
+            background:
+              state.type === "success"
+                ? "rgba(46,213,115,0.085)"
+                : "rgba(255,138,149,0.085)",
+            color:
+              state.type === "success"
+                ? "var(--color-sage)"
+                : "var(--color-danger)",
+            borderRadius: 16,
+            padding: 12,
             fontSize: 12,
-            fontWeight: 800,
-            lineHeight: 1.4,
+            lineHeight: 1.5,
+            fontWeight: 750,
+            overflowWrap: "anywhere",
           }}
         >
-          {message}
-        </span>
-      )}
-
-      {error && (
-        <span
-          style={{
-            color: "#ff8a95",
-            fontSize: 12,
-            fontWeight: 800,
-            lineHeight: 1.4,
-          }}
-        >
-          {error}
-        </span>
-      )}
+          {state.message}
+        </div>
+      ) : null}
     </div>
   );
 }
+
+export default DemoSampleDataButton;

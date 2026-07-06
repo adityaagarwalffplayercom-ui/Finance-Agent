@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { DemoSampleDataButton } from "./components/DemoSampleDataButton";
 
 type DashboardLayoutProps = {
   children: ReactNode;
@@ -234,6 +235,7 @@ export default async function DashboardLayout({
   const country = displayValue(business?.country);
   const currency = displayValue(business?.currency);
   const financialYear = displayValue(business?.financialYear);
+
   const profileReady =
     business?.name &&
     business?.industry &&
@@ -278,12 +280,7 @@ export default async function DashboardLayout({
               minWidth: 0,
             }}
           >
-            <p
-              className="eyebrow"
-              style={{
-                margin: 0,
-              }}
-            >
+            <p className="eyebrow" style={{ margin: 0 }}>
               Executive workspace
             </p>
 
@@ -368,6 +365,48 @@ export default async function DashboardLayout({
           <ActionButton href="/documents">Review documents</ActionButton>
           <ActionButton href="/reports/cfo">Export CFO report</ActionButton>
           <ActionButton href="/onboarding">Setup guide</ActionButton>
+        </div>
+
+        <div
+          className="workspace-sample-actions"
+          style={{
+            border: "1px solid rgba(255,209,102,0.14)",
+            background: "rgba(0,0,0,0.10)",
+            borderRadius: 20,
+            padding: 14,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gap: 4,
+            }}
+          >
+            <strong
+              style={{
+                color: "var(--color-text-primary)",
+                fontSize: 13,
+                lineHeight: 1.3,
+              }}
+            >
+              Sample workspace
+            </strong>
+
+            <span
+              style={{
+                color: "var(--color-text-secondary)",
+                fontSize: 12,
+                lineHeight: 1.45,
+              }}
+            >
+              Load sample finance data to quickly demonstrate dashboard, charts,
+              AI chat, and CFO report.
+            </span>
+          </div>
+
+          <DemoSampleDataButton />
         </div>
 
         <div
@@ -483,12 +522,7 @@ export default async function DashboardLayout({
               gap: 6,
             }}
           >
-            <p
-              className="eyebrow"
-              style={{
-                margin: 0,
-              }}
-            >
+            <p className="eyebrow" style={{ margin: 0 }}>
               Recommended next actions
             </p>
 
@@ -683,6 +717,11 @@ export default async function DashboardLayout({
               width: 100% !important;
               justify-content: center !important;
               text-align: center !important;
+            }
+
+            .workspace-sample-actions {
+              padding: 12px !important;
+              border-radius: 18px !important;
             }
 
             .workspace-progress-card {
