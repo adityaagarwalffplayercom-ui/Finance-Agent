@@ -11,19 +11,65 @@ type SidebarProps = {
 };
 
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/dashboard", enabled: true },
-  { label: "Setup", href: "/onboarding", enabled: true },
-  { label: "Business", href: "/business", enabled: true },
-  { label: "Documents", href: "/documents", enabled: true },
-  { label: "AI Team", href: "/ai-team", enabled: true },
-  { label: "Chat", href: "/chat", enabled: true },
-  { label: "Reports", href: "/reports/cfo", enabled: true },
-  { label: "Activity", href: "/activity", enabled: true },
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    enabled: true,
+  },
+  {
+    label: "Setup",
+    href: "/onboarding",
+    enabled: true,
+  },
+  {
+    label: "Business",
+    href: "/business",
+    enabled: true,
+  },
+  {
+    label: "Documents",
+    href: "/documents",
+    enabled: true,
+  },
+  {
+    label: "AI Team",
+    href: "/ai-team",
+    enabled: true,
+  },
+  {
+    label: "Chat",
+    href: "/chat",
+    enabled: true,
+  },
+  {
+    label: "CFO Report",
+    href: "/reports/cfo",
+    enabled: true,
+  },
+  {
+    label: "Activity",
+    href: "/activity",
+    enabled: true,
+  },
+  {
+    label: "Privacy",
+    href: "/privacy",
+    enabled: true,
+  },
+  {
+    label: "Terms",
+    href: "/terms",
+    enabled: true,
+  },
 ];
 
 function isActiveLink(pathname: string, href: string) {
   if (href === "/dashboard") {
     return pathname === "/dashboard";
+  }
+
+  if (href === "/privacy" || href === "/terms") {
+    return pathname === href;
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -126,10 +172,6 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           display: none !important;
         }
 
-        .sidebar .aureli-logo-tagline {
-          display: none !important;
-        }
-
         @media (max-width: 980px) {
           :root {
             --aureli-sidebar-width: 0px;
@@ -210,7 +252,6 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           .sidebar .brand .aureli-logo-name {
             font-size: 16px !important;
             white-space: nowrap !important;
-            line-height: 1 !important;
           }
 
           .sidebar .brand .aureli-logo-tagline {
@@ -283,7 +324,6 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           main h1 {
             font-size: clamp(34px, 11vw, 48px) !important;
             line-height: 1 !important;
-            letter-spacing: -0.06em !important;
           }
 
           main h2 {
@@ -354,7 +394,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
               color: "inherit",
             }}
           >
-            <AureliLogo size={36} showWordmark />
+            <AureliLogo size={36} showWordmark tagline="AI finance team" />
           </Link>
 
           <button

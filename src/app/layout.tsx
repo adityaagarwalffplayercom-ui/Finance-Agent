@@ -1,29 +1,29 @@
-import type { Metadata } from "next";
-import { Fraunces, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { PWARegister } from "@/components/PWARegister";
 import "./globals.css";
 
-const display = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-});
-
-const body = IBM_Plex_Sans({
-  subsets: ["latin"],
-  variable: "--font-body",
-  weight: ["400", "500", "600"],
-});
-
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  weight: ["400", "500"],
-});
-
 export const metadata: Metadata = {
-  title: "Aureli — your AI finance team",
-  description: "The always-on CFO, accountant, and analyst for your business.",
+  title: "Aureli — AI Finance Workspace",
+  description:
+    "Aureli is an AI-powered finance workspace for smarter business decisions.",
+  applicationName: "Aureli",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Aureli",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: "/aureli-icon.svg",
+    apple: "/aureli-icon.svg",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0b111b",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -32,9 +32,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
-      <body>{children}</body>
+    <html lang="en">
+      <body>
+        <PWARegister />
+        {children}
+      </body>
     </html>
   );
 }
-

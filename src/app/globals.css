@@ -2176,3 +2176,129 @@ body {
     line-height: 1.1 !important;
   }
 }
+/* ============================
+   Aureli final typography polish
+   ============================ */
+
+:root {
+  --aureli-font-sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+html,
+body {
+  font-family: var(--aureli-font-sans) !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.01em;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body,
+p,
+span,
+label,
+input,
+select,
+textarea,
+button,
+a {
+  font-family: var(--aureli-font-sans) !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--aureli-font-sans) !important;
+  font-weight: 760 !important;
+  letter-spacing: -0.055em !important;
+}
+
+h1,
+.workspace-title,
+.aureli-home-title {
+  font-weight: 780 !important;
+  letter-spacing: -0.065em !important;
+}
+
+h2 {
+  font-weight: 740 !important;
+  letter-spacing: -0.05em !important;
+}
+
+h3,
+h4 {
+  font-weight: 700 !important;
+  letter-spacing: -0.035em !important;
+}
+
+strong,
+b {
+  font-weight: 700 !important;
+}
+
+.eyebrow,
+.section-hint,
+.page-intro {
+  letter-spacing: 0.02em !important;
+}
+
+.eyebrow {
+  font-weight: 720 !important;
+}
+
+.btn-ghost,
+.sidebar-link,
+.workspace-chip,
+.workspace-status,
+.aureli-nav-button,
+.aureli-hero-button {
+  font-weight: 650 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.sidebar-link-active {
+  font-weight: 720 !important;
+}
+
+.aureli-logo-name,
+.brand-word {
+  font-weight: 760 !important;
+  letter-spacing: -0.045em !important;
+}
+
+.aureli-logo-tagline,
+.sidebar-user-email,
+.sidebar-user-name {
+  font-weight: 500 !important;
+}
+
+input,
+select,
+textarea {
+  font-weight: 450 !important;
+}
+
+@media (max-width: 760px) {
+  h1,
+  .workspace-title,
+  .aureli-home-title {
+    font-weight: 760 !important;
+    letter-spacing: -0.055em !important;
+  }
+
+  h2 {
+    font-weight: 720 !important;
+  }
+
+  .btn-ghost,
+  .sidebar-link,
+  .aureli-nav-button {
+    font-weight: 620 !important;
+  }
+}
