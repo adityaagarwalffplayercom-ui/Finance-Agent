@@ -14,7 +14,8 @@ export function Brand({ className }: { className?: string }) {
         <line x1="7" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.2" opacity="0.6" />
         <circle cx="21" cy="7" r="5" fill="var(--color-amber)" opacity="0.9" />
       </svg>
-      <span className="brand-word">Ledger</span>
+      <span className="brand-word">Aureli</span>
     </div>
   );
 }
+

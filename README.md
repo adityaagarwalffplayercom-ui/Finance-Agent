@@ -1,8 +1,8 @@
-# Ledger — AI Executive Finance Team for Small Businesses
+# Aureli — AI Executive Finance Team for Small Businesses
 
-Ledger is an AI-powered finance platform that helps small and medium businesses turn financial documents into trusted dashboards, insights, and business decisions.
+Aureli is an AI-powered finance platform that helps small and medium businesses turn financial documents into trusted dashboards, insights, and business decisions.
 
-Instead of showing only accounting reports, Ledger acts like an **AI Executive Finance Team** for the business owner. It can extract financial data from documents, detect real accounting units, allow the owner to approve trusted numbers, update the finance dashboard, and answer business questions using AI agents.
+Instead of showing only accounting reports, Aureli acts like an **AI Executive Finance Team** for the business owner. It can extract financial data from documents, detect real accounting units, allow the owner to approve trusted numbers, update the finance dashboard, and answer business questions using AI agents.
 
 ---
 
@@ -32,13 +32,13 @@ Traditional accounting software shows reports, but business owners still need to
 - What should I fix first?
 - What is my biggest financial risk?
 
-Ledger solves this by combining document AI, trusted review, dashboard intelligence, and AI finance agents.
+Aureli solves this by combining document AI, trusted review, dashboard intelligence, and AI finance agents.
 
 ---
 
 ## 💡 Solution
 
-Ledger allows a business owner to:
+Aureli allows a business owner to:
 
 1. Create an account and log in
 2. Upload financial documents
@@ -60,3 +60,4 @@ Owner Reviews Extraction
 Approved Data Powers Dashboard
         ↓
 AI Finance Team Answers Business Questions
+

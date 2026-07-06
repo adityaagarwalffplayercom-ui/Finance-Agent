@@ -346,7 +346,7 @@ export default function HomePage() {
                 letterSpacing: "-0.03em",
               }}
             >
-              Ledger
+              Aureli
             </span>
           </Link>
 
@@ -478,7 +478,7 @@ export default function HomePage() {
                     maxWidth: 700,
                   }}
                 >
-                  Ledger understands financial statements, invoices, bank
+                  Aureli understands financial statements, invoices, bank
                   statements, payroll, and bills — then converts them into a
                   dashboard, AI finance chat, risk insights, and printable CFO
                   reports.
@@ -759,7 +759,7 @@ export default function HomePage() {
                 letterSpacing: "0.12em",
               }}
             >
-              What Ledger does
+              What Aureli does
             </p>
 
             <h2

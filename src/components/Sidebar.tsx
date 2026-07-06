@@ -60,7 +60,7 @@ function isActiveLink(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function LedgerLogo() {
+function AureliLogo() {
   return (
     <svg
       width="28"
@@ -122,8 +122,8 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
     <>
       <style jsx global>{`
         :root {
-          --ledger-sidebar-width: 280px;
-          --ledger-shell-gap: 20px;
+          --Aureli-sidebar-width: 280px;
+          --Aureli-shell-gap: 20px;
         }
 
         .dashboard-shell {
@@ -139,7 +139,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           top: 16px !important;
           left: 16px !important;
           bottom: 16px !important;
-          width: var(--ledger-sidebar-width) !important;
+          width: var(--Aureli-sidebar-width) !important;
           height: calc(100dvh - 32px) !important;
           max-height: calc(100dvh - 32px) !important;
           z-index: 50 !important;
@@ -150,10 +150,10 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
         .dashboard-main {
           margin-left: calc(
-            var(--ledger-sidebar-width) + var(--ledger-shell-gap)
+            var(--Aureli-sidebar-width) + var(--Aureli-shell-gap)
           ) !important;
           width: calc(
-            100% - var(--ledger-sidebar-width) - var(--ledger-shell-gap)
+            100% - var(--Aureli-sidebar-width) - var(--Aureli-shell-gap)
           ) !important;
           min-width: 0 !important;
           box-sizing: border-box !important;
@@ -187,8 +187,8 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
         @media (max-width: 1180px) {
           :root {
-            --ledger-sidebar-width: 250px;
-            --ledger-shell-gap: 16px;
+            --Aureli-sidebar-width: 250px;
+            --Aureli-shell-gap: 16px;
           }
         }
 
@@ -231,8 +231,8 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
             color: "inherit",
           }}
         >
-          <LedgerLogo />
-          <span className="brand-word">Ledger</span>
+          <AureliLogo />
+          <span className="brand-word">Aureli</span>
         </Link>
 
         <nav className="sidebar-nav" aria-label="Main navigation">

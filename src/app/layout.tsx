@@ -22,7 +22,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ledger — your AI finance team",
+  title: "Aureli — your AI finance team",
   description: "The always-on CFO, accountant, and analyst for your business.",
 };
 
@@ -37,3 +37,4 @@ export default function RootLayout({
     </html>
   );
 }
+
