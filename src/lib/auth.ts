@@ -10,7 +10,9 @@ const vercelUrl = process.env.VERCEL_URL
 const productionUrl = "https://finance-agent-nine-umber.vercel.app";
 
 const baseURL =
-  process.env.BETTER_AUTH_URL ?? vercelUrl ?? "http://localhost:3000";
+  process.env.BETTER_AUTH_URL ||
+  vercelUrl ||
+  "http://localhost:3000";
 
 export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
@@ -27,6 +29,7 @@ export const auth = betterAuth({
     vercelUrl,
     productionUrl,
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
   ].filter(Boolean) as string[],
   plugins: [nextCookies()],
 });
