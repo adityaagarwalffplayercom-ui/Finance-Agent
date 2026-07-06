@@ -1,574 +1,946 @@
 "use client";
 
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  useState,
-  type CSSProperties,
-  type FocusEvent,
-  type FormEvent,
-  type ReactNode,
-} from "react";
 
-type BusinessProfileFields = {
-  name: string;
-  industry: string;
-  businessType: string;
-  financialYear: string;
-  currency: string;
-  country: string;
+type BusinessProfile = {
+  name?: string | null;
+  industry?: string | null;
+  businessType?: string | null;
+  financialYear?: string | null;
+  currency?: string | null;
+  country?: string | null;
 };
 
 type BusinessProfileFormProps = {
-  initialValues: BusinessProfileFields;
-  hasBusinessProfile: boolean;
+  business?: BusinessProfile | null;
+  initialBusiness?: BusinessProfile | null;
+};
+
+type FormState = {
+  type: "idle" | "success" | "error";
+  message: string;
 };
 
 type SelectOption = {
   value: string;
   label: string;
+  description?: string;
+  icon?: string;
 };
 
 const INDUSTRY_OPTIONS: SelectOption[] = [
-  { value: "Retail", label: "Retail" },
-  { value: "Manufacturing", label: "Manufacturing" },
-  { value: "Services", label: "Services" },
-  { value: "Technology", label: "Technology" },
-  { value: "Healthcare", label: "Healthcare" },
-  { value: "Education", label: "Education" },
-  { value: "Food & Beverage", label: "Food & Beverage" },
-  { value: "Construction", label: "Construction" },
-  { value: "Logistics", label: "Logistics" },
-  { value: "Finance", label: "Finance" },
-  { value: "Other", label: "Other" },
+  {
+    value: "Retail",
+    label: "Retail",
+    description: "Shops, stores, consumer goods, trading",
+    icon: "🛍️",
+  },
+  {
+    value: "Manufacturing",
+    label: "Manufacturing",
+    description: "Production, factory, plant operations",
+    icon: "🏭",
+  },
+  {
+    value: "Services",
+    label: "Services",
+    description: "Consulting, agencies, professional services",
+    icon: "🤝",
+  },
+  {
+    value: "Technology",
+    label: "Technology",
+    description: "Software, SaaS, IT services, digital products",
+    icon: "💻",
+  },
+  {
+    value: "Healthcare",
+    label: "Healthcare",
+    description: "Clinics, pharma, medical services",
+    icon: "🏥",
+  },
+  {
+    value: "Education",
+    label: "Education",
+    description: "Schools, coaching, training institutes",
+    icon: "🎓",
+  },
+  {
+    value: "Food & Beverage",
+    label: "Food & Beverage",
+    description: "Restaurants, cafes, catering, packaged food",
+    icon: "🍽️",
+  },
+  {
+    value: "Real Estate",
+    label: "Real Estate",
+    description: "Property, rent, construction, brokerage",
+    icon: "🏢",
+  },
+  {
+    value: "Logistics",
+    label: "Logistics",
+    description: "Transport, delivery, warehousing",
+    icon: "🚚",
+  },
+  {
+    value: "Finance",
+    label: "Finance",
+    description: "Accounting, lending, advisory, investments",
+    icon: "💰",
+  },
+  {
+    value: "Agriculture",
+    label: "Agriculture",
+    description: "Farming, agribusiness, food supply",
+    icon: "🌾",
+  },
+  {
+    value: "Energy",
+    label: "Energy",
+    description: "Power, renewables, utilities",
+    icon: "⚡",
+  },
+  {
+    value: "Other",
+    label: "Other",
+    description: "Any other business industry",
+    icon: "📌",
+  },
 ];
 
 const BUSINESS_TYPE_OPTIONS: SelectOption[] = [
-  { value: "Sole Proprietorship", label: "Sole Proprietorship" },
-  { value: "Partnership", label: "Partnership" },
-  { value: "LLP", label: "LLP" },
-  { value: "Private Limited", label: "Private Limited" },
-  { value: "Public Limited", label: "Public Limited" },
-  { value: "Startup", label: "Startup" },
-  { value: "Non-profit", label: "Non-profit" },
-  { value: "Other", label: "Other" },
+  {
+    value: "Sole Proprietorship",
+    label: "Sole Proprietorship",
+    description: "Single owner business",
+    icon: "👤",
+  },
+  {
+    value: "Partnership",
+    label: "Partnership",
+    description: "Business owned by partners",
+    icon: "🤝",
+  },
+  {
+    value: "LLP",
+    label: "LLP",
+    description: "Limited Liability Partnership",
+    icon: "📘",
+  },
+  {
+    value: "Private Limited",
+    label: "Private Limited",
+    description: "Registered private company",
+    icon: "🏛️",
+  },
+  {
+    value: "Public Limited",
+    label: "Public Limited",
+    description: "Public company structure",
+    icon: "🏦",
+  },
+  {
+    value: "Startup",
+    label: "Startup",
+    description: "Early-stage scalable business",
+    icon: "🚀",
+  },
+  {
+    value: "SME",
+    label: "SME",
+    description: "Small or medium enterprise",
+    icon: "🏪",
+  },
+  {
+    value: "Non-profit",
+    label: "Non-profit",
+    description: "NGO, trust, foundation",
+    icon: "🌱",
+  },
+  {
+    value: "Other",
+    label: "Other",
+    description: "Any other legal structure",
+    icon: "📌",
+  },
+];
+
+const FINANCIAL_YEAR_OPTIONS: SelectOption[] = [
+  {
+    value: "2023-24",
+    label: "2023-24",
+    description: "April 2023 to March 2024",
+    icon: "📅",
+  },
+  {
+    value: "2024-25",
+    label: "2024-25",
+    description: "April 2024 to March 2025",
+    icon: "📅",
+  },
+  {
+    value: "2025-26",
+    label: "2025-26",
+    description: "April 2025 to March 2026",
+    icon: "📅",
+  },
+  {
+    value: "2026-27",
+    label: "2026-27",
+    description: "April 2026 to March 2027",
+    icon: "📅",
+  },
+  {
+    value: "Calendar Year 2024",
+    label: "Calendar Year 2024",
+    description: "January 2024 to December 2024",
+    icon: "🗓️",
+  },
+  {
+    value: "Calendar Year 2025",
+    label: "Calendar Year 2025",
+    description: "January 2025 to December 2025",
+    icon: "🗓️",
+  },
+  {
+    value: "Calendar Year 2026",
+    label: "Calendar Year 2026",
+    description: "January 2026 to December 2026",
+    icon: "🗓️",
+  },
 ];
 
 const CURRENCY_OPTIONS: SelectOption[] = [
-  { value: "INR", label: "INR — Indian Rupee" },
-  { value: "USD", label: "USD — US Dollar" },
-  { value: "EUR", label: "EUR — Euro" },
-  { value: "GBP", label: "GBP — British Pound" },
-  { value: "CHF", label: "CHF — Swiss Franc" },
-  { value: "AED", label: "AED — UAE Dirham" },
-  { value: "SGD", label: "SGD — Singapore Dollar" },
+  {
+    value: "INR",
+    label: "INR — Indian Rupee",
+    description: "₹ Indian Rupee",
+    icon: "₹",
+  },
+  {
+    value: "USD",
+    label: "USD — US Dollar",
+    description: "$ United States Dollar",
+    icon: "$",
+  },
+  {
+    value: "EUR",
+    label: "EUR — Euro",
+    description: "€ Euro",
+    icon: "€",
+  },
+  {
+    value: "GBP",
+    label: "GBP — British Pound",
+    description: "£ Pound Sterling",
+    icon: "£",
+  },
+  {
+    value: "CHF",
+    label: "CHF — Swiss Franc",
+    description: "Swiss Franc",
+    icon: "₣",
+  },
+  {
+    value: "AED",
+    label: "AED — UAE Dirham",
+    description: "United Arab Emirates Dirham",
+    icon: "د.إ",
+  },
+  {
+    value: "SGD",
+    label: "SGD — Singapore Dollar",
+    description: "Singapore Dollar",
+    icon: "S$",
+  },
+  {
+    value: "AUD",
+    label: "AUD — Australian Dollar",
+    description: "Australian Dollar",
+    icon: "A$",
+  },
+  {
+    value: "CAD",
+    label: "CAD — Canadian Dollar",
+    description: "Canadian Dollar",
+    icon: "C$",
+  },
+  {
+    value: "JPY",
+    label: "JPY — Japanese Yen",
+    description: "Japanese Yen",
+    icon: "¥",
+  },
 ];
 
 const COUNTRY_OPTIONS: SelectOption[] = [
-  { value: "India", label: "India" },
-  { value: "United States", label: "United States" },
-  { value: "United Kingdom", label: "United Kingdom" },
-  { value: "Switzerland", label: "Switzerland" },
-  { value: "United Arab Emirates", label: "United Arab Emirates" },
-  { value: "Singapore", label: "Singapore" },
-  { value: "Germany", label: "Germany" },
-  { value: "France", label: "France" },
-  { value: "Other", label: "Other" },
+  {
+    value: "India",
+    label: "India",
+    description: "Business operating in India",
+    icon: "🇮🇳",
+  },
+  {
+    value: "United States",
+    label: "United States",
+    description: "Business operating in the US",
+    icon: "🇺🇸",
+  },
+  {
+    value: "United Kingdom",
+    label: "United Kingdom",
+    description: "Business operating in the UK",
+    icon: "🇬🇧",
+  },
+  {
+    value: "United Arab Emirates",
+    label: "United Arab Emirates",
+    description: "Business operating in UAE",
+    icon: "🇦🇪",
+  },
+  {
+    value: "Singapore",
+    label: "Singapore",
+    description: "Business operating in Singapore",
+    icon: "🇸🇬",
+  },
+  {
+    value: "Switzerland",
+    label: "Switzerland",
+    description: "Business operating in Switzerland",
+    icon: "🇨🇭",
+  },
+  {
+    value: "Germany",
+    label: "Germany",
+    description: "Business operating in Germany",
+    icon: "🇩🇪",
+  },
+  {
+    value: "France",
+    label: "France",
+    description: "Business operating in France",
+    icon: "🇫🇷",
+  },
+  {
+    value: "Canada",
+    label: "Canada",
+    description: "Business operating in Canada",
+    icon: "🇨🇦",
+  },
+  {
+    value: "Australia",
+    label: "Australia",
+    description: "Business operating in Australia",
+    icon: "🇦🇺",
+  },
+  {
+    value: "Japan",
+    label: "Japan",
+    description: "Business operating in Japan",
+    icon: "🇯🇵",
+  },
+  {
+    value: "Other",
+    label: "Other",
+    description: "Any other country",
+    icon: "🌍",
+  },
 ];
 
-function readErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Something went wrong while saving business profile.";
-}
-
-async function readApiError(response: Response) {
-  try {
-    const data = await response.json();
-
-    if (typeof data?.error === "string") {
-      return data.error;
+function findOption(options: SelectOption[], value: string) {
+  return (
+    options.find((option) => option.value === value) ?? {
+      value,
+      label: value || "Select option",
+      description: "Choose the closest matching option",
+      icon: "📌",
     }
-
-    return "Business profile update failed.";
-  } catch {
-    return "Business profile update failed.";
-  }
-}
-
-function FieldLabel({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint: string;
-  children: ReactNode;
-}) {
-  return (
-    <label
-      style={{
-        display: "grid",
-        gap: 8,
-      }}
-    >
-      <span
-        style={{
-          color: "var(--color-text-primary)",
-          fontSize: 13,
-          fontWeight: 900,
-        }}
-      >
-        {label}
-      </span>
-
-      {children}
-
-      <span
-        style={{
-          color: "var(--color-text-muted)",
-          fontSize: 12,
-          lineHeight: 1.4,
-        }}
-      >
-        {hint}
-      </span>
-    </label>
   );
 }
 
-function FieldShell({
+function InlineScrollableSelect({
   label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint: string;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gap: 8,
-      }}
-    >
-      <span
-        style={{
-          color: "var(--color-text-primary)",
-          fontSize: 13,
-          fontWeight: 900,
-        }}
-      >
-        {label}
-      </span>
-
-      {children}
-
-      <span
-        style={{
-          color: "var(--color-text-muted)",
-          fontSize: 12,
-          lineHeight: 1.4,
-        }}
-      >
-        {hint}
-      </span>
-    </div>
-  );
-}
-
-function inputStyle(): CSSProperties {
-  return {
-    border: "1px solid var(--color-border)",
-    background:
-      "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025))",
-    color: "var(--color-text-primary)",
-    borderRadius: 14,
-    padding: "12px 13px",
-    outline: "none",
-    fontSize: 14,
-    width: "100%",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-  };
-}
-
-function ThemedSelect({
   value,
   options,
-  placeholder,
   onChange,
+  disabled,
 }: {
+  label: string;
   value: string;
   options: SelectOption[];
-  placeholder: string;
   onChange: (value: string) => void;
+  disabled: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const selectedOption = options.find((option) => option.value === value);
-
-  function handleBlur(event: FocusEvent<HTMLDivElement>) {
-    const nextFocusedElement = event.relatedTarget as Node | null;
-
-    if (
-      nextFocusedElement &&
-      event.currentTarget.contains(nextFocusedElement)
-    ) {
-      return;
-    }
-
-    setIsOpen(false);
-  }
+  const [open, setOpen] = useState(false);
+  const selected = findOption(options, value);
 
   return (
     <div
-      onBlur={handleBlur}
       style={{
-        position: "relative",
+        display: "grid",
+        gap: 10,
+        minWidth: 0,
       }}
     >
+      <label
+        style={{
+          color: "var(--color-text-primary)",
+          fontSize: 13,
+          fontWeight: 900,
+        }}
+      >
+        {label}
+      </label>
+
       <button
         type="button"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        onClick={() => setIsOpen((current) => !current)}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
         style={{
           width: "100%",
-          border: isOpen
-            ? "1px solid rgba(245,158,11,0.55)"
-            : "1px solid var(--color-border)",
-          background: isOpen
-            ? "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(255,255,255,0.04))"
-            : "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025))",
-          color: selectedOption
-            ? "var(--color-text-primary)"
-            : "var(--color-text-muted)",
-          borderRadius: 14,
-          padding: "12px 13px",
-          outline: "none",
-          fontSize: 14,
-          cursor: "pointer",
+          border: "1px solid rgba(245,158,11,0.24)",
+          background:
+            "linear-gradient(135deg, rgba(255,255,255,0.060), rgba(255,255,255,0.025))",
+          color: "var(--color-text-primary)",
+          borderRadius: 18,
+          padding: 14,
           display: "flex",
+          alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
-          alignItems: "center",
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.65 : 1,
           textAlign: "left",
-          boxShadow: isOpen
-            ? "0 0 0 1px rgba(245,158,11,0.16), 0 18px 45px rgba(0,0,0,0.20)"
-            : "inset 0 1px 0 rgba(255,255,255,0.04)",
+          minWidth: 0,
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
         }}
       >
         <span
           style={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            minWidth: 0,
           }}
         >
-          {selectedOption?.label ?? placeholder}
+          <span
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 15,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid rgba(255,209,102,0.28)",
+              background: "rgba(245,158,11,0.10)",
+              color: "var(--color-gold)",
+              fontSize: 15,
+              fontWeight: 950,
+              flex: "0 0 auto",
+            }}
+          >
+            {selected.icon ?? "📌"}
+          </span>
+
+          <span
+            style={{
+              display: "grid",
+              gap: 4,
+              minWidth: 0,
+            }}
+          >
+            <strong
+              style={{
+                color: "var(--color-text-primary)",
+                fontSize: 14,
+                lineHeight: 1.25,
+                overflowWrap: "anywhere",
+              }}
+            >
+              {selected.label}
+            </strong>
+
+            {selected.description ? (
+              <span
+                style={{
+                  color: "var(--color-text-secondary)",
+                  fontSize: 12,
+                  lineHeight: 1.35,
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {selected.description}
+              </span>
+            ) : null}
+          </span>
         </span>
 
         <span
           style={{
-            color: "var(--color-amber)",
-            fontSize: 13,
-            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "0.18s ease",
+            color: "var(--color-gold)",
+            fontSize: 16,
+            lineHeight: 1,
+            flex: "0 0 auto",
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 160ms ease",
           }}
         >
-          ▼
+          ▾
         </span>
       </button>
 
-      {isOpen && (
+      {open ? (
         <div
-          role="listbox"
           style={{
-            position: "absolute",
-            zIndex: 40,
-            top: "calc(100% + 8px)",
-            left: 0,
-            right: 0,
-            border: "1px solid rgba(245,158,11,0.28)",
+            border: "1px solid rgba(245,158,11,0.22)",
             background:
-              "linear-gradient(180deg, rgba(18,24,33,0.98), rgba(10,15,22,0.98))",
-            color: "var(--color-text-primary)",
-            borderRadius: 16,
+              "linear-gradient(135deg, rgba(10,15,22,0.98), rgba(14,20,30,0.98))",
+            borderRadius: 20,
             padding: 8,
             display: "grid",
-            gap: 5,
-            maxHeight: 260,
+            gap: 6,
+            maxHeight: 360,
             overflowY: "auto",
+            overflowX: "hidden",
+            overscrollBehavior: "contain",
+            scrollbarWidth: "thin",
             boxShadow:
-              "0 22px 70px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)",
-            backdropFilter: "blur(16px)",
+              "0 18px 52px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.06)",
           }}
         >
           {options.map((option) => {
-            const isSelected = option.value === value;
+            const active = option.value === value;
 
             return (
               <button
                 key={option.value}
                 type="button"
-                role="option"
-                aria-selected={isSelected}
                 onClick={() => {
                   onChange(option.value);
-                  setIsOpen(false);
+                  setOpen(false);
                 }}
                 style={{
-                  border: isSelected
-                    ? "1px solid rgba(245,158,11,0.42)"
-                    : "1px solid transparent",
-                  background: isSelected
-                    ? "rgba(245,158,11,0.14)"
-                    : "rgba(255,255,255,0.025)",
-                  color: isSelected
-                    ? "var(--color-amber)"
-                    : "var(--color-text-primary)",
-                  borderRadius: 12,
-                  padding: "10px 11px",
+                  border: active
+                    ? "1px solid rgba(255,209,102,0.30)"
+                    : "1px solid rgba(255,255,255,0.045)",
+                  background: active
+                    ? "rgba(245,158,11,0.10)"
+                    : "rgba(255,255,255,0.024)",
+                  color: "var(--color-text-primary)",
+                  borderRadius: 15,
+                  padding: 11,
+                  display: "flex",
+                  gap: 11,
+                  alignItems: "center",
                   textAlign: "left",
                   cursor: "pointer",
-                  fontSize: 13,
-                  fontWeight: isSelected ? 900 : 700,
-                  lineHeight: 1.35,
+                  minWidth: 0,
                 }}
               >
-                {option.label}
+                <span
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 13,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid rgba(255,209,102,0.24)",
+                    background: "rgba(245,158,11,0.085)",
+                    color: "var(--color-gold)",
+                    fontSize: 13,
+                    fontWeight: 950,
+                    flex: "0 0 auto",
+                  }}
+                >
+                  {option.icon ?? "📌"}
+                </span>
+
+                <span
+                  style={{
+                    display: "grid",
+                    gap: 3,
+                    minWidth: 0,
+                  }}
+                >
+                  <strong
+                    style={{
+                      color: active
+                        ? "var(--color-gold)"
+                        : "var(--color-text-primary)",
+                      fontSize: 13,
+                      lineHeight: 1.2,
+                      overflowWrap: "anywhere",
+                    }}
+                  >
+                    {option.label}
+                  </strong>
+
+                  {option.description ? (
+                    <span
+                      style={{
+                        color: "var(--color-text-secondary)",
+                        fontSize: 11,
+                        lineHeight: 1.35,
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {option.description}
+                    </span>
+                  ) : null}
+                </span>
               </button>
             );
           })}
         </div>
-      )}
+      ) : null}
+    </div>
+  );
+}
+
+function TextInput({
+  label,
+  value,
+  placeholder,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 10,
+        minWidth: 0,
+      }}
+    >
+      <label
+        style={{
+          color: "var(--color-text-primary)",
+          fontSize: 13,
+          fontWeight: 900,
+        }}
+      >
+        {label}
+      </label>
+
+      <input
+        value={value}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        style={{
+          width: "100%",
+          border: "1px solid rgba(245,158,11,0.20)",
+          background:
+            "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.024))",
+          color: "var(--color-text-primary)",
+          borderRadius: 18,
+          padding: "15px 16px",
+          fontSize: 14,
+          outline: "none",
+          boxSizing: "border-box",
+          opacity: disabled ? 0.65 : 1,
+        }}
+      />
     </div>
   );
 }
 
 export function BusinessProfileForm({
-  initialValues,
-  hasBusinessProfile,
+  business,
+  initialBusiness,
 }: BusinessProfileFormProps) {
   const router = useRouter();
+  const currentBusiness = business ?? initialBusiness ?? null;
 
-  const [values, setValues] = useState<BusinessProfileFields>(initialValues);
-  const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState(currentBusiness?.name ?? "");
+  const [industry, setIndustry] = useState(
+    currentBusiness?.industry ?? "Technology",
+  );
+  const [businessType, setBusinessType] = useState(
+    currentBusiness?.businessType ?? "Private Limited",
+  );
+  const [financialYear, setFinancialYear] = useState(
+    currentBusiness?.financialYear ?? "2025-26",
+  );
+  const [currency, setCurrency] = useState(currentBusiness?.currency ?? "INR");
+  const [country, setCountry] = useState(currentBusiness?.country ?? "India");
+  const [state, setState] = useState<FormState>({
+    type: "idle",
+    message: "",
+  });
+  const [isPending, startTransition] = useTransition();
 
-  function updateField(field: keyof BusinessProfileFields, value: string) {
-    setValues((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  }
+  const selectedSummary = useMemo(() => {
+    return `${industry} · ${businessType} · ${currency} · ${country}`;
+  }, [industry, businessType, currency, country]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (isSaving) return;
-
-    setMessage(null);
-    setError(null);
-
-    if (!values.name.trim()) {
-      setError("Business name is required.");
+    if (!name.trim()) {
+      setState({
+        type: "error",
+        message: "Please enter your business name.",
+      });
       return;
     }
 
-    setIsSaving(true);
+    setState({
+      type: "idle",
+      message: "",
+    });
 
-    try {
-      const response = await fetch("/api/business", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/business", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            industry,
+            businessType,
+            financialYear,
+            currency,
+            country,
+          }),
+        });
 
-      if (!response.ok) {
-        const apiError = await readApiError(response);
-        setError(apiError);
-        return;
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+        } | null;
+
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Business profile could not be saved.");
+        }
+
+        setState({
+          type: "success",
+          message:
+            data?.message ??
+            "Business profile saved. Aureli will use this context for dashboard, AI chat, and CFO reports.",
+        });
+
+        router.refresh();
+      } catch (error) {
+        setState({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Business profile could not be saved.",
+        });
       }
-
-      setMessage("Business profile saved successfully.");
-      router.refresh();
-    } catch (saveError) {
-      setError(readErrorMessage(saveError));
-    } finally {
-      setIsSaving(false);
-    }
+    });
   }
 
   return (
     <form
       onSubmit={handleSubmit}
       style={{
+        border: "1px solid rgba(245,158,11,0.16)",
+        background:
+          "radial-gradient(circle at top left, rgba(245,158,11,0.10), transparent 28%), linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.024))",
+        borderRadius: 28,
+        padding: 22,
         display: "grid",
-        gap: 18,
+        gap: 20,
+        minWidth: 0,
+        overflow: "visible",
+        boxShadow:
+          "0 18px 60px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.052)",
       }}
     >
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          gap: 16,
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 14,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          minWidth: 0,
         }}
       >
-        <FieldLabel
-          label="Business name"
-          hint="This name will appear in reports and finance context."
+        <div
+          style={{
+            display: "grid",
+            gap: 6,
+            minWidth: 0,
+          }}
         >
-          <input
-            value={values.name}
-            onChange={(event) => updateField("name", event.target.value)}
-            placeholder="Example: Aditya Enterprises"
-            required
-            style={inputStyle()}
-          />
-        </FieldLabel>
+          <p className="section-title" style={{ margin: 0 }}>
+            Business profile
+          </p>
 
-        <FieldShell
-          label="Industry"
-          hint="Helps AI understand revenue, cost, and risk patterns."
-        >
-          <ThemedSelect
-            value={values.industry}
-            options={INDUSTRY_OPTIONS}
-            placeholder="Select industry"
-            onChange={(value) => updateField("industry", value)}
-          />
-        </FieldShell>
+          <p
+            className="section-hint"
+            style={{
+              margin: 0,
+              lineHeight: 1.55,
+            }}
+          >
+            This context improves dashboard accuracy, AI answers, and CFO-style
+            reports.
+          </p>
+        </div>
 
-        <FieldShell
-          label="Business type"
-          hint="Useful for financial profile and compliance context."
+        <span
+          style={{
+            border: "1px solid rgba(255,209,102,0.26)",
+            background: "rgba(245,158,11,0.09)",
+            color: "var(--color-gold)",
+            borderRadius: 999,
+            padding: "8px 11px",
+            fontSize: 11,
+            fontWeight: 950,
+            maxWidth: "100%",
+            overflowWrap: "anywhere",
+          }}
         >
-          <ThemedSelect
-            value={values.businessType}
-            options={BUSINESS_TYPE_OPTIONS}
-            placeholder="Select business type"
-            onChange={(value) => updateField("businessType", value)}
-          />
-        </FieldShell>
-
-        <FieldLabel
-          label="Financial year"
-          hint="Example: 2024-25, FY 2025, Jan-Dec 2024."
-        >
-          <input
-            value={values.financialYear}
-            onChange={(event) =>
-              updateField("financialYear", event.target.value)
-            }
-            placeholder="2024-25"
-            style={inputStyle()}
-          />
-        </FieldLabel>
-
-        <FieldShell
-          label="Currency"
-          hint="Default currency for dashboard and reports."
-        >
-          <ThemedSelect
-            value={values.currency}
-            options={CURRENCY_OPTIONS}
-            placeholder="Select currency"
-            onChange={(value) => updateField("currency", value)}
-          />
-        </FieldShell>
-
-        <FieldShell
-          label="Country"
-          hint="Helps AI understand taxes, filings, and business context."
-        >
-          <ThemedSelect
-            value={values.country}
-            options={COUNTRY_OPTIONS}
-            placeholder="Select country"
-            onChange={(value) => updateField("country", value)}
-          />
-        </FieldShell>
+          {selectedSummary}
+        </span>
       </div>
 
-      {message && (
-        <div
-          style={{
-            border: "1px solid rgba(46,213,115,0.30)",
-            background: "rgba(46,213,115,0.09)",
-            color: "#7bed9f",
-            borderRadius: 14,
-            padding: 12,
-            fontSize: 13,
-            lineHeight: 1.5,
-          }}
-        >
-          {message}
-        </div>
-      )}
+      <TextInput
+        label="Business name"
+        value={name}
+        placeholder="Example: Aureli Foods Pvt Ltd"
+        onChange={setName}
+        disabled={isPending}
+      />
 
-      {error && (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          gap: 16,
+        }}
+        className="business-profile-grid"
+      >
+        <InlineScrollableSelect
+          label="Industry"
+          value={industry}
+          options={INDUSTRY_OPTIONS}
+          onChange={setIndustry}
+          disabled={isPending}
+        />
+
+        <InlineScrollableSelect
+          label="Business type"
+          value={businessType}
+          options={BUSINESS_TYPE_OPTIONS}
+          onChange={setBusinessType}
+          disabled={isPending}
+        />
+
+        <InlineScrollableSelect
+          label="Financial year"
+          value={financialYear}
+          options={FINANCIAL_YEAR_OPTIONS}
+          onChange={setFinancialYear}
+          disabled={isPending}
+        />
+
+        <InlineScrollableSelect
+          label="Currency"
+          value={currency}
+          options={CURRENCY_OPTIONS}
+          onChange={setCurrency}
+          disabled={isPending}
+        />
+
+        <InlineScrollableSelect
+          label="Country"
+          value={country}
+          options={COUNTRY_OPTIONS}
+          onChange={setCountry}
+          disabled={isPending}
+        />
+      </div>
+
+      {state.type !== "idle" ? (
         <div
           style={{
-            border: "1px solid rgba(255,71,87,0.30)",
-            background: "rgba(255,71,87,0.09)",
-            color: "#ff8a95",
-            borderRadius: 14,
-            padding: 12,
+            border:
+              state.type === "success"
+                ? "1px solid rgba(46,213,115,0.28)"
+                : "1px solid rgba(255,138,149,0.30)",
+            background:
+              state.type === "success"
+                ? "rgba(46,213,115,0.085)"
+                : "rgba(255,138,149,0.085)",
+            color:
+              state.type === "success"
+                ? "var(--color-sage)"
+                : "var(--color-danger)",
+            borderRadius: 16,
+            padding: 13,
             fontSize: 13,
             lineHeight: 1.5,
+            fontWeight: 750,
+            overflowWrap: "anywhere",
           }}
         >
-          {error}
+          {state.message}
         </div>
-      )}
+      ) : null}
 
       <div
         style={{
           display: "flex",
           gap: 10,
-          flexWrap: "wrap",
           alignItems: "center",
+          flexWrap: "wrap",
         }}
       >
         <button
           type="submit"
-          disabled={isSaving}
+          disabled={isPending}
+          className="btn-ghost"
           style={{
-            border: "none",
-            background: "linear-gradient(135deg, var(--color-amber), #ffd166)",
-            color: "var(--color-base)",
-            borderRadius: 14,
-            padding: "12px 15px",
-            cursor: isSaving ? "not-allowed" : "pointer",
-            fontSize: 14,
-            fontWeight: 950,
-            opacity: isSaving ? 0.7 : 1,
-            boxShadow: "0 16px 40px rgba(245,158,11,0.16)",
+            border: "1px solid rgba(255,209,102,0.30)",
+            background: "rgba(245,158,11,0.10)",
+            color: "var(--color-gold)",
+            cursor: isPending ? "not-allowed" : "pointer",
+            opacity: isPending ? 0.7 : 1,
           }}
         >
-          {isSaving
-            ? "Saving..."
-            : hasBusinessProfile
-              ? "Update business profile"
-              : "Create business profile"}
+          {isPending ? "Saving profile..." : "Save business profile"}
         </button>
 
         <span
           style={{
-            color: "var(--color-text-muted)",
+            color: "var(--color-text-secondary)",
             fontSize: 12,
-            lineHeight: 1.4,
+            lineHeight: 1.45,
           }}
         >
-          This information improves dashboard, reports, and AI finance answers.
+          Approved documents plus this profile power Aureli&apos;s finance
+          intelligence.
         </span>
       </div>
+
+      <style>
+        {`
+          @media (max-width: 860px) {
+            .business-profile-grid {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}
+      </style>
     </form>
   );
 }

@@ -49,10 +49,14 @@ function formatBytes(bytes: number) {
   if (bytes === 0) return "0 B";
 
   const units = ["B", "KB", "MB", "GB"];
-  const index = Math.floor(Math.log(bytes) / Math.log(1024));
+  const index = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+
   const value = bytes / Math.pow(1024, index);
 
-  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[index]}`;
+  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
 function DocumentTypeSelect({
@@ -71,7 +75,8 @@ function DocumentTypeSelect({
   return (
     <div
       style={{
-        position: "relative",
+        display: "grid",
+        gap: 10,
         minWidth: 0,
       }}
     >
@@ -168,14 +173,9 @@ function DocumentTypeSelect({
         </span>
       </button>
 
-      {open && (
+      {open ? (
         <div
           style={{
-            position: "absolute",
-            zIndex: 30,
-            left: 0,
-            right: 0,
-            top: "calc(100% + 8px)",
             border: "1px solid rgba(245,158,11,0.22)",
             background:
               "linear-gradient(135deg, rgba(10,15,22,0.98), rgba(14,20,30,0.98))",
@@ -183,10 +183,13 @@ function DocumentTypeSelect({
             padding: 8,
             display: "grid",
             gap: 6,
-            maxHeight: 360,
+            maxHeight: 420,
             overflowY: "auto",
+            overflowX: "hidden",
+            overscrollBehavior: "contain",
+            scrollbarWidth: "thin",
             boxShadow:
-              "0 24px 80px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.06)",
+              "0 18px 52px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.06)",
           }}
         >
           {DOCUMENT_CATEGORIES.map((category) => {
@@ -204,8 +207,8 @@ function DocumentTypeSelect({
                 style={{
                   border: active
                     ? `1px solid ${tone.border}`
-                    : "1px solid transparent",
-                  background: active ? tone.background : "transparent",
+                    : "1px solid rgba(255,255,255,0.045)",
+                  background: active ? tone.background : "rgba(255,255,255,0.024)",
                   color: "var(--color-text-primary)",
                   borderRadius: 15,
                   padding: 11,
@@ -267,7 +270,7 @@ function DocumentTypeSelect({
             );
           })}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
