@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth-client";
+import { AureliLogo } from "./AureliLogo";
 
 type SidebarProps = {
   userName?: string | null;
@@ -60,54 +61,6 @@ function isActiveLink(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function AureliLogo() {
-  return (
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 28 28"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      style={{
-        flex: "0 0 auto",
-      }}
-    >
-      <rect
-        x="3"
-        y="4"
-        width="18"
-        height="20"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-
-      <line
-        x1="7"
-        y1="9"
-        x2="17"
-        y2="9"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        opacity="0.6"
-      />
-
-      <line
-        x1="7"
-        y1="13"
-        x2="15"
-        y2="13"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        opacity="0.6"
-      />
-
-      <circle cx="21" cy="7" r="5" fill="var(--color-amber)" opacity="0.9" />
-    </svg>
-  );
-}
-
 export function Sidebar({ userName, userEmail }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -122,8 +75,8 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
     <>
       <style jsx global>{`
         :root {
-          --Aureli-sidebar-width: 280px;
-          --Aureli-shell-gap: 20px;
+          --aureli-sidebar-width: 280px;
+          --aureli-shell-gap: 20px;
         }
 
         .dashboard-shell {
@@ -139,7 +92,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           top: 16px !important;
           left: 16px !important;
           bottom: 16px !important;
-          width: var(--Aureli-sidebar-width) !important;
+          width: var(--aureli-sidebar-width) !important;
           height: calc(100dvh - 32px) !important;
           max-height: calc(100dvh - 32px) !important;
           z-index: 50 !important;
@@ -150,10 +103,10 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
         .dashboard-main {
           margin-left: calc(
-            var(--Aureli-sidebar-width) + var(--Aureli-shell-gap)
+            var(--aureli-sidebar-width) + var(--aureli-shell-gap)
           ) !important;
           width: calc(
-            100% - var(--Aureli-sidebar-width) - var(--Aureli-shell-gap)
+            100% - var(--aureli-sidebar-width) - var(--aureli-shell-gap)
           ) !important;
           min-width: 0 !important;
           box-sizing: border-box !important;
@@ -187,8 +140,8 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
         @media (max-width: 1180px) {
           :root {
-            --Aureli-sidebar-width: 250px;
-            --Aureli-shell-gap: 16px;
+            --aureli-sidebar-width: 250px;
+            --aureli-shell-gap: 16px;
           }
         }
 
@@ -231,8 +184,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
             color: "inherit",
           }}
         >
-          <AureliLogo />
-          <span className="brand-word">Aureli</span>
+          <AureliLogo size={36} showWordmark tagline="AI finance team" />
         </Link>
 
         <nav className="sidebar-nav" aria-label="Main navigation">
