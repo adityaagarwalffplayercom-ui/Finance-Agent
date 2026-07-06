@@ -263,6 +263,7 @@ export default function HomePage() {
         }}
       >
         <nav
+          className="aureli-home-nav"
           style={{
             width: "min(1180px, calc(100% - 32px))",
             margin: "0 auto",
@@ -275,15 +276,18 @@ export default function HomePage() {
         >
           <Link
             href="/"
+            className="aureli-home-brand"
             style={{
               color: "inherit",
               textDecoration: "none",
+              minWidth: 0,
             }}
           >
             <AureliLogo size={38} showWordmark tagline="Your AI finance team" />
           </Link>
 
           <div
+            className="aureli-home-nav-actions"
             style={{
               display: "flex",
               gap: 10,
@@ -292,13 +296,13 @@ export default function HomePage() {
               justifyContent: "flex-end",
             }}
           >
-            <Link href="/login" className="btn-ghost">
+            <Link href="/login" className="btn-ghost aureli-nav-button">
               Sign in
             </Link>
 
             <Link
               href="/signup"
-              className="btn-ghost"
+              className="btn-ghost aureli-nav-button aureli-nav-primary"
               style={{
                 border: "1px solid rgba(255,209,102,0.34)",
                 background: "rgba(245,158,11,0.12)",
@@ -330,6 +334,7 @@ export default function HomePage() {
             }}
           >
             <span
+              className="aureli-home-eyebrow-pill"
               style={{
                 width: "fit-content",
                 border: "1px solid rgba(255,209,102,0.26)",
@@ -347,6 +352,7 @@ export default function HomePage() {
             </span>
 
             <h1
+              className="aureli-home-title"
               style={{
                 margin: 0,
                 color: "var(--color-text-primary)",
@@ -361,6 +367,7 @@ export default function HomePage() {
             </h1>
 
             <p
+              className="aureli-home-intro"
               style={{
                 margin: 0,
                 color: "var(--color-text-secondary)",
@@ -375,6 +382,7 @@ export default function HomePage() {
             </p>
 
             <div
+              className="aureli-home-hero-actions"
               style={{
                 display: "flex",
                 gap: 12,
@@ -383,7 +391,7 @@ export default function HomePage() {
             >
               <Link
                 href="/signup"
-                className="btn-ghost"
+                className="btn-ghost aureli-hero-button"
                 style={{
                   border: "1px solid rgba(255,209,102,0.38)",
                   background:
@@ -397,7 +405,7 @@ export default function HomePage() {
 
               <Link
                 href="/login"
-                className="btn-ghost"
+                className="btn-ghost aureli-hero-button"
                 style={{
                   padding: "13px 18px",
                 }}
@@ -408,6 +416,7 @@ export default function HomePage() {
           </div>
 
           <section
+            className="aureli-home-preview"
             style={{
               border: "1px solid rgba(245,158,11,0.18)",
               background:
@@ -678,11 +687,121 @@ export default function HomePage() {
             }
           }
 
+          @media (max-width: 760px) {
+            .aureli-home-nav {
+              width: min(100% - 24px, 1180px) !important;
+              padding: 16px 0 !important;
+              display: grid !important;
+              grid-template-columns: minmax(0, 1fr) auto !important;
+              align-items: center !important;
+              gap: 10px !important;
+            }
+
+            .aureli-home-brand {
+              overflow: hidden !important;
+              min-width: 0 !important;
+            }
+
+            .aureli-home-brand .aureli-logo {
+              gap: 8px !important;
+              min-width: 0 !important;
+              max-width: 100% !important;
+            }
+
+            .aureli-home-brand .aureli-logo-mark {
+              width: 34px !important;
+              height: 34px !important;
+            }
+
+            .aureli-home-brand .aureli-logo-name {
+              font-size: 18px !important;
+              white-space: nowrap !important;
+            }
+
+            .aureli-home-brand .aureli-logo-tagline {
+              display: none !important;
+            }
+
+            .aureli-home-nav-actions {
+              display: flex !important;
+              flex-wrap: nowrap !important;
+              gap: 7px !important;
+              justify-content: flex-end !important;
+              align-items: center !important;
+            }
+
+            .aureli-nav-button {
+              min-height: 34px !important;
+              padding: 8px 10px !important;
+              font-size: 11px !important;
+              line-height: 1 !important;
+              border-radius: 999px !important;
+              white-space: nowrap !important;
+              width: auto !important;
+            }
+
+            .aureli-home-hero {
+              width: min(100% - 24px, 1180px) !important;
+              padding: 42px 0 54px !important;
+              gap: 28px !important;
+            }
+
+            .aureli-home-eyebrow-pill {
+              font-size: 10px !important;
+              padding: 9px 12px !important;
+              letter-spacing: 0.05em !important;
+            }
+
+            .aureli-home-title {
+              font-size: clamp(46px, 16vw, 68px) !important;
+              line-height: 0.94 !important;
+              letter-spacing: -0.08em !important;
+            }
+
+            .aureli-home-intro {
+              font-size: 16px !important;
+              line-height: 1.65 !important;
+            }
+
+            .aureli-home-hero-actions {
+              display: grid !important;
+              grid-template-columns: 1fr !important;
+              gap: 10px !important;
+            }
+
+            .aureli-hero-button {
+              width: 100% !important;
+              justify-content: center !important;
+              min-height: 48px !important;
+            }
+
+            .aureli-home-preview {
+              border-radius: 26px !important;
+              padding: 18px !important;
+            }
+          }
+
           @media (max-width: 680px) {
             .aureli-home-feature-grid,
             .aureli-home-workflow-grid,
             .aureli-home-metrics {
               grid-template-columns: 1fr !important;
+            }
+          }
+
+          @media (max-width: 390px) {
+            .aureli-nav-button {
+              padding: 8px 8px !important;
+              font-size: 10px !important;
+            }
+
+            .aureli-home-brand .aureli-logo-name {
+              font-size: 16px !important;
+            }
+
+            .aureli-home-brand .aureli-logo-mark {
+              width: 30px !important;
+              height: 30px !important;
             }
           }
         `}
