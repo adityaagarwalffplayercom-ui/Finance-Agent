@@ -1,4 +1,122 @@
 import Link from "next/link";
+import { AureliLogo } from "@/components/AureliLogo";
+
+const FEATURES = [
+  {
+    title: "AI document extraction",
+    description:
+      "Upload financial statements, invoices, bank statements, and expense documents. Aureli extracts trusted finance data using AI.",
+    icon: "📄",
+  },
+  {
+    title: "Finance health dashboard",
+    description:
+      "Track revenue, expenses, profit, cash flow, financial health score, alerts, and visual charts from approved data.",
+    icon: "📊",
+  },
+  {
+    title: "AI finance team",
+    description:
+      "Ask CFO, accountant, analyst, cash flow, risk, and consultant agents business questions using your approved documents.",
+    icon: "🧠",
+  },
+  {
+    title: "CFO-style reports",
+    description:
+      "Generate executive finance summaries that explain business performance, risks, and recommended next actions.",
+    icon: "📈",
+  },
+];
+
+const WORKFLOW = [
+  {
+    step: "01",
+    title: "Create business profile",
+    description:
+      "Add your business name, industry, country, currency, and financial year.",
+  },
+  {
+    step: "02",
+    title: "Upload finance documents",
+    description:
+      "Add statements, invoices, payroll, utility bills, or any finance-related file.",
+  },
+  {
+    step: "03",
+    title: "Review AI extraction",
+    description:
+      "Approve only the extracted numbers you trust. Pending and rejected data stay excluded.",
+  },
+  {
+    step: "04",
+    title: "Use dashboard and AI agents",
+    description:
+      "Monitor performance, ask finance questions, and generate CFO-style insights.",
+  },
+];
+
+function MetricCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <article
+      style={{
+        border: "1px solid rgba(245,158,11,0.18)",
+        background:
+          "linear-gradient(135deg, rgba(255,255,255,0.070), rgba(255,255,255,0.024))",
+        borderRadius: 24,
+        padding: 18,
+        display: "grid",
+        gap: 8,
+        minWidth: 0,
+        boxShadow:
+          "0 18px 60px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          color: "var(--color-text-secondary)",
+          fontSize: 11,
+          fontWeight: 950,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        {label}
+      </p>
+
+      <strong
+        style={{
+          color: "var(--color-text-primary)",
+          fontSize: 32,
+          lineHeight: 1,
+          fontWeight: 950,
+          letterSpacing: "-0.055em",
+        }}
+      >
+        {value}
+      </strong>
+
+      <span
+        style={{
+          color: "var(--color-gold)",
+          fontSize: 12,
+          lineHeight: 1.45,
+          fontWeight: 800,
+        }}
+      >
+        {hint}
+      </span>
+    </article>
+  );
+}
 
 function FeatureCard({
   icon,
@@ -14,25 +132,27 @@ function FeatureCard({
       style={{
         border: "1px solid rgba(245,158,11,0.14)",
         background:
-          "linear-gradient(135deg, rgba(245,158,11,0.055), rgba(255,255,255,0.025))",
-        borderRadius: 24,
+          "linear-gradient(135deg, rgba(255,255,255,0.058), rgba(255,255,255,0.022))",
+        borderRadius: 26,
         padding: 22,
         display: "grid",
         gap: 14,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.055)",
+        minHeight: 230,
+        boxShadow:
+          "0 18px 60px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.052)",
       }}
     >
       <span
         style={{
           width: 48,
           height: 48,
-          borderRadius: 18,
+          borderRadius: 17,
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "rgba(245,158,11,0.12)",
-          border: "1px solid rgba(245,158,11,0.28)",
-          fontSize: 22,
+          border: "1px solid rgba(255,209,102,0.28)",
+          background: "rgba(245,158,11,0.10)",
+          fontSize: 20,
         }}
       >
         {icon}
@@ -47,9 +167,11 @@ function FeatureCard({
         <h3
           style={{
             margin: 0,
-            color: "#f8fafc",
+            color: "var(--color-text-primary)",
             fontSize: 19,
             lineHeight: 1.2,
+            fontWeight: 950,
+            letterSpacing: "-0.04em",
           }}
         >
           {title}
@@ -58,9 +180,9 @@ function FeatureCard({
         <p
           style={{
             margin: 0,
-            color: "rgba(226,232,240,0.74)",
+            color: "var(--color-text-secondary)",
             fontSize: 14,
-            lineHeight: 1.65,
+            lineHeight: 1.7,
           }}
         >
           {description}
@@ -70,284 +192,95 @@ function FeatureCard({
   );
 }
 
-function StepCard({
-  number,
+function WorkflowCard({
+  step,
   title,
   description,
 }: {
-  number: string;
+  step: string;
   title: string;
   description: string;
 }) {
   return (
     <article
       style={{
-        border: "1px solid rgba(245,158,11,0.12)",
+        border: "1px solid rgba(255,255,255,0.10)",
         background: "rgba(255,255,255,0.035)",
         borderRadius: 22,
-        padding: 20,
+        padding: 18,
         display: "grid",
-        gap: 14,
-      }}
-    >
-      <span
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 16,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "rgba(245,158,11,0.12)",
-          border: "1px solid rgba(245,158,11,0.26)",
-          color: "#f59e0b",
-          fontSize: 13,
-          fontWeight: 950,
-        }}
-      >
-        {number}
-      </span>
-
-      <div
-        style={{
-          display: "grid",
-          gap: 7,
-        }}
-      >
-        <h3
-          style={{
-            margin: 0,
-            color: "#f8fafc",
-            fontSize: 18,
-            lineHeight: 1.25,
-          }}
-        >
-          {title}
-        </h3>
-
-        <p
-          style={{
-            margin: 0,
-            color: "rgba(226,232,240,0.72)",
-            fontSize: 13,
-            lineHeight: 1.6,
-          }}
-        >
-          {description}
-        </p>
-      </div>
-    </article>
-  );
-}
-
-function MetricPill({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <span
-      style={{
-        border: "1px solid rgba(245,158,11,0.18)",
-        background: "rgba(245,158,11,0.075)",
-        borderRadius: 999,
-        padding: "9px 12px",
-        display: "inline-flex",
-        gap: 7,
-        alignItems: "center",
-        color: "rgba(226,232,240,0.78)",
-        fontSize: 12,
-        fontWeight: 800,
-      }}
-    >
-      {label}
-      <strong
-        style={{
-          color: "#f8fafc",
-        }}
-      >
-        {value}
-      </strong>
-    </span>
-  );
-}
-
-function AgentCard({
-  name,
-  role,
-  icon,
-}: {
-  name: string;
-  role: string;
-  icon: string;
-}) {
-  return (
-    <div
-      style={{
-        border: "1px solid rgba(245,158,11,0.13)",
-        background: "rgba(245,158,11,0.045)",
-        borderRadius: 18,
-        padding: 14,
-        display: "flex",
         gap: 12,
-        alignItems: "center",
       }}
     >
       <span
         style={{
-          width: 38,
-          height: 38,
-          borderRadius: 14,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "rgba(245,158,11,0.11)",
-          border: "1px solid rgba(245,158,11,0.24)",
-          fontSize: 18,
-          flex: "0 0 auto",
+          color: "var(--color-gold)",
+          fontSize: 12,
+          fontWeight: 950,
+          letterSpacing: "0.10em",
         }}
       >
-        {icon}
+        {step}
       </span>
 
-      <span
+      <h3
         style={{
-          display: "grid",
-          gap: 3,
+          margin: 0,
+          color: "var(--color-text-primary)",
+          fontSize: 17,
+          lineHeight: 1.25,
+          fontWeight: 950,
+          letterSpacing: "-0.035em",
         }}
       >
-        <strong
-          style={{
-            color: "#f8fafc",
-            fontSize: 13,
-            lineHeight: 1.2,
-          }}
-        >
-          {name}
-        </strong>
+        {title}
+      </h3>
 
-        <span
-          style={{
-            color: "rgba(226,232,240,0.65)",
-            fontSize: 12,
-            lineHeight: 1.35,
-          }}
-        >
-          {role}
-        </span>
-      </span>
-    </div>
+      <p
+        style={{
+          margin: 0,
+          color: "var(--color-text-secondary)",
+          fontSize: 13,
+          lineHeight: 1.65,
+        }}
+      >
+        {description}
+      </p>
+    </article>
   );
 }
 
 export default function HomePage() {
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top left, rgba(245,158,11,0.20), transparent 34%), radial-gradient(circle at bottom right, rgba(46,213,115,0.08), transparent 30%), linear-gradient(135deg, #080d14, #0d1117 48%, #090d13)",
-        color: "#f8fafc",
-        overflow: "hidden",
-      }}
-    >
-      <style>
-        {`
-          @media (max-width: 980px) {
-            .landing-hero-grid,
-            .landing-final-grid {
-              grid-template-columns: 1fr !important;
-            }
-
-            .landing-nav {
-              justify-content: center !important;
-            }
-
-            .landing-hero-title {
-              font-size: 44px !important;
-            }
-          }
-
-          @media (max-width: 640px) {
-            .landing-page-shell {
-              padding: 18px !important;
-            }
-
-            .landing-hero {
-              padding: 28px !important;
-            }
-
-            .landing-hero-title {
-              font-size: 36px !important;
-            }
-
-            .landing-section {
-              padding: 22px !important;
-            }
-          }
-        `}
-      </style>
-
-      <div
-        className="landing-page-shell"
+    <>
+      <main
         style={{
-          width: "100%",
-          maxWidth: 1180,
-          margin: "0 auto",
-          padding: 24,
-          display: "grid",
-          gap: 24,
+          minHeight: "100dvh",
+          background:
+            "radial-gradient(circle at top left, rgba(245,158,11,0.18), transparent 32%), radial-gradient(circle at 88% 14%, rgba(46,213,115,0.10), transparent 30%), linear-gradient(180deg, #090d14 0%, #0b111b 52%, #090d14 100%)",
+          color: "var(--color-text-primary)",
+          overflow: "hidden",
         }}
       >
         <nav
-          className="landing-nav"
           style={{
+            width: "min(1180px, calc(100% - 32px))",
+            margin: "0 auto",
+            padding: "22px 0",
             display: "flex",
             justifyContent: "space-between",
-            gap: 18,
             alignItems: "center",
-            flexWrap: "wrap",
-            padding: "10px 0",
+            gap: 16,
           }}
         >
           <Link
             href="/"
             style={{
-              display: "inline-flex",
-              gap: 10,
-              alignItems: "center",
+              color: "inherit",
               textDecoration: "none",
             }}
           >
-            <span
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 15,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background:
-                  "linear-gradient(135deg, rgba(245,158,11,0.24), rgba(255,255,255,0.06))",
-                border: "1px solid rgba(245,158,11,0.32)",
-                fontSize: 18,
-              }}
-            >
-              📊
-            </span>
-
-            <span
-              style={{
-                color: "#f8fafc",
-                fontSize: 18,
-                fontWeight: 950,
-                letterSpacing: "-0.03em",
-              }}
-            >
-              Aureli
-            </span>
+            <AureliLogo size={38} showWordmark tagline="Your AI finance team" />
           </Link>
 
           <div
@@ -356,188 +289,185 @@ export default function HomePage() {
               gap: 10,
               alignItems: "center",
               flexWrap: "wrap",
+              justifyContent: "flex-end",
             }}
           >
-            <Link
-              href="/login"
-              style={{
-                border: "1px solid rgba(245,158,11,0.16)",
-                background: "rgba(255,255,255,0.045)",
-                color: "#f8fafc",
-                borderRadius: 999,
-                padding: "10px 14px",
-                textDecoration: "none",
-                fontSize: 13,
-                fontWeight: 900,
-              }}
-            >
-              Login
+            <Link href="/login" className="btn-ghost">
+              Sign in
             </Link>
 
             <Link
               href="/signup"
+              className="btn-ghost"
               style={{
-                border: "1px solid rgba(245,158,11,0.42)",
-                background:
-                  "linear-gradient(135deg, rgba(245,158,11,0.95), #ffd166)",
-                color: "#090d13",
-                borderRadius: 999,
-                padding: "10px 14px",
-                textDecoration: "none",
-                fontSize: 13,
-                fontWeight: 950,
-                boxShadow: "0 18px 44px rgba(245,158,11,0.18)",
+                border: "1px solid rgba(255,209,102,0.34)",
+                background: "rgba(245,158,11,0.12)",
+                color: "var(--color-gold)",
               }}
             >
-              Start workspace
+              Start free
             </Link>
           </div>
         </nav>
 
         <section
-          className="landing-hero"
           style={{
-            border: "1px solid rgba(245,158,11,0.22)",
-            background:
-              "radial-gradient(circle at top left, rgba(245,158,11,0.17), transparent 38%), linear-gradient(135deg, rgba(255,255,255,0.070), rgba(255,255,255,0.026))",
-            borderRadius: 34,
-            padding: 34,
+            width: "min(1180px, calc(100% - 32px))",
+            margin: "0 auto",
+            padding: "58px 0 72px",
             display: "grid",
-            gap: 26,
-            boxShadow:
-              "0 30px 100px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)",
+            gridTemplateColumns: "minmax(0, 1.05fr) minmax(320px, 0.95fr)",
+            gap: 34,
+            alignItems: "center",
           }}
+          className="aureli-home-hero"
         >
           <div
-            className="landing-hero-grid"
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0, 1.1fr) minmax(340px, 0.9fr)",
-              gap: 30,
-              alignItems: "center",
+              gap: 22,
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                width: "fit-content",
+                border: "1px solid rgba(255,209,102,0.26)",
+                background: "rgba(245,158,11,0.10)",
+                color: "var(--color-gold)",
+                borderRadius: 999,
+                padding: "10px 14px",
+                fontSize: 12,
+                fontWeight: 950,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}
+            >
+              AI executive finance workspace
+            </span>
+
+            <h1
+              style={{
+                margin: 0,
+                color: "var(--color-text-primary)",
+                fontSize: "clamp(48px, 8vw, 92px)",
+                lineHeight: 0.92,
+                letterSpacing: "-0.088em",
+                maxWidth: 900,
+                fontWeight: 950,
+              }}
+            >
+              Meet Aureli, your AI finance team.
+            </h1>
+
+            <p
+              style={{
+                margin: 0,
+                color: "var(--color-text-secondary)",
+                fontSize: 18,
+                lineHeight: 1.75,
+                maxWidth: 740,
+              }}
+            >
+              Upload financial documents, approve trusted numbers, monitor cash
+              flow, understand business health, and ask CFO-style questions from
+              one intelligent workspace.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <Link
+                href="/signup"
+                className="btn-ghost"
+                style={{
+                  border: "1px solid rgba(255,209,102,0.38)",
+                  background:
+                    "linear-gradient(135deg, rgba(245,158,11,0.22), rgba(255,209,102,0.10))",
+                  color: "var(--color-gold)",
+                  padding: "13px 18px",
+                }}
+              >
+                Launch Aureli
+              </Link>
+
+              <Link
+                href="/login"
+                className="btn-ghost"
+                style={{
+                  padding: "13px 18px",
+                }}
+              >
+                Sign in
+              </Link>
+            </div>
+          </div>
+
+          <section
+            style={{
+              border: "1px solid rgba(245,158,11,0.18)",
+              background:
+                "radial-gradient(circle at top right, rgba(245,158,11,0.18), transparent 34%), linear-gradient(135deg, rgba(255,255,255,0.075), rgba(255,255,255,0.026))",
+              borderRadius: 34,
+              padding: 22,
+              display: "grid",
+              gap: 16,
+              boxShadow:
+                "0 28px 100px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.08)",
+              minWidth: 0,
             }}
           >
             <div
               style={{
-                display: "grid",
-                gap: 22,
-                minWidth: 0,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 14,
+                alignItems: "center",
               }}
             >
-              <div
+              <AureliLogo size={44} showWordmark tagline="Finance command" />
+
+              <span
                 style={{
-                  display: "flex",
-                  gap: 8,
-                  flexWrap: "wrap",
+                  border: "1px solid rgba(46,213,115,0.28)",
+                  background: "rgba(46,213,115,0.09)",
+                  color: "var(--color-sage)",
+                  borderRadius: 999,
+                  padding: "8px 11px",
+                  fontSize: 11,
+                  fontWeight: 950,
                 }}
               >
-                <MetricPill label="AI CFO" value="24/7" />
-                <MetricPill label="Docs" value="PDF, Excel, CSV" />
-                <MetricPill label="Reports" value="CFO-ready" />
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gap: 14,
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#f59e0b",
-                    fontSize: 13,
-                    fontWeight: 950,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.12em",
-                  }}
-                >
-                  AI Executive Finance Team
-                </p>
-
-                <h1
-                  className="landing-hero-title"
-                  style={{
-                    margin: 0,
-                    color: "#f8fafc",
-                    fontSize: 62,
-                    lineHeight: 0.98,
-                    letterSpacing: "-0.07em",
-                    maxWidth: 760,
-                  }}
-                >
-                  Turn business documents into CFO-level decisions.
-                </h1>
-
-                <p
-                  style={{
-                    margin: 0,
-                    color: "rgba(226,232,240,0.76)",
-                    fontSize: 17,
-                    lineHeight: 1.75,
-                    maxWidth: 700,
-                  }}
-                >
-                  Aureli understands financial statements, invoices, bank
-                  statements, payroll, and bills — then converts them into a
-                  dashboard, AI finance chat, risk insights, and printable CFO
-                  reports.
-                </p>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: 12,
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                }}
-              >
-                <Link
-                  href="/signup"
-                  style={{
-                    border: "1px solid rgba(245,158,11,0.42)",
-                    background:
-                      "linear-gradient(135deg, rgba(245,158,11,0.98), #ffd166)",
-                    color: "#080d14",
-                    borderRadius: 999,
-                    padding: "13px 17px",
-                    textDecoration: "none",
-                    fontSize: 14,
-                    fontWeight: 950,
-                    boxShadow: "0 18px 50px rgba(245,158,11,0.18)",
-                  }}
-                >
-                  Build my finance workspace
-                </Link>
-
-                <Link
-                  href="/login"
-                  style={{
-                    border: "1px solid rgba(245,158,11,0.16)",
-                    background: "rgba(255,255,255,0.045)",
-                    color: "#f8fafc",
-                    borderRadius: 999,
-                    padding: "13px 17px",
-                    textDecoration: "none",
-                    fontSize: 14,
-                    fontWeight: 900,
-                  }}
-                >
-                  Open existing workspace
-                </Link>
-              </div>
+                Live insights
+              </span>
             </div>
 
             <div
               style={{
-                border: "1px solid rgba(245,158,11,0.16)",
-                background: "rgba(0,0,0,0.18)",
-                borderRadius: 30,
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 12,
+              }}
+              className="aureli-home-metrics"
+            >
+              <MetricCard label="Revenue" value="₹42.8L" hint="+18% trend" />
+              <MetricCard label="Profit" value="₹9.4L" hint="Healthy margin" />
+              <MetricCard label="Cash" value="₹16.2L" hint="Stable runway" />
+              <MetricCard label="Health" value="84/100" hint="Strong position" />
+            </div>
+
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(0,0,0,0.14)",
+                borderRadius: 24,
                 padding: 18,
                 display: "grid",
                 gap: 14,
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.055)",
               }}
             >
               <div
@@ -548,434 +478,215 @@ export default function HomePage() {
                   alignItems: "center",
                 }}
               >
+                <strong
+                  style={{
+                    color: "var(--color-text-primary)",
+                    fontSize: 14,
+                  }}
+                >
+                  Cash flow trend
+                </strong>
+
                 <span
                   style={{
-                    color: "rgba(226,232,240,0.72)",
+                    color: "var(--color-sage)",
                     fontSize: 12,
                     fontWeight: 900,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.10em",
                   }}
                 >
-                  Live dashboard preview
-                </span>
-
-                <span
-                  style={{
-                    border: "1px solid rgba(46,213,115,0.28)",
-                    background: "rgba(46,213,115,0.09)",
-                    color: "#7bed9f",
-                    borderRadius: 999,
-                    padding: "6px 9px",
-                    fontSize: 11,
-                    fontWeight: 950,
-                  }}
-                >
-                  AI ready
+                  +₹6.8L net
                 </span>
               </div>
 
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: 12,
-                }}
-              >
-                <div
-                  style={{
-                    border: "1px solid rgba(46,213,115,0.25)",
-                    background: "rgba(46,213,115,0.075)",
-                    borderRadius: 20,
-                    padding: 15,
-                    display: "grid",
-                    gap: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "rgba(226,232,240,0.66)",
-                      fontSize: 11,
-                      fontWeight: 900,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    Revenue
-                  </span>
-
-                  <strong
-                    style={{
-                      color: "#f8fafc",
-                      fontSize: 25,
-                    }}
-                  >
-                    ₹48.5L
-                  </strong>
-
-                  <span
-                    style={{
-                      color: "#7bed9f",
-                      fontSize: 12,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Healthy inflow
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    border: "1px solid rgba(245,158,11,0.25)",
-                    background: "rgba(245,158,11,0.075)",
-                    borderRadius: 20,
-                    padding: 15,
-                    display: "grid",
-                    gap: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "rgba(226,232,240,0.66)",
-                      fontSize: 11,
-                      fontWeight: 900,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    Health
-                  </span>
-
-                  <strong
-                    style={{
-                      color: "#f8fafc",
-                      fontSize: 25,
-                    }}
-                  >
-                    82/100
-                  </strong>
-
-                  <span
-                    style={{
-                      color: "#ffd166",
-                      fontSize: 12,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Stable business
-                  </span>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  border: "1px solid rgba(245,158,11,0.25)",
-                  background:
-                    "linear-gradient(135deg, rgba(245,158,11,0.09), rgba(255,255,255,0.025))",
-                  borderRadius: 22,
-                  padding: 16,
-                  display: "grid",
+                  height: 120,
+                  display: "flex",
                   gap: 10,
+                  alignItems: "end",
                 }}
               >
-                <span
-                  style={{
-                    color: "#ffd166",
-                    fontSize: 12,
-                    fontWeight: 950,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  CFO insight
-                </span>
-
-                <p
-                  style={{
-                    margin: 0,
-                    color: "rgba(226,232,240,0.78)",
-                    fontSize: 13,
-                    lineHeight: 1.65,
-                  }}
-                >
-                  Profit is positive, but expense ratio is still high. Review
-                  payroll and operating costs before increasing fixed expenses.
-                </p>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gap: 10,
-                }}
-              >
-                <AgentCard
-                  icon="🧠"
-                  name="CFO Agent"
-                  role="Strategy, profit, risk, runway"
-                />
-
-                <AgentCard
-                  icon="🧾"
-                  name="Accountant Agent"
-                  role="Documents, review, trust status"
-                />
-
-                <AgentCard
-                  icon="📈"
-                  name="Analyst Agent"
-                  role="Margins, trends, ratios"
-                />
+                {[42, 56, 38, 72, 64, 92].map((height, index) => (
+                  <span
+                    key={index}
+                    style={{
+                      flex: 1,
+                      height,
+                      borderRadius: "14px 14px 7px 7px",
+                      background:
+                        "linear-gradient(180deg, var(--color-sage), rgba(46,213,115,0.18))",
+                      border: "1px solid rgba(46,213,115,0.25)",
+                      boxShadow: "0 16px 42px rgba(46,213,115,0.12)",
+                    }}
+                  />
+                ))}
               </div>
             </div>
-          </div>
+          </section>
         </section>
 
         <section
-          className="landing-section"
           style={{
-            border: "1px solid rgba(245,158,11,0.12)",
-            background: "rgba(255,255,255,0.030)",
-            borderRadius: 30,
-            padding: 28,
+            width: "min(1180px, calc(100% - 32px))",
+            margin: "0 auto",
+            padding: "22px 0 76px",
             display: "grid",
-            gap: 20,
+            gap: 22,
           }}
         >
           <div
             style={{
               display: "grid",
               gap: 8,
-              maxWidth: 720,
+              maxWidth: 760,
             }}
           >
-            <p
-              style={{
-                margin: 0,
-                color: "#f59e0b",
-                fontSize: 12,
-                fontWeight: 950,
-                textTransform: "uppercase",
-                letterSpacing: "0.12em",
-              }}
-            >
+            <p className="eyebrow" style={{ margin: 0 }}>
               What Aureli does
             </p>
 
             <h2
               style={{
                 margin: 0,
-                color: "#f8fafc",
-                fontSize: 36,
-                lineHeight: 1.08,
-                letterSpacing: "-0.045em",
+                color: "var(--color-text-primary)",
+                fontSize: "clamp(32px, 4vw, 56px)",
+                lineHeight: 1,
+                letterSpacing: "-0.07em",
+                fontWeight: 950,
               }}
             >
-              Not just accounting reports. Actual business intelligence.
+              From documents to decisions.
             </h2>
+
+            <p
+              style={{
+                margin: 0,
+                color: "var(--color-text-secondary)",
+                fontSize: 16,
+                lineHeight: 1.7,
+              }}
+            >
+              Aureli converts raw finance documents into dashboards, charts,
+              alerts, reports, and AI-powered business answers.
+            </p>
           </div>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-              gap: 14,
+              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+              gap: 16,
             }}
+            className="aureli-home-feature-grid"
           >
-            <FeatureCard
-              icon="📁"
-              title="Upload finance documents"
-              description="Upload statements, invoices, payroll sheets, bills, and financial reports in common formats."
-            />
-
-            <FeatureCard
-              icon="🤖"
-              title="AI extracts key numbers"
-              description="The AI reads the documents and extracts revenue, expenses, cash, profit, assets, liabilities, and line items."
-            />
-
-            <FeatureCard
-              icon="✅"
-              title="Approve trusted data"
-              description="Review extracted results before they power the dashboard, chat, and reports."
-            />
-
-            <FeatureCard
-              icon="📊"
-              title="Executive dashboard"
-              description="See health score, revenue, expenses, profit, cash, trends, alerts, and recommendations."
-            />
-
-            <FeatureCard
-              icon="💬"
-              title="AI finance chat"
-              description="Ask your AI finance team questions like what to fix first, why losses happened, or how to improve cash flow."
-            />
-
-            <FeatureCard
-              icon="📄"
-              title="CFO report export"
-              description="Generate a printable CFO-style report for reviews, demos, or business decision meetings."
-            />
+            {FEATURES.map((feature) => (
+              <FeatureCard key={feature.title} {...feature} />
+            ))}
           </div>
         </section>
 
         <section
-          className="landing-section"
           style={{
-            border: "1px solid rgba(245,158,11,0.18)",
-            background:
-              "radial-gradient(circle at top right, rgba(245,158,11,0.12), transparent 34%), rgba(255,255,255,0.030)",
-            borderRadius: 30,
-            padding: 28,
+            width: "min(1180px, calc(100% - 32px))",
+            margin: "0 auto",
+            padding: "0 0 88px",
             display: "grid",
-            gap: 20,
+            gridTemplateColumns: "minmax(0, 0.85fr) minmax(0, 1.15fr)",
+            gap: 22,
+            alignItems: "start",
           }}
+          className="aureli-home-workflow"
         >
           <div
             style={{
+              border: "1px solid rgba(255,209,102,0.18)",
+              background:
+                "linear-gradient(135deg, rgba(245,158,11,0.11), rgba(255,255,255,0.024))",
+              borderRadius: 30,
+              padding: 24,
               display: "grid",
-              gap: 8,
-              maxWidth: 720,
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                color: "#f59e0b",
-                fontSize: 12,
-                fontWeight: 950,
-                textTransform: "uppercase",
-                letterSpacing: "0.12em",
-              }}
-            >
-              Workflow
-            </p>
-
-            <h2
-              style={{
-                margin: 0,
-                color: "#f8fafc",
-                fontSize: 36,
-                lineHeight: 1.08,
-                letterSpacing: "-0.045em",
-              }}
-            >
-              From raw documents to executive decisions.
-            </h2>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
               gap: 14,
             }}
           >
-            <StepCard
-              number="01"
-              title="Set business profile"
-              description="Add company name, industry, country, currency, and financial year."
-            />
-
-            <StepCard
-              number="02"
-              title="Upload documents"
-              description="Add the financial files that describe how the business actually works."
-            />
-
-            <StepCard
-              number="03"
-              title="Review AI extraction"
-              description="Approve only the documents you trust for dashboard and chat intelligence."
-            />
-
-            <StepCard
-              number="04"
-              title="Use AI finance team"
-              description="Open dashboard, ask finance questions, and export CFO-style reports."
-            />
-          </div>
-        </section>
-
-        <section
-          className="landing-section landing-final-grid"
-          style={{
-            border: "1px solid rgba(46,213,115,0.20)",
-            background:
-              "radial-gradient(circle at top left, rgba(46,213,115,0.13), transparent 34%), linear-gradient(135deg, rgba(255,255,255,0.060), rgba(255,255,255,0.024))",
-            borderRadius: 30,
-            padding: 28,
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto",
-            gap: 20,
-            alignItems: "center",
-            marginBottom: 24,
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gap: 9,
-              maxWidth: 760,
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                color: "#7bed9f",
-                fontSize: 12,
-                fontWeight: 950,
-                textTransform: "uppercase",
-                letterSpacing: "0.12em",
-              }}
-            >
-              Ready to start
-            </p>
+            <AureliLogo size={48} showWordmark tagline="Classic AI finance" />
 
             <h2
               style={{
                 margin: 0,
-                color: "#f8fafc",
-                fontSize: 34,
-                lineHeight: 1.08,
-                letterSpacing: "-0.045em",
+                color: "var(--color-text-primary)",
+                fontSize: "clamp(30px, 4vw, 52px)",
+                lineHeight: 1,
+                letterSpacing: "-0.07em",
+                fontWeight: 950,
               }}
             >
-              Build your AI finance workspace.
+              Built for trust, not guesswork.
             </h2>
 
             <p
               style={{
                 margin: 0,
-                color: "rgba(226,232,240,0.72)",
-                fontSize: 14,
-                lineHeight: 1.65,
+                color: "var(--color-text-secondary)",
+                fontSize: 15,
+                lineHeight: 1.7,
               }}
             >
-              Create your profile, upload documents, approve trusted data, and
-              let the AI finance team explain what is happening in the business.
+              Aureli only uses approved processed documents for dashboard
+              metrics and AI recommendations, so business owners stay in
+              control of trusted financial data.
             </p>
+
+            <Link
+              href="/signup"
+              className="btn-ghost"
+              style={{
+                width: "fit-content",
+                border: "1px solid rgba(255,209,102,0.34)",
+                background: "rgba(245,158,11,0.12)",
+                color: "var(--color-gold)",
+              }}
+            >
+              Start with Aureli
+            </Link>
           </div>
 
-          <Link
-            href="/signup"
+          <div
             style={{
-              border: "1px solid rgba(46,213,115,0.32)",
-              background: "rgba(46,213,115,0.10)",
-              color: "#7bed9f",
-              borderRadius: 999,
-              padding: "13px 17px",
-              textDecoration: "none",
-              fontSize: 14,
-              fontWeight: 950,
-              whiteSpace: "nowrap",
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 14,
             }}
+            className="aureli-home-workflow-grid"
           >
-            Start now
-          </Link>
+            {WORKFLOW.map((item) => (
+              <WorkflowCard key={item.step} {...item} />
+            ))}
+          </div>
         </section>
-      </div>
-    </main>
+      </main>
+
+      <style>
+        {`
+          @media (max-width: 1060px) {
+            .aureli-home-hero,
+            .aureli-home-workflow {
+              grid-template-columns: 1fr !important;
+            }
+
+            .aureli-home-feature-grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+          }
+
+          @media (max-width: 680px) {
+            .aureli-home-feature-grid,
+            .aureli-home-workflow-grid,
+            .aureli-home-metrics {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}
+      </style>
+    </>
   );
 }
