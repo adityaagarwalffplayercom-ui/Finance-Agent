@@ -1,6 +1,18 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+
+type AgentId =
+  | "team"
+  | "cfo"
+  | "accountant"
+  | "tax"
+  | "analyst"
+  | "cashflow"
+  | "consultant"
+  | "risk";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -8,157 +20,143 @@ type ChatMessage = {
   createdAt?: string;
 };
 
-type AiAgentId =
-  | "overall"
-  | "cfo"
-  | "accountant"
-  | "analyst"
-  | "cashflow"
-  | "consultant"
-  | "risk";
-
-type AgentOption = {
-  id: AiAgentId;
+type AgentUiConfig = {
   name: string;
-  shortName: string;
-  role: string;
-  icon: string;
-  description: string;
+  title: string;
+  eyebrow: string;
+  placeholder: string;
+  intro: string;
+  accent: string;
 };
 
-const AGENTS: AgentOption[] = [
-  {
-    id: "overall",
-    name: "Overall Finance Team",
-    shortName: "Overall",
-    role: "Complete AI finance team",
-    icon: "🤖",
-    description:
-      "General chat combining CFO, accountant, analyst, cash flow, consultant, and risk views.",
+const AGENTS: Record<AgentId, AgentUiConfig> = {
+  team: {
+    name: "AI Finance Team",
+    title: "Ask your business anything.",
+    eyebrow: "AI finance team",
+    placeholder: "Ask: Why is my business running at a loss?",
+    intro:
+      "Hi, I am your AI finance team. Ask me about revenue, expenses, profit, cash flow, tax, risks, or next actions.",
+    accent: "#8abfff",
   },
-  {
-    id: "cfo",
+  cfo: {
     name: "CFO Agent",
-    shortName: "CFO",
-    role: "Executive finance decision maker",
-    icon: "📊",
-    description: "Financial health, profit, risk, and next decisions.",
+    title: "Ask the CFO Agent.",
+    eyebrow: "Executive decision support",
+    placeholder: "Ask: What should I fix first as the owner?",
+    intro:
+      "Hi, I am your CFO Agent. I focus on health score, profitability, risk, runway, and executive decisions.",
+    accent: "#7bed9f",
   },
-  {
-    id: "accountant",
+  accountant: {
     name: "Accountant Agent",
-    shortName: "Accountant",
-    role: "Books and document control",
-    icon: "📚",
-    description: "Missing documents, data quality, and accounting gaps.",
+    title: "Ask the Accountant Agent.",
+    eyebrow: "Books and document control",
+    placeholder: "Ask: Which documents are missing?",
+    intro:
+      "Hi, I am your Accountant Agent. I focus on document quality, missing records, categorization, and data reliability.",
+    accent: "#8abfff",
   },
-  {
-    id: "analyst",
+  tax: {
+    name: "Tax Agent",
+    title: "Ask the Tax Agent.",
+    eyebrow: "Tax, GST and compliance",
+    placeholder: "Ask: Are there any GST or tax risks?",
+    intro:
+      "Hi, I am your Tax Agent. I help review GST, tax documents, deductions, compliance risks, payable tax indicators, and filing preparation reminders. I provide informational support only, not final tax/legal advice.",
+    accent: "#ffd166",
+  },
+  analyst: {
     name: "Financial Analyst Agent",
-    shortName: "Analyst",
-    role: "Ratios and performance analysis",
-    icon: "📈",
-    description: "Margins, expense ratio, coverage, and trends.",
+    title: "Ask the Financial Analyst Agent.",
+    eyebrow: "Margins, ratios, and trends",
+    placeholder: "Ask: What is my profit margin?",
+    intro:
+      "Hi, I am your Financial Analyst Agent. I focus on revenue, expenses, margins, ratios, and performance trends.",
+    accent: "#ffd166",
   },
-  {
-    id: "cashflow",
+  cashflow: {
     name: "Cash Flow Agent",
-    shortName: "Cash Flow",
-    role: "Liquidity and runway monitor",
-    icon: "💧",
-    description: "Cash runway, burn rate, bank data, and liquidity.",
+    title: "Ask the Cash Flow Agent.",
+    eyebrow: "Runway and liquidity",
+    placeholder: "Ask: What is my cash runway?",
+    intro:
+      "Hi, I am your Cash Flow Agent. I focus on cash position, burn rate, runway, and liquidity risk.",
+    accent: "#38bdf8",
   },
-  {
-    id: "consultant",
+  consultant: {
     name: "Business Consultant Agent",
-    shortName: "Consultant",
-    role: "Growth and cost-control advisor",
-    icon: "🧠",
-    description: "Strategy, pricing, cost control, and action plans.",
+    title: "Ask the Business Consultant Agent.",
+    eyebrow: "Growth and cost control",
+    placeholder: "Ask: What costs should I cut first?",
+    intro:
+      "Hi, I am your Business Consultant Agent. I turn finance signals into practical growth and cost-control actions.",
+    accent: "#c084fc",
   },
-  {
-    id: "risk",
+  risk: {
     name: "Risk & Compliance Agent",
-    shortName: "Risk",
-    role: "Financial risk guardrail",
-    icon: "🛡️",
-    description: "Warnings, weak signals, missing data, and red flags.",
+    title: "Ask the Risk & Compliance Agent.",
+    eyebrow: "Risk guardrail",
+    placeholder: "Ask: What are the biggest red flags?",
+    intro:
+      "Hi, I am your Risk & Compliance Agent. I focus on missing approvals, rejected data, financial risks, and verification needs.",
+    accent: "#ff8a95",
   },
-];
+};
 
 const DEFAULT_STARTER_QUESTIONS = [
-  "Give me an overall summary of my business.",
-  "What is the current financial condition of my business?",
-  "What should I fix first?",
-  "What are my biggest risks and opportunities?",
-  "Give me a complete action plan.",
+  "Why is my health score low?",
+  "Why is my business running at a loss?",
+  "What expenses should I reduce first?",
+  "Are there any tax or compliance risks?",
+  "How can I improve my cash flow?",
 ];
 
-const DEFAULT_MESSAGES: ChatMessage[] = [
-  {
-    role: "assistant",
-    content:
-      "Hi, I am your Overall Finance Team. I can answer like a CFO, accountant, financial analyst, cash flow manager, business consultant, and risk manager together. Choose a specialist agent only when you want a focused answer.",
-  },
-];
-
-function isValidAgent(agent: string | null): agent is AiAgentId {
-  return (
-    agent === "overall" ||
-    agent === "cfo" ||
-    agent === "accountant" ||
-    agent === "analyst" ||
-    agent === "cashflow" ||
-    agent === "consultant" ||
-    agent === "risk"
-  );
-}
-
-function getInitialAgent(): AiAgentId {
-  if (typeof window === "undefined") return "overall";
-
-  const agent = new URLSearchParams(window.location.search).get("agent");
-
-  if (isValidAgent(agent)) {
-    return agent;
+function normalizeAgentId(value: string | null): AgentId {
+  if (
+    value === "cfo" ||
+    value === "accountant" ||
+    value === "tax" ||
+    value === "analyst" ||
+    value === "cashflow" ||
+    value === "consultant" ||
+    value === "risk" ||
+    value === "team"
+  ) {
+    return value;
   }
 
-  return "overall";
-}
-
-function formatMessage(content: string) {
-  return content
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter((line, index, lines) => line.trim() || lines[index - 1]?.trim())
-    .join("\n");
+  return "team";
 }
 
 export default function BusinessChatPage() {
-  const [selectedAgent, setSelectedAgent] = useState<AiAgentId>("overall");
-  const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>(DEFAULT_MESSAGES);
-  const [suggestions, setSuggestions] = useState(DEFAULT_STARTER_QUESTIONS);
+  const searchParams = useSearchParams();
+  const agentId = normalizeAgentId(searchParams.get("agent"));
+  const agent = AGENTS[agentId];
 
+  const defaultMessages = useMemo<ChatMessage[]>(
+    () => [
+      {
+        role: "assistant",
+        content: agent.intro,
+      },
+    ],
+    [agent.intro],
+  );
+
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>(defaultMessages);
+  const [suggestions, setSuggestions] = useState(DEFAULT_STARTER_QUESTIONS);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
-
-  useEffect(() => {
-    setSelectedAgent(getInitialAgent());
-  }, []);
-
-  const activeAgent = useMemo(
-    () => AGENTS.find((agent) => agent.id === selectedAgent) ?? AGENTS[0],
-    [selectedAgent],
-  );
 
   useEffect(() => {
     async function loadChatHistory() {
       setIsLoadingHistory(true);
 
       try {
-        const response = await fetch(`/api/chat?agent=${selectedAgent}`, {
+        const response = await fetch(`/api/chat?agent=${agentId}`, {
           method: "GET",
           cache: "no-store",
         });
@@ -172,15 +170,7 @@ export default function BusinessChatPage() {
         if (Array.isArray(data.messages) && data.messages.length > 0) {
           setMessages(data.messages);
         } else {
-          setMessages([
-            {
-              role: "assistant",
-              content:
-                selectedAgent === "overall"
-                  ? "Hi, I am your Overall Finance Team. Ask me anything about your approved financial data, dashboard, risks, documents, cash flow, or next actions."
-                  : `Hi, I am your ${activeAgent.name}. ${activeAgent.description}`,
-            },
-          ]);
+          setMessages(defaultMessages);
         }
 
         if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
@@ -190,7 +180,7 @@ export default function BusinessChatPage() {
         }
       } catch (error) {
         setMessages([
-          ...DEFAULT_MESSAGES,
+          ...defaultMessages,
           {
             role: "assistant",
             content:
@@ -205,19 +195,16 @@ export default function BusinessChatPage() {
     }
 
     loadChatHistory();
-  }, [
-    selectedAgent,
-    activeAgent.name,
-    activeAgent.description,
-  ]);
+  }, [agentId, defaultMessages]);
 
   async function askQuestion(nextQuestion?: string) {
     const finalQuestion = (nextQuestion ?? question).trim();
 
-    if (!finalQuestion || isLoading || isLoadingHistory) return;
+    if (!finalQuestion || isLoading || isLoadingHistory) {
+      return;
+    }
 
     setQuestion("");
-
     setMessages((current) => [
       ...current,
       {
@@ -236,7 +223,7 @@ export default function BusinessChatPage() {
         },
         body: JSON.stringify({
           question: finalQuestion,
-          agentId: selectedAgent,
+          agentId,
         }),
       });
 
@@ -279,7 +266,9 @@ export default function BusinessChatPage() {
   }
 
   async function clearChat() {
-    if (isLoading || isClearing) return;
+    if (isLoading || isClearing) {
+      return;
+    }
 
     setIsClearing(true);
 
@@ -294,16 +283,7 @@ export default function BusinessChatPage() {
         throw new Error(data?.error ?? "Failed to clear chat.");
       }
 
-      setMessages([
-        {
-          role: "assistant",
-          content:
-            selectedAgent === "overall"
-              ? "Chat cleared. I am your Overall Finance Team. Ask me anything about your approved financial data."
-              : `Chat cleared. I am your ${activeAgent.name}. Ask me anything about your approved financial data.`,
-        },
-      ]);
-
+      setMessages(defaultMessages);
       setSuggestions(DEFAULT_STARTER_QUESTIONS);
       setQuestion("");
     } catch (error) {
@@ -322,218 +302,331 @@ export default function BusinessChatPage() {
     }
   }
 
-  function changeAgent(agentId: AiAgentId) {
-    setSelectedAgent(agentId);
-
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-
-      if (agentId === "overall") {
-        url.searchParams.delete("agent");
-      } else {
-        url.searchParams.set("agent", agentId);
-      }
-
-      window.history.replaceState(null, "", url.toString());
-    }
-  }
-
   return (
     <>
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">AI finance team</p>
-          <h1>Ask your business anything.</h1>
-        </div>
-
-        <span className="badge-sample">
-          Active mode · {activeAgent.shortName}
-        </span>
-      </header>
-
-      <p className="page-intro">
-        Use Overall Finance Team for general answers, or choose a specialist
-        agent for CFO, accounting, analysis, cash flow, consulting, or risk.
-        Answers use only approved documents.
-      </p>
-
-      <section
+      <main
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(240px, 0.75fr) minmax(0, 1.5fr)",
-          gap: 20,
-          alignItems: "start",
+          gap: 18,
+          minWidth: 0,
         }}
       >
-        <aside
-          className="alerts-card"
+        <section
           style={{
+            border: `1px solid ${agent.accent}44`,
+            background:
+              "radial-gradient(circle at top right, rgba(245,158,11,0.14), transparent 32%), linear-gradient(135deg, rgba(255,255,255,0.060), rgba(255,255,255,0.024))",
+            borderRadius: 30,
+            padding: 24,
             display: "grid",
-            gap: 14,
-            position: "sticky",
-            top: 24,
-          }}
-        >
-          <div>
-            <p className="section-title">Choose chat mode</p>
-            <p className="section-hint">
-              Overall mode gives a complete answer. Specialist agents go deeper
-              into one finance area.
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gap: 10,
-            }}
-          >
-            {AGENTS.map((agent) => {
-              const active = agent.id === selectedAgent;
-
-              return (
-                <button
-                  key={agent.id}
-                  type="button"
-                  onClick={() => changeAgent(agent.id)}
-                  disabled={isLoading || isLoadingHistory}
-                  style={{
-                    border: active
-                      ? "1px solid rgba(245,158,11,0.55)"
-                      : "1px solid var(--color-border)",
-                    background: active
-                      ? "rgba(245,158,11,0.12)"
-                      : "rgba(255,255,255,0.03)",
-                    color: "var(--color-text-primary)",
-                    borderRadius: 16,
-                    padding: 13,
-                    cursor:
-                      isLoading || isLoadingHistory ? "not-allowed" : "pointer",
-                    textAlign: "left",
-                    display: "grid",
-                    gap: 7,
-                  }}
-                >
-                  <span
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      alignItems: "center",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 12,
-                        display: "grid",
-                        placeItems: "center",
-                        border: "1px solid var(--color-border)",
-                        background: "rgba(255,255,255,0.04)",
-                        fontSize: 17,
-                      }}
-                    >
-                      {agent.icon}
-                    </span>
-
-                    <span>
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: 14,
-                          fontWeight: 900,
-                        }}
-                      >
-                        {agent.name}
-                      </span>
-
-                      <span
-                        style={{
-                          display: "block",
-                          color: "var(--color-text-secondary)",
-                          fontSize: 12,
-                          marginTop: 2,
-                        }}
-                      >
-                        {agent.role}
-                      </span>
-                    </span>
-                  </span>
-
-                  <span
-                    style={{
-                      color: "var(--color-text-secondary)",
-                      fontSize: 12,
-                      lineHeight: 1.45,
-                    }}
-                  >
-                    {agent.description}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </aside>
-
-        <main
-          className="alerts-card"
-          style={{
-            display: "grid",
-            gap: 18,
-            minHeight: 680,
+            gap: 16,
+            overflow: "hidden",
+            boxShadow:
+              "0 24px 80px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.06)",
           }}
         >
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              gap: 16,
-              alignItems: "flex-start",
+              gap: 14,
+              alignItems: "start",
               flexWrap: "wrap",
             }}
           >
-            <div>
-              <p className="section-title">{activeAgent.name}</p>
-              <p className="section-hint">{activeAgent.description}</p>
+            <div
+              style={{
+                display: "grid",
+                gap: 8,
+                minWidth: 0,
+              }}
+            >
+              <p
+                className="eyebrow"
+                style={{
+                  margin: 0,
+                  color: agent.accent,
+                }}
+              >
+                {agent.eyebrow}
+              </p>
+
+              <h1
+                style={{
+                  margin: 0,
+                  color: "var(--color-text-primary)",
+                  fontSize: "clamp(36px, 6vw, 64px)",
+                  lineHeight: 0.96,
+                  letterSpacing: "-0.07em",
+                  fontWeight: 780,
+                }}
+              >
+                {agent.title}
+              </h1>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--color-text-secondary)",
+                  fontSize: 14,
+                  lineHeight: 1.7,
+                  maxWidth: 760,
+                }}
+              >
+                This chat uses approved documents only. Pending and rejected
+                documents are excluded from answers.
+              </p>
             </div>
 
             <button
               type="button"
+              className="btn-ghost"
               onClick={clearChat}
-              disabled={isLoading || isClearing}
+              disabled={isClearing || isLoading}
               style={{
-                border: "1px solid var(--color-border)",
-                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.14)",
                 color: "var(--color-text-secondary)",
-                borderRadius: 12,
-                padding: "9px 12px",
-                cursor: isLoading || isClearing ? "not-allowed" : "pointer",
-                fontSize: 13,
-                fontWeight: 800,
+                cursor: isClearing || isLoading ? "not-allowed" : "pointer",
               }}
             >
               {isClearing ? "Clearing..." : "Clear chat"}
             </button>
           </div>
 
-          <section
+          <div
+            className="agent-switcher"
             style={{
-              border: "1px solid var(--color-border)",
-              background:
-                "linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
-              borderRadius: 18,
-              padding: 16,
-              display: "grid",
-              gap: 12,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
             }}
           >
-            <div>
-              <p
+            {Object.entries(AGENTS).map(([id, item]) => {
+              const active = id === agentId;
+
+              return (
+                <Link
+                  key={id}
+                  href={`/chat?agent=${id}`}
+                  className="agent-chip"
+                  style={{
+                    border: active
+                      ? `1px solid ${item.accent}88`
+                      : "1px solid rgba(255,255,255,0.11)",
+                    background: active
+                      ? `${item.accent}18`
+                      : "rgba(255,255,255,0.035)",
+                    color: active ? item.accent : "var(--color-text-secondary)",
+                    textDecoration: "none",
+                    borderRadius: 999,
+                    padding: "8px 11px",
+                    fontSize: 11,
+                    lineHeight: 1,
+                    fontWeight: active ? 720 : 560,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {item.name}
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+
+        <section
+          className="chat-layout"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) 320px",
+            gap: 16,
+            alignItems: "start",
+          }}
+        >
+          <article
+            style={{
+              border: "1px solid rgba(255,209,102,0.14)",
+              background:
+                "linear-gradient(135deg, rgba(255,255,255,0.052), rgba(255,255,255,0.022))",
+              borderRadius: 26,
+              padding: 18,
+              display: "grid",
+              gap: 14,
+              minWidth: 0,
+            }}
+          >
+            <div
+              className="chat-messages"
+              style={{
+                minHeight: 440,
+                maxHeight: "62dvh",
+                overflowY: "auto",
+                display: "grid",
+                gap: 12,
+                paddingRight: 4,
+              }}
+            >
+              {isLoadingHistory ? (
+                <div
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "rgba(255,255,255,0.035)",
+                    borderRadius: 20,
+                    padding: 16,
+                    color: "var(--color-text-secondary)",
+                    fontSize: 13,
+                  }}
+                >
+                  Loading saved chat history...
+                </div>
+              ) : (
+                messages.map((message, index) => {
+                  const isUser = message.role === "user";
+
+                  return (
+                    <div
+                      key={`${message.role}-${index}-${message.createdAt ?? ""}`}
+                      style={{
+                        display: "grid",
+                        justifyItems: isUser ? "end" : "start",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "min(760px, 92%)",
+                          border: isUser
+                            ? "1px solid rgba(255,209,102,0.24)"
+                            : `1px solid ${agent.accent}33`,
+                          background: isUser
+                            ? "rgba(245,158,11,0.085)"
+                            : "rgba(255,255,255,0.045)",
+                          borderRadius: isUser
+                            ? "22px 22px 6px 22px"
+                            : "22px 22px 22px 6px",
+                          padding: 14,
+                          display: "grid",
+                          gap: 8,
+                        }}
+                      >
+                        <strong
+                          style={{
+                            color: isUser ? "var(--color-gold)" : agent.accent,
+                            fontSize: 12,
+                            lineHeight: 1,
+                            fontWeight: 720,
+                          }}
+                        >
+                          {isUser ? "You" : agent.name}
+                        </strong>
+
+                        <p
+                          style={{
+                            margin: 0,
+                            color: "var(--color-text-primary)",
+                            fontSize: 14,
+                            lineHeight: 1.72,
+                            whiteSpace: "pre-wrap",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {message.content}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              {isLoading ? (
+                <div
+                  style={{
+                    width: "min(760px, 92%)",
+                    border: `1px solid ${agent.accent}33`,
+                    background: "rgba(255,255,255,0.045)",
+                    borderRadius: "22px 22px 22px 6px",
+                    padding: 14,
+                    color: "var(--color-text-secondary)",
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {agent.name} is analyzing approved financial data...
+                </div>
+              ) : null}
+            </div>
+
+            <form
+              onSubmit={handleSubmit}
+              style={{
+                display: "grid",
+                gap: 10,
+              }}
+            >
+              <textarea
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                placeholder={agent.placeholder}
+                disabled={isLoading || isLoadingHistory}
+                rows={3}
                 style={{
-                  margin: "0 0 5px",
+                  width: "100%",
+                  resize: "vertical",
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  background: "rgba(0,0,0,0.16)",
                   color: "var(--color-text-primary)",
+                  borderRadius: 20,
+                  padding: 14,
                   fontSize: 14,
-                  fontWeight: 900,
+                  lineHeight: 1.6,
+                  outline: "none",
+                }}
+              />
+
+              <button
+                type="submit"
+                className="btn-ghost"
+                disabled={isLoading || isLoadingHistory || !question.trim()}
+                style={{
+                  width: "100%",
+                  justifyContent: "center",
+                  border: `1px solid ${agent.accent}66`,
+                  background: `${agent.accent}14`,
+                  color: agent.accent,
+                  cursor:
+                    isLoading || isLoadingHistory || !question.trim()
+                      ? "not-allowed"
+                      : "pointer",
+                  opacity:
+                    isLoading || isLoadingHistory || !question.trim() ? 0.65 : 1,
+                }}
+              >
+                {isLoading ? "Analyzing..." : "Ask Aureli"}
+              </button>
+            </form>
+          </article>
+
+          <aside
+            style={{
+              border: "1px solid rgba(255,209,102,0.14)",
+              background:
+                "linear-gradient(135deg, rgba(255,255,255,0.050), rgba(255,255,255,0.020))",
+              borderRadius: 26,
+              padding: 18,
+              display: "grid",
+              gap: 14,
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gap: 6,
+              }}
+            >
+              <p
+                className="eyebrow"
+                style={{
+                  margin: 0,
+                  color: agent.accent,
                 }}
               >
                 Suggested questions
@@ -543,19 +636,18 @@ export default function BusinessChatPage() {
                 style={{
                   margin: 0,
                   color: "var(--color-text-secondary)",
-                  fontSize: 13,
-                  lineHeight: 1.45,
+                  fontSize: 12,
+                  lineHeight: 1.55,
                 }}
               >
-                Click one to test this chat mode during demo.
+                Use these to quickly test the selected agent.
               </p>
             </div>
 
             <div
               style={{
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
+                display: "grid",
+                gap: 8,
               }}
             >
               {suggestions.map((starter) => (
@@ -565,175 +657,70 @@ export default function BusinessChatPage() {
                   onClick={() => askQuestion(starter)}
                   disabled={isLoading || isLoadingHistory}
                   style={{
-                    border: "1px solid var(--color-border)",
-                    background: "rgba(255,255,255,0.04)",
-                    color: "var(--color-text-primary)",
-                    borderRadius: 999,
-                    padding: "9px 12px",
+                    border: "1px solid rgba(255,255,255,0.11)",
+                    background: "rgba(255,255,255,0.040)",
+                    color: "var(--color-text-secondary)",
+                    borderRadius: 18,
+                    padding: 12,
                     cursor:
                       isLoading || isLoadingHistory ? "not-allowed" : "pointer",
-                    fontSize: 13,
-                    fontWeight: 750,
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    textAlign: "left",
                   }}
                 >
                   {starter}
                 </button>
               ))}
             </div>
-          </section>
+          </aside>
+        </section>
+      </main>
 
-          <section
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 14,
-              minHeight: 360,
-              maxHeight: 560,
-              overflowY: "auto",
-              paddingRight: 4,
-            }}
-          >
-            {isLoadingHistory ? (
-              <div
-                style={{
-                  border: "1px solid var(--color-border)",
-                  background: "rgba(255,255,255,0.03)",
-                  color: "var(--color-text-secondary)",
-                  borderRadius: 16,
-                  padding: 16,
-                  fontSize: 14,
-                }}
-              >
-                Loading saved chat history...
-              </div>
-            ) : (
-              messages.map((message, index) => {
-                const isUser = message.role === "user";
+      <style>
+        {`
+          .chat-messages::-webkit-scrollbar {
+            width: 5px;
+          }
 
-                return (
-                  <article
-                    key={`${message.createdAt ?? "message"}-${index}`}
-                    style={{
-                      alignSelf: isUser ? "flex-end" : "flex-start",
-                      width: "min(100%, 760px)",
-                      border: "1px solid var(--color-border)",
-                      background: isUser
-                        ? "rgba(245,158,11,0.10)"
-                        : "rgba(255,255,255,0.035)",
-                      borderRadius: 18,
-                      padding: 15,
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: "0 0 8px",
-                        color: isUser
-                          ? "var(--color-amber)"
-                          : "var(--color-text-primary)",
-                        fontSize: 12,
-                        fontWeight: 900,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      {isUser ? "You" : activeAgent.name}
-                    </p>
+          .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+          }
 
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "var(--color-text-secondary)",
-                        fontSize: 14,
-                        lineHeight: 1.65,
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {formatMessage(message.content)}
-                    </p>
-                  </article>
-                );
-              })
-            )}
+          .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(255,209,102,0.28);
+            border-radius: 999px;
+          }
 
-            {isLoading && (
-              <article
-                style={{
-                  alignSelf: "flex-start",
-                  width: "min(100%, 760px)",
-                  border: "1px solid rgba(255,193,7,0.25)",
-                  background: "rgba(255,193,7,0.08)",
-                  borderRadius: 18,
-                  padding: 15,
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#ffd166",
-                    fontSize: 14,
-                    fontWeight: 850,
-                  }}
-                >
-                  {activeAgent.name} is analyzing your approved financial data...
-                </p>
-              </article>
-            )}
-          </section>
+          @media (max-width: 980px) {
+            .chat-layout {
+              grid-template-columns: 1fr !important;
+            }
 
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              borderTop: "1px solid var(--color-border)",
-              paddingTop: 16,
-            }}
-          >
-            <input
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder={`Ask ${activeAgent.shortName}: ${
-                suggestions[0] ?? "What should I do next?"
-              }`}
-              disabled={isLoading || isLoadingHistory}
-              style={{
-                width: "100%",
-                border: "1px solid var(--color-border)",
-                background: "rgba(255,255,255,0.04)",
-                color: "var(--color-text-primary)",
-                borderRadius: 14,
-                padding: "13px 14px",
-                outline: "none",
-                fontSize: 14,
-              }}
-            />
+            .agent-switcher {
+              flex-wrap: nowrap !important;
+              overflow-x: auto !important;
+              padding-bottom: 4px !important;
+              scrollbar-width: none !important;
+            }
 
-            <button
-              type="submit"
-              disabled={!question.trim() || isLoading || isLoadingHistory}
-              style={{
-                border: "none",
-                background: "var(--color-amber)",
-                color: "var(--color-base)",
-                borderRadius: 14,
-                padding: "13px 18px",
-                cursor:
-                  !question.trim() || isLoading || isLoadingHistory
-                    ? "not-allowed"
-                    : "pointer",
-                fontSize: 14,
-                fontWeight: 900,
-                opacity:
-                  !question.trim() || isLoading || isLoadingHistory ? 0.65 : 1,
-                whiteSpace: "nowrap",
-              }}
-            >
-              Send
-            </button>
-          </form>
-        </main>
-      </section>
+            .agent-switcher::-webkit-scrollbar {
+              display: none !important;
+            }
+
+            .agent-chip {
+              flex: 0 0 auto !important;
+            }
+          }
+
+          @media (max-width: 560px) {
+            .chat-messages {
+              min-height: 380px !important;
+              max-height: 58dvh !important;
+            }
+          }
+        `}
+      </style>
     </>
   );
 }

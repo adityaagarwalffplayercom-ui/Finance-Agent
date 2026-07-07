@@ -8,7 +8,7 @@ import {
 } from "./financial-intelligence";
 
 const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY ?? "",
 });
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite";
@@ -17,6 +17,7 @@ export type AiAgentId =
   | "team"
   | "cfo"
   | "accountant"
+  | "tax"
   | "analyst"
   | "cashflow"
   | "consultant"
@@ -113,24 +114,26 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "AI Finance Team",
     title: "Executive finance team",
     systemRole:
-      "You are the complete AI Executive Finance Team for a small or medium business. You combine CFO, accountant, analyst, cash-flow, risk, and business consultant thinking.",
+      "You are the complete AI Executive Finance Team for a small or medium business. You combine CFO, accountant, tax, analyst, cash-flow, risk, compliance, and business consultant thinking.",
     styleRules: [
       "Give a balanced finance answer.",
       "Mention the most important numbers first.",
       "Consider the user's business profile before giving advice.",
+      "Include tax and compliance reminders only when relevant.",
       "End with 2-3 practical next actions.",
     ],
     defaultSuggestions: [
       "Why is my health score low?",
       "Why is my business running at a loss?",
       "What expenses should I reduce first?",
+      "Are there any tax or compliance risks?",
       "How can I improve my cash flow?",
-      "Can I afford to hire another employee?",
     ],
     emptyDataSuggestions: [
       "Which documents should I upload and approve first?",
       "What can you analyze from an approved financial statement?",
       "What documents are needed to calculate cash runway?",
+      "What documents are useful for tax review?",
     ],
   },
   cfo: {
@@ -181,6 +184,33 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
       "Which documents should I upload first?",
       "How should I review AI extractions?",
       "What makes a document reliable for accounting?",
+    ],
+  },
+  tax: {
+    id: "tax",
+    name: "Tax Agent",
+    title: "Tax, GST and compliance assistant",
+    systemRole:
+      "You are the Tax Agent. Your job is to help users understand tax-related documents, GST returns, invoices, deductions, tax payable indicators, compliance risks, and filing reminders using approved business data. You must explain in simple business language. You must not claim to be a certified CA, CPA, tax lawyer, or government authority. You must not give final legal, tax, audit, or filing advice. For official filing, audits, notices, legal interpretation, or compliance decisions, recommend consulting a qualified tax professional.",
+    styleRules: [
+      "Focus on GST, tax documents, invoice tax details, deductions, and filing preparation.",
+      "Use only approved financial data and never invent tax numbers.",
+      "Clearly say when data is missing.",
+      "Give informational support only, not final tax or legal advice.",
+      "Recommend consulting a qualified CA or tax professional for official decisions.",
+    ],
+    defaultSuggestions: [
+      "What tax-related documents have I uploaded?",
+      "Are there any GST or compliance risks?",
+      "What deductions or tax items should I review?",
+      "What tax documents are missing?",
+      "What should I verify before filing taxes?",
+    ],
+    emptyDataSuggestions: [
+      "Which documents are useful for tax review?",
+      "What GST documents should I upload?",
+      "Can you review tax risk from approved invoices?",
+      "What information is needed before tax filing?",
     ],
   },
   analyst: {
@@ -288,12 +318,15 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
 export const DEFAULT_AGENT_ID: AiAgentId = "team";
 
 function normalizeAgentId(value: unknown): AiAgentId {
-  if (typeof value !== "string") return DEFAULT_AGENT_ID;
+  if (typeof value !== "string") {
+    return DEFAULT_AGENT_ID;
+  }
 
   if (
     value === "team" ||
     value === "cfo" ||
     value === "accountant" ||
+    value === "tax" ||
     value === "analyst" ||
     value === "cashflow" ||
     value === "consultant" ||
@@ -310,12 +343,18 @@ function getAgentProfile(agentId?: unknown) {
 }
 
 function safeNumber(value: number | null | undefined) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
   return value;
 }
 
 function formatPct(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return "not available";
+  if (value === null || !Number.isFinite(value)) {
+    return "not available";
+  }
+
   return `${value.toFixed(2)}%`;
 }
 
@@ -344,7 +383,10 @@ function buildBusinessProfileContext(
     industry: displayValue(business?.industry),
     businessType: displayValue(business?.businessType),
     financialYear: displayValue(business?.financialYear),
-    currency: displayValue(business?.currency) === "Not set" ? "INR" : displayValue(business?.currency),
+    currency:
+      displayValue(business?.currency) === "Not set"
+        ? "INR"
+        : displayValue(business?.currency),
     country: displayValue(business?.country),
     hasProfile: Boolean(business?.name?.trim()),
   };
@@ -620,6 +662,7 @@ function buildSuggestedQuestions(
   agentId?: AiAgentId,
 ) {
   const agent = getAgentProfile(agentId);
+
   const suggestions: string[] = [];
 
   const riskLevel = context.rawNumbers.riskLevel;
@@ -637,6 +680,7 @@ function buildSuggestedQuestions(
   if (agent.id === "team") {
     suggestions.push("What is the overall financial condition of my business?");
     suggestions.push("What should I do next as the owner?");
+    suggestions.push("Are there any tax or compliance risks?");
   }
 
   if (agent.id === "cfo") {
@@ -652,6 +696,13 @@ function buildSuggestedQuestions(
     suggestions.push("Which documents are missing?");
     suggestions.push("Is my uploaded data reliable?");
     suggestions.push("What should I approve next?");
+  }
+
+  if (agent.id === "tax") {
+    suggestions.push("What tax-related documents have I uploaded?");
+    suggestions.push("Are there any GST or compliance risks?");
+    suggestions.push("What deductions or tax items should I review?");
+    suggestions.push("What tax documents are missing?");
   }
 
   if (agent.id === "analyst") {
@@ -718,6 +769,7 @@ function buildPrompt(params: {
 ${agent.systemRole}
 
 You are answering inside a finance SaaS product where the user selected:
+
 Agent: ${agent.name}
 Agent title: ${agent.title}
 
@@ -751,6 +803,7 @@ Universal finance rules:
 8. Keep the answer concise but useful.
 9. Mention that the answer is based on approved documents when helpful.
 10. End with practical next actions when relevant.
+11. For tax, GST, filing, notices, audit, or legal compliance decisions, recommend consulting a qualified CA or tax professional.
 
 Approved company financial context:
 ${JSON.stringify(context, null, 2)}
@@ -823,6 +876,7 @@ export async function getBusinessChatSuggestions(
   agentId?: unknown,
 ) {
   const agent = getAgentProfile(agentId);
+
   const { businessProfile, documents } = await loadBusinessContext(userId);
 
   if (documents.length === 0) {
@@ -866,8 +920,7 @@ export async function answerBusinessQuestion(params: {
 
   if (!process.env.GEMINI_API_KEY) {
     return {
-      answer:
-        "Gemini API key is missing. Add GEMINI_API_KEY to your environment variables first.",
+      answer: "Gemini API key is missing. Add GEMINI_API_KEY to your environment variables first.",
       suggestions: [],
       agentId: agent.id,
       agentName: agent.name,

@@ -17,7 +17,7 @@ const FEATURES = [
   {
     title: "AI finance team",
     description:
-      "Ask CFO, accountant, analyst, cash flow, risk, and consultant agents business questions using your approved documents.",
+      "Ask CFO, accountant, tax, analyst, cash flow, risk, and consultant agents business questions using your approved documents.",
     icon: "🧠",
   },
   {

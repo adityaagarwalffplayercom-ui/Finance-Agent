@@ -39,8 +39,12 @@ function formatPct(value: number | null) {
   return `${value.toFixed(2)}%`;
 }
 
-function cleanActions(actions: string[]) {
-  return actions.filter(Boolean).slice(0, 4);
+function cleanActions(actions: Array<string | false | null | undefined>) {
+  return actions.filter(Boolean).slice(0, 4) as string[];
+}
+
+function plural(count: number, singular: string, pluralWord?: string) {
+  return `${count} ${count === 1 ? singular : pluralWord ?? `${singular}s`}`;
 }
 
 function waitingAgent(params: {
@@ -96,6 +100,19 @@ function buildWaitingAgents(): AiAgent[] {
         "Data completeness",
         "Transaction quality",
         "Record hygiene",
+      ],
+    }),
+    waitingAgent({
+      id: "tax",
+      name: "Tax Agent",
+      title: "Tax, GST and compliance review",
+      summary:
+        "Reviews GST, tax documents, deductions, payable tax indicators, compliance risks, and filing preparation reminders.",
+      focusAreas: [
+        "GST documents",
+        "Tax compliance",
+        "Deductions",
+        "Tax payable indicators",
       ],
     }),
     waitingAgent({
@@ -159,7 +176,6 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
         currency: true,
       },
     }),
-
     prisma.document.findMany({
       where: {
         userId,
@@ -170,7 +186,6 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
         reviewStatus: true,
       },
     }),
-
     prisma.document.findMany({
       where: {
         userId,
@@ -201,12 +216,15 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
   );
 
   const totalDocuments = allDocuments.length;
+
   const processedDocuments = allDocuments.filter(
     (doc) => doc.status === "PROCESSED",
   ).length;
+
   const pendingReview = allDocuments.filter(
     (doc) => doc.reviewStatus === "NEEDS_REVIEW",
   ).length;
+
   const rejectedDocuments = allDocuments.filter(
     (doc) => doc.reviewStatus === "REJECTED",
   ).length;
@@ -229,6 +247,7 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
   );
 
   const currency = intelligence.currency;
+
   const revenue = intelligence.totals.revenue;
   const expenses = intelligence.totals.expenses;
   const profit = intelligence.totals.profit;
@@ -247,7 +266,7 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
         : "active";
 
   const analystStatus: AiAgentStatus =
-    profit < 0 || revenueCoverage !== null && revenueCoverage < 70
+    profit < 0 || (revenueCoverage !== null && revenueCoverage < 70)
       ? "warning"
       : "active";
 
@@ -262,6 +281,9 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
 
   const riskStatus: AiAgentStatus =
     rejectedDocuments > 0 || pendingReview > 0 ? "warning" : "active";
+
+  const taxStatus: AiAgentStatus =
+    pendingReview > 0 || rejectedDocuments > 0 ? "warning" : "active";
 
   const topRecommendations = intelligence.recommendations.map(
     (item) => `${item.title}: ${item.action}`,
@@ -306,9 +328,10 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
             )}.`,
       ],
       recommendedActions: cleanActions(topRecommendations),
-      confidenceLabel: `Based on ${trustedDocuments.length} approved document${
-        trustedDocuments.length === 1 ? "" : "s"
-      }`,
+      confidenceLabel: `Based on ${plural(
+        trustedDocuments.length,
+        "approved document",
+      )}`,
     },
     {
       id: "accountant",
@@ -351,6 +374,52 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
       confidenceLabel: "High confidence only for approved documents",
     },
     {
+      id: "tax",
+      name: "Tax Agent",
+      title: "Tax, GST and compliance review",
+      status: taxStatus,
+      statusLabel:
+        taxStatus === "active"
+          ? "Ready to review approved tax signals"
+          : "Tax review needs verification",
+      summary:
+        "Reviews approved financial data for GST, tax documents, deductions, payable tax indicators, compliance risks, and filing preparation reminders.",
+      focusAreas: [
+        "GST documents",
+        "Tax compliance",
+        "Deductions",
+        "Tax payable indicators",
+        "Filing reminders",
+      ],
+      currentFindings: [
+        `${trustedDocuments.length} approved document${
+          trustedDocuments.length === 1 ? "" : "s"
+        } can be reviewed for tax-related signals.`,
+        `${pendingReview} document${
+          pendingReview === 1 ? "" : "s"
+        } still need approval before tax insights can trust them.`,
+        `${processedDocuments} document${
+          processedDocuments === 1 ? "" : "s"
+        } have been processed by AI and may contain taxable revenue, expenses, invoices, GST, or deduction details.`,
+        rejectedDocuments > 0
+          ? `${rejectedDocuments} rejected document${
+              rejectedDocuments === 1 ? "" : "s"
+            } will not be used for tax or compliance insights.`
+          : "No rejected documents are currently affecting tax review quality.",
+      ],
+      recommendedActions: cleanActions([
+        trustedDocuments.length > 0
+          ? "Review approved invoices, GST returns, tax documents, and financial statements for tax-related insights."
+          : "Approve trusted financial documents before relying on tax-related insights.",
+        pendingReview > 0
+          ? "Approve pending documents only after verifying tax amounts, invoice dates, GST details, and extracted totals."
+          : "Continue checking every new upload for GST, invoice, and tax details before approval.",
+        "Upload GST returns, tax documents, invoices, purchase bills, payroll records, and financial statements for stronger tax analysis.",
+        "Consult a qualified CA or tax professional before final filing, audits, notices, or legal compliance decisions.",
+      ]),
+      confidenceLabel: "Informational only — verify with a tax professional",
+    },
+    {
       id: "analyst",
       name: "Financial Analyst Agent",
       title: "Margins, ratios, and trend analysis",
@@ -387,9 +456,10 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
           : "Maintain revenue coverage above expenses.",
         "Upload documents across multiple months to improve trend accuracy.",
       ]),
-      confidenceLabel: `Calculated from ${trustedDocuments.length} approved document${
-        trustedDocuments.length === 1 ? "" : "s"
-      }`,
+      confidenceLabel: `Calculated from ${plural(
+        trustedDocuments.length,
+        "approved document",
+      )}`,
     },
     {
       id: "cashflow",
