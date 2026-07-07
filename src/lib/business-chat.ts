@@ -6,6 +6,10 @@ import {
   formatMoney,
   type IntelligenceDocument,
 } from "./financial-intelligence";
+import {
+  buildAgentLaunchSafetyBlock,
+  getAgentSafetyFooter,
+} from "./agent-governance";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY ?? "",
@@ -123,7 +127,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
       "End with 2-3 practical next actions.",
     ],
     defaultSuggestions: [
-      "Why is my health score low?",
+      "What is my overall financial condition?",
       "Why is my business running at a loss?",
       "What expenses should I reduce first?",
       "Are there any tax or compliance risks?",
@@ -171,7 +175,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
       "Focus on records, documents, categories, missing data, and verification.",
       "Use business profile fields to explain what records may be expected.",
       "Be careful with numbers and tell the user what needs review.",
-      "Do not give final tax or audit advice.",
+      "Do not give final tax, audit, or certified accounting advice.",
     ],
     defaultSuggestions: [
       "Which documents are missing?",
@@ -191,13 +195,14 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "Tax Agent",
     title: "Tax, GST and compliance assistant",
     systemRole:
-      "You are the Tax Agent. Your job is to help users understand tax-related documents, GST returns, invoices, deductions, tax payable indicators, compliance risks, and filing reminders using approved business data. You must explain in simple business language. You must not claim to be a certified CA, CPA, tax lawyer, or government authority. You must not give final legal, tax, audit, or filing advice. For official filing, audits, notices, legal interpretation, or compliance decisions, recommend consulting a qualified tax professional.",
+      "You are the Tax Agent. Your job is to help users understand tax-related documents, GST/VAT returns, invoices, deductions, tax payable indicators, compliance risks, and filing reminders using approved business data. You must not calculate final tax payable or give final filing/legal advice unless verified source-backed rules exist in the application. In this version, you provide checklist and risk-signal support only.",
     styleRules: [
-      "Focus on GST, tax documents, invoice tax details, deductions, and filing preparation.",
+      "Focus on tax document completeness, GST/VAT/tax signals, invoice tax details, deductions to review, and filing preparation.",
       "Use only approved financial data and never invent tax numbers.",
-      "Clearly say when data is missing.",
-      "Give informational support only, not final tax or legal advice.",
-      "Recommend consulting a qualified CA or tax professional for official decisions.",
+      "Clearly say when country/year-specific tax rules are not available in the app.",
+      "Do not calculate final tax payable.",
+      "Do not choose a final tax regime for the user.",
+      "Recommend consulting a qualified CA/CPA/accountant/tax professional for official filing, audit, notices, legal interpretation, or compliance decisions.",
     ],
     defaultSuggestions: [
       "What tax-related documents have I uploaded?",
@@ -208,7 +213,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     ],
     emptyDataSuggestions: [
       "Which documents are useful for tax review?",
-      "What GST documents should I upload?",
+      "What GST or VAT documents should I upload?",
       "Can you review tax risk from approved invoices?",
       "What information is needed before tax filing?",
     ],
@@ -293,7 +298,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "Risk & Compliance Agent",
     title: "Financial risk guardrail",
     systemRole:
-      "You are the Risk & Compliance Agent. Your job is to flag financial risks, trust issues, missing approvals, rejected documents, suspicious gaps, and areas needing human verification.",
+      "You are the Risk & Compliance Agent. Your job is to flag financial risks, trust issues, missing approvals, rejected documents, suspicious gaps, tax/compliance uncertainty, and areas needing human verification.",
     styleRules: [
       "Focus on risks, missing data, verification, and guardrails.",
       "Use business country, industry, and business type only as context.",
@@ -765,16 +770,26 @@ function buildPrompt(params: {
   const { question, context, agentId } = params;
   const agent = getAgentProfile(agentId);
 
+  const launchSafetyBlock = buildAgentLaunchSafetyBlock({
+    agentId: agent.id,
+    country: context.business.country,
+    financialYear: context.business.financialYear,
+  });
+
+  const safetyFooter = getAgentSafetyFooter(agent.id);
+
   return `
 ${agent.systemRole}
 
-You are answering inside a finance SaaS product where the user selected:
+You are answering inside Aureli, a finance SaaS product where the user selected:
 
 Agent: ${agent.name}
 Agent title: ${agent.title}
 
 Agent behavior rules:
 ${agent.styleRules.map((rule) => `- ${rule}`).join("\n")}
+
+${launchSafetyBlock}
 
 Business profile:
 - Business name: ${context.business.name}
@@ -803,7 +818,10 @@ Universal finance rules:
 8. Keep the answer concise but useful.
 9. Mention that the answer is based on approved documents when helpful.
 10. End with practical next actions when relevant.
-11. For tax, GST, filing, notices, audit, or legal compliance decisions, recommend consulting a qualified CA or tax professional.
+11. For tax, GST/VAT, filing, notices, audit, or legal compliance decisions, recommend consulting a qualified professional.
+
+Mandatory closing note when answer involves tax/accounting/risk/compliance:
+${safetyFooter}
 
 Approved company financial context:
 ${JSON.stringify(context, null, 2)}
@@ -920,7 +938,8 @@ export async function answerBusinessQuestion(params: {
 
   if (!process.env.GEMINI_API_KEY) {
     return {
-      answer: "Gemini API key is missing. Add GEMINI_API_KEY to your environment variables first.",
+      answer:
+        "Gemini API key is missing. Add GEMINI_API_KEY to your environment variables first.",
       suggestions: [],
       agentId: agent.id,
       agentName: agent.name,

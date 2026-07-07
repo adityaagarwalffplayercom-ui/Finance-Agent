@@ -5,6 +5,7 @@ import {
   formatMoney,
   type IntelligenceDocument,
 } from "./financial-intelligence";
+import { getJurisdictionProfile } from "./agent-governance";
 
 export type AiAgentStatus = "active" | "waiting" | "warning" | "critical";
 
@@ -67,7 +68,7 @@ function waitingAgent(params: {
       "Upload documents, process them with AI, then approve the extraction.",
     ],
     recommendedActions: [
-      "Upload a financial statement, bank statement, invoices, bills, or payroll file.",
+      "Upload a financial statement, bank statement, invoices, bills, payroll file, or tax document.",
       "Open the document details page and approve the AI extraction after review.",
     ],
     confidenceLabel: "Low confidence until approved data is available",
@@ -105,14 +106,14 @@ function buildWaitingAgents(): AiAgent[] {
     waitingAgent({
       id: "tax",
       name: "Tax Agent",
-      title: "Tax, GST and compliance review",
+      title: "Tax, GST/VAT and compliance review",
       summary:
-        "Reviews GST, tax documents, deductions, payable tax indicators, compliance risks, and filing preparation reminders.",
+        "Reviews tax-related document completeness, GST/VAT signals, deductions to review, compliance uncertainty, and filing preparation.",
       focusAreas: [
-        "GST documents",
-        "Tax compliance",
-        "Deductions",
-        "Tax payable indicators",
+        "Tax documents",
+        "GST/VAT signals",
+        "Deductions to review",
+        "Filing readiness",
       ],
     }),
     waitingAgent({
@@ -154,7 +155,7 @@ function buildWaitingAgents(): AiAgent[] {
       name: "Risk & Compliance Agent",
       title: "Financial risk guardrail",
       summary:
-        "Flags missing data, rejected extractions, high-risk signals, and areas that need human verification.",
+        "Flags missing data, rejected extractions, high-risk signals, tax/compliance uncertainty, and areas that need human verification.",
       focusAreas: [
         "Rejected documents",
         "Pending reviews",
@@ -174,6 +175,8 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
       select: {
         name: true,
         currency: true,
+        country: true,
+        financialYear: true,
       },
     }),
     prisma.document.findMany({
@@ -246,6 +249,7 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
     business?.currency ?? "INR",
   );
 
+  const jurisdiction = getJurisdictionProfile(business?.country);
   const currency = intelligence.currency;
 
   const revenue = intelligence.totals.revenue;
@@ -369,55 +373,52 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
         rejectedDocuments > 0
           ? "Re-upload clearer files for rejected documents or correct the extraction later."
           : "Keep rejected documents at zero by reviewing extraction quality carefully.",
-        "Upload missing bank statements, invoices, payroll, and bills to improve completeness.",
+        "Upload missing bank statements, invoices, payroll, bills, and tax documents to improve completeness.",
       ]),
       confidenceLabel: "High confidence only for approved documents",
     },
     {
       id: "tax",
       name: "Tax Agent",
-      title: "Tax, GST and compliance review",
+      title: "Tax, GST/VAT and compliance review",
       status: taxStatus,
       statusLabel:
         taxStatus === "active"
-          ? "Ready to review approved tax signals"
+          ? "Checklist-ready with approved data"
           : "Tax review needs verification",
       summary:
-        "Reviews approved financial data for GST, tax documents, deductions, payable tax indicators, compliance risks, and filing preparation reminders.",
+        "Reviews approved financial data for tax-document completeness, GST/VAT/tax signals, deductions to review, compliance uncertainty, and filing preparation.",
       focusAreas: [
-        "GST documents",
-        "Tax compliance",
-        "Deductions",
+        "Tax documents",
+        "GST/VAT signals",
+        "Deductions to review",
         "Tax payable indicators",
-        "Filing reminders",
+        "Filing readiness",
       ],
       currentFindings: [
         `${trustedDocuments.length} approved document${
           trustedDocuments.length === 1 ? "" : "s"
         } can be reviewed for tax-related signals.`,
-        `${pendingReview} document${
-          pendingReview === 1 ? "" : "s"
-        } still need approval before tax insights can trust them.`,
+        `Business country is mapped to ${jurisdiction.name}.`,
         `${processedDocuments} document${
           processedDocuments === 1 ? "" : "s"
-        } have been processed by AI and may contain taxable revenue, expenses, invoices, GST, or deduction details.`,
-        rejectedDocuments > 0
-          ? `${rejectedDocuments} rejected document${
-              rejectedDocuments === 1 ? "" : "s"
-            } will not be used for tax or compliance insights.`
-          : "No rejected documents are currently affecting tax review quality.",
+        } have been processed by AI and may contain taxable revenue, expenses, invoices, GST/VAT, or deduction details.`,
+        pendingReview > 0
+          ? `${pendingReview} document${
+              pendingReview === 1 ? "" : "s"
+            } still need approval before tax insights can trust them.`
+          : "No pending documents are blocking the current tax checklist.",
       ],
       recommendedActions: cleanActions([
-        trustedDocuments.length > 0
-          ? "Review approved invoices, GST returns, tax documents, and financial statements for tax-related insights."
-          : "Approve trusted financial documents before relying on tax-related insights.",
+        "Use this Tax Agent for checklist and tax-signal review, not final tax payable calculation.",
+        "Upload tax returns, GST/VAT returns, invoices, purchase bills, payroll records, and financial statements for stronger tax review.",
         pendingReview > 0
-          ? "Approve pending documents only after verifying tax amounts, invoice dates, GST details, and extracted totals."
-          : "Continue checking every new upload for GST, invoice, and tax details before approval.",
-        "Upload GST returns, tax documents, invoices, purchase bills, payroll records, and financial statements for stronger tax analysis.",
-        "Consult a qualified CA or tax professional before final filing, audits, notices, or legal compliance decisions.",
+          ? "Approve pending documents only after verifying tax amounts, invoice dates, tax IDs, GST/VAT details, and extracted totals."
+          : "Continue checking every new upload for invoice, tax, and GST/VAT details before approval.",
+        `Verify official filing, notices, audits, legal interpretation, and compliance decisions with a ${jurisdiction.professionalReviewLabel}.`,
       ]),
-      confidenceLabel: "Informational only — verify with a tax professional",
+      confidenceLabel:
+        "Informational checklist only — exact rules need verified official-source tax engine",
     },
     {
       id: "analyst",
@@ -545,11 +546,12 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
           ? "No major trust issues"
           : "Review and verification needed",
       summary:
-        "Flags trust gaps, missing approvals, rejected documents, and financial warning signals.",
+        "Flags trust gaps, missing approvals, rejected documents, tax/compliance uncertainty, and financial warning signals.",
       focusAreas: [
         "Pending reviews",
         "Rejected documents",
         "Financial alerts",
+        "Tax/compliance uncertainty",
         "Human verification",
       ],
       currentFindings: cleanActions([
@@ -572,7 +574,7 @@ export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
         rejectedDocuments > 0
           ? "Replace rejected documents with clearer uploads."
           : "Continue using approval workflow before trusting AI extraction.",
-        "Do not use AI output as final legal, tax, or audit advice without professional review.",
+        "Do not use AI output as final legal, tax, audit, or compliance advice without professional review.",
       ]),
       confidenceLabel: "Trust score depends on approval quality",
     },
