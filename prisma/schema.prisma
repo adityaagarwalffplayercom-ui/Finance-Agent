@@ -150,6 +150,34 @@ model AuditEvent {
   @@map("audit_event")
 }
 
+model TaxRule {
+  id                 String        @id @default(cuid())
+  countryCode        String
+  countryName        String
+  financialYear      String
+  taxType            TaxRuleType
+  ruleKey            String
+  title              String
+  summary            String
+  ruleText           String
+  sourceName         String
+  sourceUrl          String
+  sourcePublishedAt  DateTime?
+  effectiveFrom      DateTime?
+  effectiveTo        DateTime?
+  lastVerifiedAt     DateTime?
+  verificationStatus TaxRuleStatus @default(DRAFT)
+  verifiedBy         String?
+  notes              String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@unique([countryCode, financialYear, taxType, ruleKey])
+  @@index([countryCode, financialYear, taxType, verificationStatus])
+  @@index([verificationStatus, lastVerifiedAt])
+  @@map("tax_rule")
+}
+
 enum DocumentCategory {
   BANK_STATEMENT
   SALES_INVOICE
@@ -182,4 +210,24 @@ enum DocumentReviewStatus {
   NEEDS_REVIEW
   APPROVED
   REJECTED
+}
+
+enum TaxRuleType {
+  INCOME_TAX
+  GST
+  VAT
+  SALES_TAX
+  CORPORATE_TAX
+  PAYROLL_TAX
+  DEDUCTION
+  FILING
+  COMPLIANCE
+  OTHER
+}
+
+enum TaxRuleStatus {
+  DRAFT
+  VERIFIED
+  NEEDS_REVIEW
+  ARCHIVED
 }
