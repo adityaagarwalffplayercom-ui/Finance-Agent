@@ -42,6 +42,11 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
+    label: "Tax Knowledge",
+    href: "/admin/tax-knowledge",
+    enabled: true,
+  },
+  {
     label: "CFO Report",
     href: "/reports/cfo",
     enabled: true,
