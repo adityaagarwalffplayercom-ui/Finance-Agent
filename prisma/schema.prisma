@@ -151,7 +151,7 @@ model AuditEvent {
 }
 
 model TaxRule {
-  id                 String        @id @default(cuid())
+  id                 String              @id @default(cuid())
   countryCode        String
   countryName        String
   financialYear      String
@@ -166,16 +166,78 @@ model TaxRule {
   effectiveFrom      DateTime?
   effectiveTo        DateTime?
   lastVerifiedAt     DateTime?
-  verificationStatus TaxRuleStatus @default(DRAFT)
+  verificationStatus TaxRuleStatus       @default(DRAFT)
   verifiedBy         String?
   notes              String?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  sourceLinks        TaxRuleSourceLink[]
 
   @@unique([countryCode, financialYear, taxType, ruleKey])
   @@index([countryCode, financialYear, taxType, verificationStatus])
   @@index([verificationStatus, lastVerifiedAt])
   @@map("tax_rule")
+}
+
+model TaxSourceDocument {
+  id                 String              @id @default(cuid())
+  countryCode        String
+  countryName        String
+  financialYear      String
+  taxType            TaxRuleType
+  title              String
+  sourceName         String
+  sourceUrl          String?
+  fileName           String?
+  mimeType           String?
+  originalText       String
+  verificationStatus TaxRuleStatus       @default(DRAFT)
+  uploadedBy         String?
+  lastVerifiedAt     DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  chunks             TaxKnowledgeChunk[]
+  ruleLinks          TaxRuleSourceLink[]
+
+  @@index([countryCode, financialYear, taxType, verificationStatus])
+  @@index([verificationStatus, lastVerifiedAt])
+  @@map("tax_source_document")
+}
+
+model TaxKnowledgeChunk {
+  id                 String            @id @default(cuid())
+  sourceDocumentId   String
+  countryCode        String
+  countryName        String
+  financialYear      String
+  taxType            TaxRuleType
+  chunkIndex         Int
+  title              String
+  content            String
+  sourceName         String
+  sourceUrl          String?
+  verificationStatus TaxRuleStatus     @default(DRAFT)
+  lastVerifiedAt     DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  sourceDocument     TaxSourceDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([countryCode, financialYear, taxType, verificationStatus])
+  @@index([sourceDocumentId, chunkIndex])
+  @@map("tax_knowledge_chunk")
+}
+
+model TaxRuleSourceLink {
+  id               String            @id @default(cuid())
+  taxRuleId        String
+  sourceDocumentId String
+  createdAt        DateTime          @default(now())
+  taxRule          TaxRule           @relation(fields: [taxRuleId], references: [id], onDelete: Cascade)
+  sourceDocument   TaxSourceDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([taxRuleId, sourceDocumentId])
+  @@index([sourceDocumentId])
+  @@map("tax_rule_source_link")
 }
 
 enum DocumentCategory {

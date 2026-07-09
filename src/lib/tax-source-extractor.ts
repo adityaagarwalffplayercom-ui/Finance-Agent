@@ -14,6 +14,39 @@ function getAiClient() {
   });
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function errorToText(error: unknown) {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function isRetryableGeminiError(error: unknown) {
+  const text = errorToText(error).toLowerCase();
+
+  return (
+    text.includes("503") ||
+    text.includes("500") ||
+    text.includes("502") ||
+    text.includes("504") ||
+    text.includes("unavailable") ||
+    text.includes("high demand") ||
+    text.includes("overloaded") ||
+    text.includes("quota") ||
+    text.includes("rate limit") ||
+    text.includes("resource_exhausted")
+  );
+}
+
 function cleanExtractedText(text: string) {
   return text
     .replace(/\r/g, "\n")
@@ -78,45 +111,78 @@ export async function extractTaxSourceTextFromFile(params: {
   sourceName: string;
 }) {
   const ai = getAiClient();
+  const maxAttempts = 4;
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: [
-      {
-        role: "user",
-        parts: [
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL,
+        contents: [
           {
-            text: getPrompt({
-              fileName: params.fileName,
-              countryCode: params.countryCode,
-              countryName: params.countryName,
-              financialYear: params.financialYear,
-              taxType: params.taxType,
-              sourceName: params.sourceName,
-            }),
-          },
-          {
-            inlineData: {
-              mimeType: params.mimeType,
-              data: params.base64Data,
-            },
+            role: "user",
+            parts: [
+              {
+                text: getPrompt({
+                  fileName: params.fileName,
+                  countryCode: params.countryCode,
+                  countryName: params.countryName,
+                  financialYear: params.financialYear,
+                  taxType: params.taxType,
+                  sourceName: params.sourceName,
+                }),
+              },
+              {
+                inlineData: {
+                  mimeType: params.mimeType,
+                  data: params.base64Data,
+                },
+              },
+            ],
           },
         ],
-      },
-    ],
-  });
+      });
 
-  const text = response.text;
+      const text = response.text;
 
-  if (!text || !text.trim()) {
-    throw new Error("Gemini returned empty tax source text.");
+      if (!text || !text.trim()) {
+        throw new Error("Gemini returned empty tax source text.");
+      }
+
+      const cleaned = cleanExtractedText(text);
+
+      if (cleaned.length < 50) {
+        throw new Error("Extracted tax source text is too short.");
+      }
+
+      return cleaned;
+    } catch (error) {
+      console.error(
+        `Tax source Gemini extraction failed attempt ${attempt}/${maxAttempts}:`,
+        error,
+      );
+
+      const canRetry = isRetryableGeminiError(error);
+      const isLastAttempt = attempt === maxAttempts;
+
+      if (!canRetry || isLastAttempt) {
+        throw new Error(
+          [
+            "Gemini could not extract this file right now.",
+            "Reason: Gemini is temporarily overloaded or unavailable.",
+            "",
+            "Fix:",
+            "1. If this is a UK GOV.UK source, upload the .txt version instead of PDF.",
+            "2. Or paste the GOV.UK page text into the text box.",
+            "3. Or try the same PDF again after 2–5 minutes.",
+            "",
+            `Original error: ${errorToText(error)}`,
+          ].join("\n"),
+        );
+      }
+
+      await sleep(3000 * attempt);
+    }
   }
 
-  const cleaned = cleanExtractedText(text);
-
-  if (cleaned.length < 50) {
-    throw new Error("Extracted tax source text is too short.");
-  }
-
-  return cleaned;
+  throw new Error("Tax source extraction failed after retries.");
 }
