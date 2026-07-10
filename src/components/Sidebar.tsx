@@ -47,6 +47,11 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
+    label: "Monthly Report",
+    href: "/reports/monthly",
+    enabled: true,
+  },
+  {
     label: "Activity",
     href: "/activity",
     enabled: true,
