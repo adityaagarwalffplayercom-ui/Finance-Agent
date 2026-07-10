@@ -463,9 +463,9 @@ export default function HomePage() {
               }}
               className="aureli-home-metrics"
             >
-              <MetricCard label="Revenue" value="₹42.8L" hint="+18% trend" />
-              <MetricCard label="Profit" value="₹9.4L" hint="Healthy margin" />
-              <MetricCard label="Cash" value="₹16.2L" hint="Stable runway" />
+              <MetricCard label="Revenue" value="Rs. 42.8L" hint="+18% trend" />
+              <MetricCard label="Profit" value="Rs. 9.4L" hint="Healthy margin" />
+              <MetricCard label="Cash" value="Rs. 16.2L" hint="Stable runway" />
               <MetricCard label="Health" value="84/100" hint="Strong position" />
             </div>
 
@@ -503,7 +503,7 @@ export default function HomePage() {
                     fontWeight: 900,
                   }}
                 >
-                  +₹6.8L net
+                  +Rs. 6.8L net
                 </span>
               </div>
 

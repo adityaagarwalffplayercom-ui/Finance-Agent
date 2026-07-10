@@ -126,7 +126,7 @@ export async function AiTeamSection({ userId }: { userId: string }) {
             whiteSpace: "nowrap",
           }}
         >
-          View full team →
+          View full team -&gt;
         </Link>
       </div>
 
@@ -347,7 +347,7 @@ export async function AiTeamSection({ userId }: { userId: string }) {
                 fontWeight: 850,
               }}
             >
-              Ask agent →
+              Ask agent -&gt;
             </Link>
           </article>
         ))}

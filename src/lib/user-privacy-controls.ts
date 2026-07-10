@@ -70,7 +70,7 @@ function getObjectValue<T = unknown>(value: unknown, key: string): T | null {
 
 function sanitizePdfText(value: unknown) {
   return safeString(value)
-    .replace(/[^\x09\x0A\x0D\x20-\x7E₹]/g, "")
+    .replace(/[^\x09\x0A\x0D\x20-\x7ERs. ]/g, "")
     .replace(/\r/g, "\n")
     .trim();
 }

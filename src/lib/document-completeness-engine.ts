@@ -300,7 +300,7 @@ function hasCurrencyDeep(value: unknown) {
       "presentationCurrency",
     ]) ||
     /\b(inr|usd|eur|gbp|aed|cad|aud|sgd|jpy)\b/i.test(searchText) ||
-    /₹|\$|€|£|\brs\.?\b|\brupees?\b/i.test(searchText)
+    /Rs. |\$|€|£|\brs\.?\b|\brupees?\b/i.test(searchText)
   );
 }
 

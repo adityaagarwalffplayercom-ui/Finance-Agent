@@ -218,8 +218,8 @@ const CURRENCY_OPTIONS: SelectOption[] = [
   {
     value: "INR",
     label: "INR — Indian Rupee",
-    description: "₹ Indian Rupee",
-    icon: "₹",
+    description: "Rs.  Indian Rupee",
+    icon: "Rs. ",
   },
   {
     value: "USD",

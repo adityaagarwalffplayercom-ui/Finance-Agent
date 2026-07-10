@@ -444,11 +444,11 @@ They may say:
 - "Figures in INR thousands"
 - "Rs. in thousands"
 - "Amount in lakhs"
-- "₹ in lakhs"
+- "Rs.  in lakhs"
 - "Rs. in crores"
 - "Amount in millions"
 - "USD in millions"
-- "All amounts are in ₹ million unless otherwise stated"
+- "All amounts are in Rs.  million unless otherwise stated"
 
 You MUST detect the reporting unit from the document text/header/notes/table caption.
 

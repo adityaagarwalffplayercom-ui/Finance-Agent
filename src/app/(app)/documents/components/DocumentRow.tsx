@@ -98,7 +98,7 @@ function formatAmount(amount: number, currency?: string | null) {
   }
 
   const currencySymbols: Record<string, string> = {
-    INR: "₹",
+    INR: "Rs. ",
     USD: "$",
     EUR: "€",
     GBP: "£",

@@ -21,7 +21,7 @@ function cleanSpaces(value: string) {
 function cleanDescription(value: string) {
   return cleanSpaces(
     value
-      .replace(/[₹$£€]/g, "")
+      .replace(/[Rs. $£€]/g, "")
       .replace(/\bINR\b/gi, "")
       .replace(/\bUSD\b/gi, "")
       .replace(/\bGBP\b/gi, "")
@@ -70,7 +70,7 @@ function toNumber(value: unknown): number | null {
   const isNegativeByBracket = /^\(.*\)$/.test(text);
 
   text = text
-    .replace(/[₹$£€]/g, "")
+    .replace(/[Rs. $£€]/g, "")
     .replace(/\bINR\b/gi, "")
     .replace(/\bUSD\b/gi, "")
     .replace(/\bGBP\b/gi, "")
@@ -111,7 +111,7 @@ function detectScaleMultiplier(text: string) {
     lower.includes("in crores") ||
     lower.includes("in crore") ||
     lower.includes("rs. in crores") ||
-    lower.includes("₹ in crores") ||
+    lower.includes("Rs.  in crores") ||
     lower.includes("rupees in crores")
   ) {
     return 10_000_000;
@@ -121,7 +121,7 @@ function detectScaleMultiplier(text: string) {
     lower.includes("in lakhs") ||
     lower.includes("in lakh") ||
     lower.includes("rs. in lakhs") ||
-    lower.includes("₹ in lakhs") ||
+    lower.includes("Rs.  in lakhs") ||
     lower.includes("rupees in lakhs")
   ) {
     return 100_000;
@@ -130,7 +130,7 @@ function detectScaleMultiplier(text: string) {
   if (
     lower.includes("in millions") ||
     lower.includes("in million") ||
-    lower.includes("₹ million") ||
+    lower.includes("Rs.  million") ||
     lower.includes("inr million") ||
     lower.includes("amounts are in million") ||
     lower.includes("amounts in million")
@@ -141,7 +141,7 @@ function detectScaleMultiplier(text: string) {
   if (
     lower.includes("in billions") ||
     lower.includes("in billion") ||
-    lower.includes("₹ billion") ||
+    lower.includes("Rs.  billion") ||
     lower.includes("inr billion")
   ) {
     return 1_000_000_000;
@@ -151,7 +151,7 @@ function detectScaleMultiplier(text: string) {
     lower.includes("in thousands") ||
     lower.includes("in thousand") ||
     lower.includes("rs. in thousands") ||
-    lower.includes("₹ in thousands") ||
+    lower.includes("Rs.  in thousands") ||
     lower.includes("rupees in thousands")
   ) {
     return 1_000;
@@ -256,7 +256,7 @@ function inferCategory(description: string, fallback?: string | null) {
 }
 
 function numberTokenRegex() {
-  return /(?:₹|Rs\.?|INR|USD|US\$|GBP|EUR|£|\$)?\s*\(?-?\d{1,3}(?:,\d{2,3})+(?:\.\d+)?\)?|(?:₹|Rs\.?|INR|USD|US\$|GBP|EUR|£|\$)\s*\(?-?\d+(?:\.\d+)?\)?|\(\s*-?\d+(?:,\d{2,3})*(?:\.\d+)?\s*\)|-?\d+\.\d{1,4}|\b-?\d{2,}\b/g;
+  return /(?:Rs. |Rs\.?|INR|USD|US\$|GBP|EUR|£|\$)?\s*\(?-?\d{1,3}(?:,\d{2,3})+(?:\.\d+)?\)?|(?:Rs. |Rs\.?|INR|USD|US\$|GBP|EUR|£|\$)\s*\(?-?\d+(?:\.\d+)?\)?|\(\s*-?\d+(?:,\d{2,3})*(?:\.\d+)?\s*\)|-?\d+\.\d{1,4}|\b-?\d{2,}\b/g;
 }
 
 function getAmountMatches(line: string) {
