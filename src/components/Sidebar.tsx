@@ -67,6 +67,16 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
+    label: "Anomaly Insights",
+    href: "/anomaly-insights",
+    enabled: true,
+  },
+{
+    label: "Cash Flow",
+    href: "/cash-flow",
+    enabled: true,
+  },
+{
     label: "Activity",
     href: "/activity",
     enabled: true,
@@ -526,5 +536,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
     </>
   );
 }
+
+
 
 
