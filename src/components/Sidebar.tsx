@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -44,6 +44,11 @@ const NAV_ITEMS = [
   {
     label: "CFO Report",
     href: "/reports/cfo",
+    enabled: true,
+  },
+  {
+    label: "CFO Decisions",
+    href: "/cfo-decisions",
     enabled: true,
   },
   {
@@ -516,3 +521,4 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
     </>
   );
 }
+
