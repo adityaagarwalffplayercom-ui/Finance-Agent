@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+﻿import { prisma } from "@/lib/prisma";
 
 type CompletenessTone = "good" | "warning" | "danger" | "neutral";
 
@@ -197,6 +197,135 @@ function normalizeText(value: unknown) {
     .replace(/[^A-Z0-9]+/g, "_");
 }
 
+function collectSearchText(value: unknown, output: string[] = [], depth = 0) {
+  if (depth > 8) {
+    return output;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    output.push(String(value));
+    return output;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectSearchText(item, output, depth + 1);
+    }
+
+    return output;
+  }
+
+  if (!isRecord(value)) {
+    return output;
+  }
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    output.push(key);
+    collectSearchText(nestedValue, output, depth + 1);
+  }
+
+  return output;
+}
+
+function getSearchText(value: unknown) {
+  return collectSearchText(value).join(" ").toLowerCase();
+}
+
+function hasTotalsDeep(value: unknown) {
+  const searchText = getSearchText(value);
+
+  return (
+    hasNonEmptyKeyDeep(value, [
+      "revenue",
+      "totalRevenue",
+      "income",
+      "sales",
+      "expenses",
+      "totalExpenses",
+      "profit",
+      "loss",
+      "netProfit",
+      "netLoss",
+      "total",
+      "amount",
+      "assets",
+      "liabilities",
+      "equity",
+      "cash",
+    ]) ||
+    /\b(revenue|income|sales|expenses|profit|loss|assets|liabilities|equity|cash|total)\b/i.test(
+      searchText,
+    )
+  );
+}
+
+function hasDateDeep(value: unknown) {
+  const searchText = getSearchText(value);
+
+  return (
+    hasNonEmptyKeyDeep(value, [
+      "date",
+      "documentDate",
+      "statementDate",
+      "invoiceDate",
+      "uploadedAt",
+      "period",
+      "periodStart",
+      "periodEnd",
+      "financialYear",
+      "fiscalYear",
+      "yearEnded",
+      "fromDate",
+      "toDate",
+      "startDate",
+      "endDate",
+    ]) ||
+    /\b(20\d{2}|19\d{2})\b/.test(searchText) ||
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i.test(
+      searchText,
+    ) ||
+    /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/.test(searchText)
+  );
+}
+
+function hasCurrencyDeep(value: unknown) {
+  const searchText = getSearchText(value);
+
+  return (
+    hasNonEmptyKeyDeep(value, [
+      "currency",
+      "currencyCode",
+      "reportingCurrency",
+      "functionalCurrency",
+      "presentationCurrency",
+    ]) ||
+    /\b(inr|usd|eur|gbp|aed|cad|aud|sgd|jpy)\b/i.test(searchText) ||
+    /₹|\$|€|£|\brs\.?\b|\brupees?\b/i.test(searchText)
+  );
+}
+
+function hasLineItemsDeep(value: unknown) {
+  const searchText = getSearchText(value);
+
+  return (
+    hasNonEmptyKeyDeep(value, [
+      "lineItems",
+      "line_items",
+      "transactions",
+      "items",
+      "entries",
+      "rows",
+      "table",
+      "tables",
+      "statementLines",
+      "financialLineItems",
+    ]) ||
+    /\b(particulars|description|amount|debit|credit|balance|expense|revenue)\b/i.test(
+      searchText,
+    )
+  );
+}
+
 function hasKeyDeep(value: unknown, signals: string[], depth = 0): boolean {
   if (depth > 6) {
     return false;
@@ -267,7 +396,7 @@ function hasNonEmptyKeyDeep(value: unknown, signals: string[], depth = 0): boole
       if (
         typeof nestedValue === "string" &&
         nestedValue.trim().length > 0 &&
-        nestedValue.trim() !== "—"
+        nestedValue.trim() !== "â€”"
       ) {
         return true;
       }
@@ -296,42 +425,19 @@ function getDocumentQuality(extractedData: unknown): "GOOD" | "PARTIAL" | "WEAK"
 
   let score = 0;
 
-  if (
-    hasNonEmptyKeyDeep(extractedData, [
-      "revenue",
-      "expenses",
-      "profit",
-      "loss",
-      "total",
-      "amount",
-    ])
-  ) {
+  if (hasTotalsDeep(extractedData)) {
     score += 35;
   }
 
-  if (
-    hasNonEmptyKeyDeep(extractedData, [
-      "date",
-      "documentDate",
-      "period",
-      "financialYear",
-    ])
-  ) {
+  if (hasDateDeep(extractedData)) {
     score += 20;
   }
 
-  if (hasNonEmptyKeyDeep(extractedData, ["currency"])) {
+  if (hasCurrencyDeep(extractedData)) {
     score += 15;
   }
 
-  if (
-    hasNonEmptyKeyDeep(extractedData, [
-      "lineItems",
-      "transactions",
-      "items",
-      "entries",
-    ])
-  ) {
+  if (hasLineItemsDeep(extractedData)) {
     score += 30;
   }
 
@@ -345,7 +451,6 @@ function getDocumentQuality(extractedData: unknown): "GOOD" | "PARTIAL" | "WEAK"
 
   return "WEAK";
 }
-
 function requirementMatchesDocument(
   requirement: RequirementDefinition,
   document: {
@@ -433,7 +538,8 @@ function makeSummary({
 export async function getDocumentCompletenessReport(
   userId: string,
 ): Promise<DocumentCompletenessReport> {
-  const documents = await prisma.document.findMany({
+  const [documents, business] = await Promise.all([
+    prisma.document.findMany({
     where: {
       userId,
     },
@@ -448,8 +554,20 @@ export async function getDocumentCompletenessReport(
     },
     orderBy: {
       uploadedAt: "desc",
-    },
-  });
+    },    }),
+    prisma.business.findUnique({
+      where: {
+        userId,
+      },
+      select: {
+        currency: true,
+      },
+    }),
+  ]);
+
+  const hasBusinessCurrency =
+    typeof business?.currency === "string" &&
+    business.currency.trim().length > 0;
 
   const totalDocuments = documents.length;
   const processedDocuments = documents.filter(
@@ -575,36 +693,19 @@ export async function getDocumentCompletenessReport(
         : "WEAK";
 
   const documentsWithTotals = documents.filter((document) =>
-    hasNonEmptyKeyDeep(document.extractedData, [
-      "revenue",
-      "expenses",
-      "profit",
-      "loss",
-      "total",
-      "amount",
-    ]),
+    hasTotalsDeep(document.extractedData),
   ).length;
 
   const documentsWithDates = documents.filter((document) =>
-    hasNonEmptyKeyDeep(document.extractedData, [
-      "date",
-      "documentDate",
-      "period",
-      "financialYear",
-    ]),
+    hasDateDeep(document.extractedData),
   ).length;
 
-  const documentsWithCurrency = documents.filter((document) =>
-    hasNonEmptyKeyDeep(document.extractedData, ["currency"]),
+  const documentsWithCurrency = documents.filter(
+    (document) => hasCurrencyDeep(document.extractedData) || hasBusinessCurrency,
   ).length;
 
   const documentsWithLineItems = documents.filter((document) =>
-    hasNonEmptyKeyDeep(document.extractedData, [
-      "lineItems",
-      "transactions",
-      "items",
-      "entries",
-    ]),
+    hasLineItemsDeep(document.extractedData),
   ).length;
 
   const readableDataScore =
@@ -717,3 +818,5 @@ export async function getDocumentCompletenessReport(
     })),
   };
 }
+
+
