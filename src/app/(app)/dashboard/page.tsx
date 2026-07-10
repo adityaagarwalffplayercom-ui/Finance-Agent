@@ -818,7 +818,7 @@ function ActionRow({
           flex: "0 0 auto",
         }}
       >
-        â†’
+        -&gt;
       </span>
     </Link>
   );
@@ -1599,7 +1599,7 @@ function AgentCard({ agent }: { agent: AgentCardData }) {
           color: toneStyle.color,
         }}
       >
-        Ask agent â†’
+        Ask agent -&gt;
       </Link>
     </article>
   );

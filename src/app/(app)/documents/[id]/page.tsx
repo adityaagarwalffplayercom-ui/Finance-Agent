@@ -158,7 +158,7 @@ function formatAmount(amount: number | null, currency?: string | null) {
   }
 
   const currencySymbols: Record<string, string> = {
-    INR: "₹",
+    INR: "Rs. ",
     USD: "$",
     EUR: "€",
     GBP: "£",
@@ -457,7 +457,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
               textDecoration: "none",
             }}
           >
-            ← Back to documents
+            &lt;- Back to documents
           </Link>
 
           <p

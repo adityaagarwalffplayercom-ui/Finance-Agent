@@ -410,7 +410,7 @@ export default async function DocumentCompletenessPage() {
           </div>
 
           <Link href="/documents" className="btn-ghost">
-            Upload documents →
+            Upload documents -&gt;
           </Link>
         </div>
       </header>

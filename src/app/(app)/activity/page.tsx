@@ -1259,7 +1259,7 @@ export default async function ActivityPage() {
                           marginLeft: "auto",
                         }}
                       >
-                        Details →
+                        Details -&gt;
                       </Link>
                     </div>
 

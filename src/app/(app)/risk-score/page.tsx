@@ -739,7 +739,7 @@ export default function RiskScorePage() {
                   {riskScore.recommendedActions.length > 0 ? (
                     riskScore.recommendedActions.map((action) => (
                       <div key={action} className="risk-list-item">
-                        <span>→</span>
+                        <span>-&gt;</span>
                         {action}
                       </div>
                     ))

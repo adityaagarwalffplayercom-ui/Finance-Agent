@@ -615,7 +615,7 @@ export default async function DashboardLayout({
                 fontWeight: 900,
               }}
             >
-              Upload documents →
+              Upload documents -&gt;
             </span>
           </Link>
 
@@ -660,7 +660,7 @@ export default async function DashboardLayout({
                 fontWeight: 900,
               }}
             >
-              Open AI chat →
+              Open AI chat -&gt;
             </span>
           </Link>
         </div>

@@ -54,7 +54,7 @@ function compactNumber(value: number) {
 
 function currencySymbol(currency: string) {
   const clean = currency.trim().toUpperCase();
-  const rupee = String.fromCharCode(8377);
+  const rupee = "Rs. ";
 
   if (clean === "INR" || currency.trim() === rupee) return rupee;
   if (clean === "USD" || currency.trim() === "$") return "$";
@@ -311,7 +311,7 @@ export default async function CfoDecisionsPage() {
           </div>
 
           <Link href="/chat?agent=cfo" className="btn-ghost">
-            Ask CFO Agent →
+            Ask CFO Agent -&gt;
           </Link>
         </div>
       </header>
