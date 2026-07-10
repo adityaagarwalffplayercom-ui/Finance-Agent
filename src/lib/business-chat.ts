@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+﻿import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
 import {
   buildAgentLaunchSafetyBlock,
@@ -571,6 +571,52 @@ function isRetryableGeminiError(error: unknown) {
   );
 }
 
+function buildOfflineAgentFallbackAnswer(prompt: string) {
+  const lower = prompt.toLowerCase();
+
+  let agentName = "AI Finance Team";
+  let focus = "finance health, risks, and next actions";
+
+  if (lower.includes("risk agent")) {
+    agentName = "Risk & Compliance Agent";
+    focus = "financial red flags, missing data, cash pressure, tax uncertainty, and unsafe decisions";
+  } else if (lower.includes("cfo agent")) {
+    agentName = "CFO Agent";
+    focus = "profitability, break-even, hiring affordability, and executive decisions";
+  } else if (lower.includes("cash flow agent")) {
+    agentName = "Cash Flow Agent";
+    focus = "runway, burn rate, inflows, outflows, and cash survival";
+  } else if (lower.includes("tax agent")) {
+    agentName = "Tax Agent";
+    focus = "tax readiness, missing tax records, GST/tax risk, and CA verification";
+  } else if (lower.includes("accountant agent")) {
+    agentName = "Accountant Agent";
+    focus = "document completeness, approved files, rejected files, and bookkeeping reliability";
+  } else if (lower.includes("financial analyst agent")) {
+    agentName = "Financial Analyst Agent";
+    focus = "line items, anomalies, margins, trends, and unusual expenses";
+  } else if (lower.includes("business consultant agent")) {
+    agentName = "Business Consultant Agent";
+    focus = "growth, pricing, cost control, and operational improvement";
+  }
+
+  return [
+    `${agentName} is running in offline fallback mode because Gemini is temporarily unavailable.`,
+    "",
+    `I can still help with ${focus} using the data already processed in Aureli.`,
+    "",
+    "What I can safely say right now:",
+    "- Check approved documents first before trusting any financial decision.",
+    "- If revenue is lower than expenses, priority should be reducing burn and improving collections.",
+    "- If cash data or bank statements are missing, runway confidence is weak.",
+    "- If tax documents or verified tax sources are incomplete, final filing should be verified by a CA/tax professional.",
+    "- If anomaly or line-item data is incomplete, upload clearer bank statements, invoices, and financial statements.",
+    "",
+    "Best next action:",
+    "Open the related dashboard page for this agent and verify the latest numbers, then ask a smaller question like “What are my top 3 risks?” or “Which document is missing?”",
+  ].join("\n");
+}
+
 async function generateAiAnswer(prompt: string) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -618,7 +664,7 @@ async function generateAiAnswer(prompt: string) {
           "",
           "Your Aureli data is safe. This is an AI model availability issue, not a database or app issue.",
           "",
-          "Please try again in 1-2 minutes. If it keeps happening, ask a smaller question like: “Summarize my tax coverage only.”",
+          "Please try again in 1-2 minutes. If it keeps happening, ask a smaller question like: â€œSummarize my tax coverage only.â€",
         ].join("\n");
       }
 
@@ -626,7 +672,7 @@ async function generateAiAnswer(prompt: string) {
     }
   }
 
-  return "Gemini is temporarily unavailable. Please try again shortly.";
+  return buildOfflineAgentFallbackAnswer(prompt);
 }
 
 export async function getBusinessChatHistory(
