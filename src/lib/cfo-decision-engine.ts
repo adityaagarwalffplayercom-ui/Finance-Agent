@@ -128,11 +128,12 @@ function compactNumber(value: number) {
 
 function currencySymbol(currency: string) {
   const clean = currency.trim().toUpperCase();
+  const rupee = String.fromCharCode(8377);
 
-  if (clean === "INR" || clean === "₹") return "₹";
-  if (clean === "USD" || clean === "$") return "$";
-  if (clean === "GBP" || clean === "£") return "£";
-  if (clean === "EUR" || clean === "€") return "€";
+  if (clean === "INR" || currency.trim() === rupee) return rupee;
+  if (clean === "USD" || currency.trim() === "$") return "$";
+  if (clean === "GBP" || currency.trim() === "£") return "£";
+  if (clean === "EUR" || currency.trim() === "€") return "€";
 
   return currency || "";
 }
