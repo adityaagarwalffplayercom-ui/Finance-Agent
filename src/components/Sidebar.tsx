@@ -32,6 +32,11 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
+    label: "Document Check",
+    href: "/document-completeness",
+    enabled: true,
+  },
+  {
     label: "AI Team",
     href: "/ai-team",
     enabled: true,
@@ -521,4 +526,5 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
     </>
   );
 }
+
 
