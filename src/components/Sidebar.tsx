@@ -52,6 +52,11 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
+    label: "Risk Score",
+    href: "/risk-score",
+    enabled: true,
+  },
+  {
     label: "Activity",
     href: "/activity",
     enabled: true,
@@ -87,7 +92,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
   async function handleSignOut() {
     await signOut();
-    router.push("/login");
+    router.push("/sign-in");
     router.refresh();
   }
 
@@ -154,9 +159,6 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
         .sidebar-nav {
           flex: 1 !important;
-          display: flex !important;
-          flex-direction: column !important;
-          gap: 8px !important;
           overflow-y: auto !important;
           overflow-x: hidden !important;
           padding-right: 2px !important;
@@ -172,12 +174,6 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           border-radius: 999px;
         }
 
-        .sidebar-link {
-          width: 100% !important;
-          min-width: 0 !important;
-          flex: 0 0 auto !important;
-        }
-
         .sidebar-footer {
           margin-top: auto !important;
           flex-shrink: 0 !important;
@@ -187,6 +183,56 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           display: none !important;
         }
 
+        /* Desktop sidebar slider / scrollbar */
+        @media (min-width: 981px) {
+          .sidebar {
+            padding-bottom: 14px !important;
+          }
+
+          .sidebar-nav {
+            flex: 1 1 auto !important;
+            max-height: calc(100dvh - 210px) !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            padding: 4px 7px 8px 0 !important;
+            margin-right: -4px !important;
+            scroll-behavior: smooth !important;
+            scrollbar-width: thin !important;
+            scrollbar-color: rgba(245, 158, 11, 0.55) rgba(255, 255, 255, 0.06) !important;
+          }
+
+          .sidebar-nav::-webkit-scrollbar {
+            width: 7px !important;
+          }
+
+          .sidebar-nav::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.06) !important;
+            border-radius: 999px !important;
+          }
+
+          .sidebar-nav::-webkit-scrollbar-thumb {
+            background: linear-gradient(
+              180deg,
+              rgba(245, 158, 11, 0.9),
+              rgba(251, 191, 36, 0.58)
+            ) !important;
+            border-radius: 999px !important;
+          }
+
+          .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: rgba(245, 158, 11, 0.95) !important;
+          }
+
+          .sidebar-link {
+            min-height: 38px !important;
+            padding-top: 9px !important;
+            padding-bottom: 9px !important;
+          }
+
+          .sidebar-footer {
+            padding-top: 12px !important;
+          }
+        }
         @media (max-width: 980px) {
           :root {
             --aureli-sidebar-width: 0px;
@@ -274,7 +320,6 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           }
 
           .sidebar-nav {
-            flex: none !important;
             display: flex !important;
             flex-direction: row !important;
             gap: 8px !important;

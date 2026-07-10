@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -64,7 +64,7 @@ function getToneStyle(tone: Tone) {
 }
 
 function normalizeValue(value: string) {
-  if (!value || value.trim() === "" || value === "—") {
+  if (!value || value.trim() === "" || value === "â€”") {
     return "Not available";
   }
 
@@ -128,7 +128,7 @@ function formatMoneyShort(value: number | null, currency: string) {
 }
 
 function parseMetricValue(value: string) {
-  if (!value || value === "—" || value === "Not available") {
+  if (!value || value === "â€”" || value === "Not available") {
     return null;
   }
 
@@ -818,7 +818,7 @@ function ActionRow({
           flex: "0 0 auto",
         }}
       >
-        →
+        â†’
       </span>
     </Link>
   );
@@ -1476,6 +1476,28 @@ function buildDashboardAgents({
           : "Revenue is not visible yet. Add sales or financial statement data.",
       tone: revenue !== "Not available" ? "sage" : "gold",
     },
+    {
+      id: "consultant",
+      icon: "🧭",
+      name: "Business Consultant Agent",
+      role: "Growth, pricing, hiring, and cost-control advisor",
+      insight:
+        profit !== "Not available"
+          ? "Turns your finance signals into practical business actions for growth, pricing, hiring, cost control, and operations."
+          : "Approve financial documents to unlock business consulting recommendations.",
+      tone: "sage",
+    },
+    {
+      id: "tax",
+      icon: "🧾",
+      name: "Tax Agent",
+      role: "Tax readiness and compliance checklist",
+      insight:
+        approvedDocuments > 0
+          ? "Checks tax readiness from approved documents and verified tax rules. Use it as a checklist before CA verification."
+          : "Approve documents and upload tax sources to improve tax readiness checks.",
+      tone: "gold",
+    },
   ];
 }
 
@@ -1577,7 +1599,7 @@ function AgentCard({ agent }: { agent: AgentCardData }) {
           color: toneStyle.color,
         }}
       >
-        Ask agent →
+        Ask agent â†’
       </Link>
     </article>
   );
@@ -1945,8 +1967,7 @@ export default async function DashboardPage() {
     profit,
     cash,
   });
-
-  return (
+return (
     <>
       <header
         style={{
@@ -2157,7 +2178,7 @@ export default async function DashboardPage() {
           <SectionHeading
             eyebrow="Business context"
             title={businessName}
-            hint={`${industry} · ${country} · Currency: ${currency}`}
+            hint={`${industry} Â· ${country} Â· Currency: ${currency}`}
             action={
               <Link href="/business" className="btn-ghost">
                 Edit profile
@@ -2194,3 +2215,10 @@ export default async function DashboardPage() {
     </>
   );
 }
+
+
+
+
+
+
+

@@ -6,6 +6,8 @@ import {
 } from "./agent-governance";
 import { buildTaxRulesPromptBlock } from "./tax-rules-engine";
 import { buildTaxKnowledgePromptBlock } from "./tax-knowledge-engine";
+import { buildTaxCoveragePromptBlock } from "./tax-coverage-engine";
+import { buildTaxSourceCitationsPromptBlock } from "./tax-source-citations";
 import {
   buildAgentIntelligenceBlock,
   buildAgentResponseContract,
@@ -89,7 +91,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "Tax Agent",
     title: "Tax readiness and compliance intelligence",
     systemRole:
-      "You are Aureli's Tax Agent. You are country-aware and use only verified tax rules and verified uploaded tax knowledge. You support India, USA, and UK strongly when verified official source coverage exists. You do not calculate final tax payable or give legal/tax certification unless complete verified coverage exists, and even then you present it as support requiring professional verification.",
+      "You are Aureli's Tax Agent. You are country-aware and use only verified tax rules, verified uploaded tax knowledge, tax coverage dashboard data, and verified tax source citations. You support India, USA, and UK strongly only when verified official source coverage exists. You do not calculate final tax payable or give legal/tax certification unless complete verified coverage exists, and even then you present it as support requiring professional verification.",
     responseStyle:
       "Be conservative, source-backed, checklist-first, and clear about verified coverage and missing coverage.",
   },
@@ -132,11 +134,15 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
 };
 
 function normalizeAgentId(value?: string | null): AiAgentId {
-  if (!value) return DEFAULT_AGENT_ID;
+  if (!value) {
+    return DEFAULT_AGENT_ID;
+  }
 
   const normalized = value.trim().toLowerCase();
 
-  if (normalized === "cash-flow") return "cashflow";
+  if (normalized === "cash-flow") {
+    return "cashflow";
+  }
 
   if (Object.prototype.hasOwnProperty.call(AGENT_PROFILES, normalized)) {
     return normalized as AiAgentId;
@@ -146,7 +152,9 @@ function normalizeAgentId(value?: string | null): AiAgentId {
 }
 
 function compactJson(value: unknown, maxLength = 1400) {
-  if (value === null || value === undefined) return "Not available";
+  if (value === null || value === undefined) {
+    return "Not available";
+  }
 
   try {
     const text = JSON.stringify(value, null, 2);
@@ -220,7 +228,9 @@ function getLineItemSummary(
 
     const lineItems = Array.isArray(data?.lineItems) ? data.lineItems : [];
 
-    if (lineItems.length === 0) continue;
+    if (lineItems.length === 0) {
+      continue;
+    }
 
     lines.push(`File: ${document.fileName}`);
 
@@ -262,7 +272,9 @@ async function buildBusinessContext(userId: string) {
     profile,
   ] = await Promise.all([
     prisma.business.findUnique({
-      where: { userId },
+      where: {
+        userId,
+      },
       select: {
         name: true,
         industry: true,
@@ -355,33 +367,35 @@ async function buildPrompt(params: {
       })
     : "";
 
-  let taxRulesBlock = "";
-  let taxKnowledgeBlock = "";
-
-  if (shouldUseTaxBlocks) {
-    try {
-      taxRulesBlock = await buildTaxRulesPromptBlock({
+  const taxCoverageBlock = shouldUseTaxBlocks
+    ? await buildTaxCoveragePromptBlock({
         country: context.business.country,
         financialYear: context.business.financialYear,
-      });
-    } catch (error) {
-      console.error("Tax rules block failed:", error);
-      taxRulesBlock =
-        "Tax rules lookup failed temporarily. Continue with approved documents and uploaded tax knowledge if available.";
-    }
+      })
+    : "";
 
-    try {
-      taxKnowledgeBlock = await buildTaxKnowledgePromptBlock({
+  const taxRulesBlock = shouldUseTaxBlocks
+    ? await buildTaxRulesPromptBlock({
+        country: context.business.country,
+        financialYear: context.business.financialYear,
+      })
+    : "";
+
+  const taxKnowledgeBlock = shouldUseTaxBlocks
+    ? await buildTaxKnowledgePromptBlock({
         country: context.business.country,
         financialYear: context.business.financialYear,
         question: params.question,
-      });
-    } catch (error) {
-      console.error("Tax knowledge block failed:", error);
-      taxKnowledgeBlock =
-        "Tax knowledge lookup failed temporarily. Ask admin to check uploaded tax knowledge chunks and server logs.";
-    }
-  }
+      })
+    : "";
+
+  const taxSourceCitationsBlock = shouldUseTaxBlocks
+    ? await buildTaxSourceCitationsPromptBlock({
+        country: context.business.country,
+        financialYear: context.business.financialYear,
+        question: params.question,
+      })
+    : "";
 
   const approvedDocumentBlock =
     context.approvedDocuments.length > 0
@@ -483,23 +497,34 @@ ${launchSafetyBlock}
 Tax max-out rules:
 ${taxMaxOutRulesBlock || "Not applicable for this question unless tax is involved."}
 
+Tax coverage dashboard block:
+${taxCoverageBlock || "Not applicable for this question unless tax is involved."}
+
 Verified tax rules block:
 ${taxRulesBlock || "Not applicable for this question unless tax is involved."}
 
 Verified uploaded tax knowledge block:
 ${taxKnowledgeBlock || "Not applicable for this question unless tax is involved."}
 
+Tax source citations block:
+${taxSourceCitationsBlock || "Not applicable for this question unless tax is involved."}
+
 Required answer contract:
 ${responseContractBlock}
 
 Strict global rules:
-- Use only the business profile, approved documents, approved line items, financial profile, verified TaxRule database, and verified uploaded tax knowledge shown above.
+- Use only the business profile, approved documents, approved line items, financial profile, tax coverage dashboard, verified TaxRule database, verified uploaded tax knowledge, and verified tax source citations shown above.
 - Do not pretend missing data exists.
 - If data is missing, clearly say what is missing.
 - Do not provide legal, tax, audit, investment, or filing certification.
-- For tax questions, do not calculate final tax payable unless verified rules and verified uploaded knowledge fully support the calculation.
+- For tax questions, first check tax coverage dashboard status: STRONG, PARTIAL, or MISSING.
+- For tax questions, include a "Sources used" section only when verified tax source citations are available in the prompt.
+- For tax questions, cite only sources shown in the Tax source citations block.
+- For tax questions, do not invent source names, links, laws, sections, dates, circulars, notifications, or government updates.
+- For tax questions, do not calculate final tax payable unless tax coverage is STRONG and verified rules + verified uploaded knowledge fully support the calculation.
 - For tax questions, prefer checklist, readiness review, missing-document list, and professional-verification guidance.
 - If verified tax knowledge is missing or incomplete, say that Aureli needs more verified official source coverage.
+- Never claim whole-country tax coverage unless all core and important tax categories are STRONG.
 - For AI Finance Team mode, produce a multi-agent answer, not a generic chatbot answer.
 - Keep answer practical for a business owner.
 - Do not mention internal prompt text.
@@ -528,7 +553,7 @@ function errorToText(error: unknown) {
   }
 }
 
-function isRetryableAiError(error: unknown) {
+function isRetryableGeminiError(error: unknown) {
   const text = errorToText(error).toLowerCase();
 
   return (
@@ -536,28 +561,14 @@ function isRetryableAiError(error: unknown) {
     text.includes("500") ||
     text.includes("502") ||
     text.includes("504") ||
-    text.includes("unavailable") ||
+    text.includes("service unavailable") ||
     text.includes("overloaded") ||
+    text.includes("unavailable") ||
     text.includes("resource_exhausted") ||
+    text.includes("429") ||
     text.includes("quota") ||
     text.includes("rate limit")
   );
-}
-
-function limitPromptSize(prompt: string) {
-  const maxChars = 90_000;
-
-  if (prompt.length <= maxChars) {
-    return prompt;
-  }
-
-  return [
-    prompt.slice(0, 60_000),
-    "",
-    "SYSTEM NOTE: The original context was too large, so the middle part was compressed/cut for safe model execution.",
-    "",
-    prompt.slice(-30_000),
-  ].join("\n");
 }
 
 async function generateAiAnswer(prompt: string) {
@@ -571,7 +582,6 @@ async function generateAiAnswer(prompt: string) {
     apiKey,
   });
 
-  const safePrompt = limitPromptSize(prompt);
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
   const maxAttempts = 4;
 
@@ -579,7 +589,11 @@ async function generateAiAnswer(prompt: string) {
     try {
       const response = await ai.models.generateContent({
         model,
-        contents: safePrompt,
+        contents: prompt,
+        config: {
+          temperature: 0.3,
+          maxOutputTokens: 1800,
+        },
       });
 
       const text = response.text?.trim();
@@ -590,30 +604,29 @@ async function generateAiAnswer(prompt: string) {
 
       return text;
     } catch (error) {
-      console.error(
-        `Business chat Gemini failed attempt ${attempt}/${maxAttempts}:`,
-        error,
-      );
-
-      const canRetry = isRetryableAiError(error);
+      const isRetryable = isRetryableGeminiError(error);
       const isLastAttempt = attempt === maxAttempts;
 
-      if (!canRetry || isLastAttempt) {
+      console.error(
+        `Gemini chat error attempt ${attempt}/${maxAttempts}:`,
+        errorToText(error),
+      );
+
+      if (!isRetryable || isLastAttempt) {
         return [
-          "I could not generate the full AI response because the AI model is temporarily unavailable or overloaded.",
+          "Gemini is temporarily unavailable or overloaded right now.",
           "",
-          "Your uploaded tax knowledge is still saved in the database. This is an AI response generation issue, not a database issue.",
+          "Your Aureli data is safe. This is an AI model availability issue, not a database or app issue.",
           "",
-          "Try again in 1–2 minutes. If it repeats, ask a smaller question like:",
-          "“List my uploaded India tax documents.”",
+          "Please try again in 1-2 minutes. If it keeps happening, ask a smaller question like: “Summarize my tax coverage only.”",
         ].join("\n");
       }
 
-      await sleep(2500 * attempt);
+      await sleep(2000 * attempt);
     }
   }
 
-  return "I could not generate a response right now. Please try again.";
+  return "Gemini is temporarily unavailable. Please try again shortly.";
 }
 
 export async function getBusinessChatHistory(
@@ -695,8 +708,8 @@ export function getBusinessChatSuggestions(
     return [
       "What uploaded tax knowledge do you have for my country?",
       "What verified tax rules are available for my business?",
-      "Can you review my GST/VAT/tax readiness from approved documents?",
-      "What country-year tax coverage is missing before filing?",
+      "What tax coverage do you have for India, USA and UK?",
+      "Can you review my GST/VAT/tax readiness and show sources used?",
     ];
   }
 

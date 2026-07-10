@@ -197,7 +197,7 @@ function getLineItems(data: ExtractedDocumentData | null): LineItem[] {
             : null,
       };
     })
-    .slice(0, 80);
+    .slice(0);
 }
 
 function Pill({ type, value }: { type: "status" | "review"; value: string }) {
@@ -775,8 +775,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
           <div>
             <p className="section-title">Extracted line items</p>
             <p className="section-hint">
-              The first 80 line items detected by AI. Use this to verify whether
-              the extraction looks reasonable.
+              All line items detected by AI. Use this to verify whether the extraction looks reasonable.
             </p>
           </div>
 

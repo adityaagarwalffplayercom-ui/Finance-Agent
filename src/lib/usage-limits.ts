@@ -1,6 +1,6 @@
 export const USAGE_LIMITS = {
-  MAX_UPLOAD_FILE_SIZE_BYTES: 15 * 1024 * 1024,
-  MAX_AI_PROCESS_FILE_SIZE_BYTES: 15 * 1024 * 1024,
+  MAX_UPLOAD_FILE_SIZE_BYTES: 50 * 1024 * 1024,
+  MAX_AI_PROCESS_FILE_SIZE_BYTES: 50 * 1024 * 1024,
 
   MAX_UPLOADS_PER_DAY: 25,
 
@@ -41,20 +41,31 @@ function formatDuration(ms: number) {
   }
 
   const hours = Math.ceil(minutes / 60);
+
   return `${hours} hour${hours === 1 ? "" : "s"}`;
 }
 
 export function formatUsageSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 MB";
   }
 
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const mb = bytes / (1024 * 1024);
+
+  if (mb >= 1) {
+    return `${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB`;
+  }
+
+  const kb = bytes / 1024;
+
+  if (kb >= 1) {
+    return `${Number.isInteger(kb) ? kb : kb.toFixed(1)} KB`;
+  }
+
+  return `${bytes} B`;
 }
 
-export function checkAndConsumeRateLimit({
+export function checkRateLimit({
   key,
   limit,
   windowMs,
@@ -107,6 +118,7 @@ export function tryAcquireProcessingLock(userId: string) {
   }
 
   activeProcessingUsers.add(userId);
+
   return true;
 }
 

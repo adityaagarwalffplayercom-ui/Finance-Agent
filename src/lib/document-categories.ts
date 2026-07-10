@@ -1,6 +1,6 @@
 import type { DocumentCategory } from "@prisma/client";
 
-export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
 const ALLOWED_MIME_TYPE_VALUES = [
   "application/pdf",

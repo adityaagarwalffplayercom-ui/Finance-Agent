@@ -1,10 +1,19 @@
 import { GoogleGenAI } from "@google/genai";
+import { ensureExtractedLineItems } from "./extracted-line-items";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite";
+const PRIMARY_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite";
+
+const FALLBACK_MODELS = [
+  PRIMARY_MODEL,
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash-lite",
+  
+  
+].filter((model, index, models) => model && models.indexOf(model) === index);
 
 const EXTRACTION_SCHEMA = {
   type: "object",
@@ -201,7 +210,7 @@ const EXTRACTION_SCHEMA = {
     lineItems: {
       type: "array",
       description:
-        "Important extracted rows or financial statement line items. Must not be empty if the document contains any table rows, totals, statement rows, invoice items, bill items, payroll rows, bank transactions, assets, liabilities, revenue, expenses, profit, loss, or cash values. All amount values must be actual full currency values after unit conversion.",
+        "Every extracted row or financial statement line item that has a label/description and amount. Do not cap at 80. Return all readable rows available in the document content. All amount values must be actual full currency values after unit conversion.",
       items: {
         type: "object",
         properties: {
@@ -217,7 +226,7 @@ const EXTRACTION_SCHEMA = {
             type: "string",
             nullable: true,
             description:
-              "Best category for this line item, for example Revenue, Expense, Asset, Liability, Equity, Cash Flow, Tax, Finance Cost, Payroll, Invoice, Bank Transaction.",
+              "Best category for this line item, for example Revenue, Expense, Asset, Liability, Equity, Cash Flow, Tax, Finance Cost.",
           },
           date: {
             type: "string",
@@ -255,7 +264,7 @@ const EXTRACTION_SCHEMA = {
       },
     },
   },
-  required: ["summary", "lineItems"],
+  required: ["summary"],
 };
 
 export type ExtractedDocumentData = {
@@ -326,47 +335,29 @@ Use "credit" for money in and "debit" for money out.
 Set totalAmount to the ending or closing balance.
 Set totalAmountLabel to "Ending balance".
 If opening balance and closing balance are available, extract both.
-
-IMPORTANT:
-Also copy the first 80 important transactions into lineItems.
-For each transaction line item:
-- description = transaction description
-- amount = positive for credit, negative for debit
-- category = Bank Transaction, Cash Inflow, or Cash Outflow
 `,
 
   SALES_INVOICE: `
 This is a sales invoice, meaning money owed TO the business.
-Extract invoice date, customer name, invoice total, taxes, and line items.
+Extract invoice date, customer name, invoice total, taxes, and every readable line item.
 Set totalAmount to the invoice total.
 Set totalAmountLabel to "Invoice total".
 Set revenue to the invoice total or subtotal if appropriate.
-
-IMPORTANT:
-lineItems must include invoice product/service rows if available.
-If product/service rows are not visible, create at least one line item using invoice total.
 `,
 
   PURCHASE_INVOICE: `
 This is a purchase invoice or vendor bill, meaning money the business owes.
-Extract vendor name, bill date, due amount, taxes, and line items.
+Extract vendor name, bill date, due amount, taxes, and every readable line item.
 Set totalAmount to the amount due.
 Set totalAmountLabel to "Amount due".
 Set expenses to the amount due or subtotal if appropriate.
-
-IMPORTANT:
-lineItems must include vendor bill rows if available.
-If bill rows are not visible, create at least one line item using amount due.
 `,
 
   PAYROLL: `
 This is a payroll or salary document.
 Set totalAmount to total net pay or total payroll cost if available.
 Set expenses to the total payroll cost if available.
-Extract employee-level line items if present.
-
-IMPORTANT:
-lineItems must include employee salary rows, department rows, payroll components, or at least one total payroll line item.
+Extract every readable employee-level line item if present.
 `,
 
   UTILITY_BILL: `
@@ -374,26 +365,7 @@ This is a utility bill.
 Set totalAmount to the amount due.
 Set totalAmountLabel to "Amount due".
 Set expenses to the amount due or bill total.
-
-IMPORTANT:
-lineItems must include bill components if available.
-If components are not visible, create one line item for the utility bill amount due.
-`,
-
-  TAX_DOCUMENT: `
-This is a tax document.
-Extract tax period, tax type, tax amount, taxable value, penalties, interest, deductions, credits, or filing amounts where available.
-
-IMPORTANT:
-lineItems must include tax rows, tax components, deductions, credits, penalties, interest, or at least one tax total line item.
-`,
-
-  GST_RETURN: `
-This is a GST return or GST-related document.
-Extract GST period, taxable value, output tax, input tax credit, tax payable, interest, penalty, and filing totals where available.
-
-IMPORTANT:
-lineItems must include GST components such as taxable value, output tax, input tax credit, tax payable, interest, penalty, or return totals.
+Extract every readable bill component as a line item.
 `,
 
   FINANCIAL_STATEMENT: `
@@ -428,38 +400,25 @@ For balance sheets:
 - equity = shareholders' funds / net worth / equity
 - cash = cash and cash equivalents / bank balance where available
 
-VERY IMPORTANT LINE ITEM RULE:
-You must populate lineItems with important visible rows from the financial statement.
-Extract up to 80 rows from:
-- Statement of profit and loss
-- Balance sheet
-- Cash flow statement
-- Notes summary tables
-- Revenue rows
-- Expense rows
-- Asset rows
-- Liability rows
-- Equity rows
-- Tax rows
-- Finance cost rows
-- Net profit/loss rows
-- Cash and bank rows
+Populate lineItems with every readable row from financial statement tables, including:
+- revenue rows
+- income rows
+- expense rows
+- asset rows
+- liability rows
+- equity rows
+- cash flow rows
+- tax rows
+- finance cost rows
+- subtotal rows
+- total rows
 
-If detailed rows are not visible, create lineItems from available totals:
-- Revenue
-- Expenses
-- Net income / net loss
-- Assets
-- Liabilities
-- Equity
-- Cash
+Do not limit lineItems to the first 80 rows.
 `,
 
   OTHER: `
 Extract whatever financial information is present as best you can using the schema.
-
-IMPORTANT:
-If any amount is visible, lineItems must not be empty. Create lineItems from visible rows or totals.
+Extract every readable financial line item that has a label and amount.
 `,
 };
 
@@ -477,27 +436,6 @@ ${category}
 
 Category-specific guidance:
 ${guidance}
-
-CRITICAL LINE ITEM RULE:
-lineItems must be populated whenever the document has any financial amount.
-Do not return an empty lineItems array if the document contains:
-- invoice rows
-- bill rows
-- payroll rows
-- transactions
-- revenue rows
-- expense rows
-- asset rows
-- liability rows
-- equity rows
-- tax rows
-- cash flow rows
-- totals
-
-For financial statements, extract up to 80 meaningful rows.
-For bank statements, copy important transactions into lineItems too.
-If only totals are visible, create lineItems from totals.
-If no financial amounts are visible at all, return lineItems as [].
 
 CRITICAL REAL-LIFE ACCOUNTING UNIT RULE:
 Many financial statements do NOT show amounts in actual rupees/dollars directly.
@@ -541,6 +479,15 @@ All numeric fields in the JSON must be actual full currency values AFTER convers
 This includes:
 totalAmount, revenue, totalRevenue, sales, expenses, totalExpenses, profit, loss, netIncome, assets, liabilities, equity, cash, balances, lineItems.amount, transactions.amount.
 
+LINE ITEM EXTRACTION RULE:
+- Extract ALL readable financial rows, not only important rows.
+- Do not cap at 80 rows.
+- Do not stop after the first table.
+- Include totals, subtotals, section rows, statement rows, and note rows if they have a label and an amount.
+- If the document has multiple statements, include rows from profit/loss, balance sheet, cash flow, and notes where readable.
+- If a line item date is not available, use documentDate or periodEnd if appropriate.
+- If line item categories are not explicitly available, infer sensible categories like Revenue, Expense, Asset, Liability, Equity, Tax, Finance Cost, Cash Flow, or Other.
+
 General rules:
 - Only report figures actually present in the document.
 - Never estimate or invent numbers.
@@ -548,8 +495,6 @@ General rules:
 - Amounts must be plain numbers only, no currency symbols and no commas.
 - Dates should be ISO 8601 format YYYY-MM-DD where possible.
 - If the company reports a loss, netIncome must be negative.
-- If line item dates are not available, use documentDate or periodEnd if appropriate.
-- If line item categories are not explicitly available, infer sensible categories like Revenue, Expense, Asset, Liability, Equity, Tax, Finance Cost, Payroll, Cash Flow, Bank Transaction, Invoice, Bill, or Other.
 `;
 }
 
@@ -582,7 +527,26 @@ function errorToText(error: unknown) {
   }
 }
 
-function isQuotaError(error: unknown) {
+function isRetryableGeminiError(error: unknown) {
+  const text = errorToText(error).toLowerCase();
+
+  return (
+    text.includes("503") ||
+    text.includes("500") ||
+    text.includes("502") ||
+    text.includes("504") ||
+    text.includes("unavailable") ||
+    text.includes("high demand") ||
+    text.includes("overloaded") ||
+    text.includes("temporarily") ||
+    text.includes("resource_exhausted") ||
+    text.includes("429") ||
+    text.includes("quota") ||
+    text.includes("rate limit")
+  );
+}
+
+function isQuotaLikeError(error: unknown) {
   const text = errorToText(error).toLowerCase();
 
   return (
@@ -609,47 +573,83 @@ function getRetryDelayMs(error: unknown, attempt: number) {
     }
   }
 
-  return Math.min(45_000, 4_000 * attempt);
+  return Math.min(45_000, 3_000 * attempt);
+}
+
+function buildRequestWithModel(
+  request: GenerateContentRequest,
+  model: string,
+): GenerateContentRequest {
+  return {
+    ...request,
+    model,
+  };
 }
 
 async function generateContentWithRetry(request: GenerateContentRequest) {
-  const maxAttempts = 4;
+  const maxAttemptsPerModel = 3;
+  let lastError: unknown = null;
+  let lastModel = PRIMARY_MODEL;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      return await ai.models.generateContent(request);
-    } catch (error) {
-      const quotaError = isQuotaError(error);
-      const isLastAttempt = attempt === maxAttempts;
+  for (const model of FALLBACK_MODELS) {
+    lastModel = model;
 
-      if (!quotaError || isLastAttempt) {
-        if (quotaError) {
-          throw new Error(
-            [
-              "Gemini quota limit reached. Wait for quota reset or use a billing-enabled Gemini API key, then click Retry analysis.",
-              "",
-              `Model: ${MODEL}`,
-              `Original error: ${errorToText(error)}`,
-            ].join("\n"),
-          );
+    for (let attempt = 1; attempt <= maxAttemptsPerModel; attempt += 1) {
+      try {
+        return await ai.models.generateContent(
+          buildRequestWithModel(request, model),
+        );
+      } catch (error) {
+        lastError = error;
+
+        const retryable = isRetryableGeminiError(error);
+        const quotaLike = isQuotaLikeError(error);
+        const isLastAttemptForModel = attempt === maxAttemptsPerModel;
+
+        console.warn(
+          `Gemini extraction failed on model ${model}, attempt ${attempt}/${maxAttemptsPerModel}: ${errorToText(
+            error,
+          )}`,
+        );
+
+        if (!retryable) {
+          throw error;
         }
 
-        throw error;
+        if (isLastAttemptForModel) {
+          console.warn(
+            `Moving to next Gemini fallback model after ${model} failed.`,
+          );
+          break;
+        }
+
+        const delayMs = getRetryDelayMs(error, attempt);
+
+        console.warn(
+          `Retrying Gemini extraction with ${model} after ${Math.round(
+            delayMs / 1000,
+          )}s...`,
+        );
+
+        await sleep(delayMs);
+
+        if (quotaLike && attempt >= 2) {
+          break;
+        }
       }
-
-      const delayMs = getRetryDelayMs(error, attempt);
-
-      console.warn(
-        `Gemini quota/rate limit hit. Retrying attempt ${
-          attempt + 1
-        }/${maxAttempts} after ${Math.round(delayMs / 1000)}s...`,
-      );
-
-      await sleep(delayMs);
     }
   }
 
-  throw new Error("Gemini extraction failed after retries.");
+  throw new Error(
+    [
+      "Gemini extraction is temporarily unavailable due to model demand or quota pressure.",
+      "Click Retry analysis after a short wait. If this keeps happening, use a billing-enabled Gemini API key or try a smaller document.",
+      "",
+      `Tried models: ${FALLBACK_MODELS.join(", ")}`,
+      `Last model: ${lastModel}`,
+      `Original error: ${errorToText(lastError)}`,
+    ].join("\n"),
+  );
 }
 
 function safeJsonParse(text: string): ExtractedDocumentData {
@@ -666,166 +666,8 @@ function safeJsonParse(text: string): ExtractedDocumentData {
   }
 }
 
-function isValidNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function addFallbackLineItem(
-  items: NonNullable<ExtractedDocumentData["lineItems"]>,
-  description: string,
-  amount: unknown,
-  category: string,
-  date?: string | null,
-) {
-  if (!isValidNumber(amount)) {
-    return;
-  }
-
-  if (items.some((item) => item.description === description)) {
-    return;
-  }
-
-  items.push({
-    description,
-    amount,
-    category,
-    date: date ?? null,
-  });
-}
-
-function normalizeExtractedData(
-  data: ExtractedDocumentData,
-  category: string,
-): ExtractedDocumentData {
-  const normalized: ExtractedDocumentData = {
-    ...data,
-    lineItems: Array.isArray(data.lineItems) ? data.lineItems : [],
-  };
-
-  const lineItems = normalized.lineItems ?? [];
-  const date = normalized.documentDate ?? normalized.periodEnd ?? null;
-
-  if (lineItems.length === 0 && Array.isArray(normalized.transactions)) {
-    for (const transaction of normalized.transactions.slice(0, 80)) {
-      const signedAmount =
-        transaction.direction === "debit"
-          ? -Math.abs(transaction.amount)
-          : Math.abs(transaction.amount);
-
-      addFallbackLineItem(
-        lineItems,
-        transaction.description,
-        signedAmount,
-        transaction.direction === "credit" ? "Cash Inflow" : "Cash Outflow",
-        transaction.date,
-      );
-    }
-  }
-
-  if (lineItems.length === 0 || category === "FINANCIAL_STATEMENT") {
-    addFallbackLineItem(
-      lineItems,
-      "Revenue",
-      normalized.revenue ?? normalized.totalRevenue ?? normalized.sales,
-      "Revenue",
-      date,
-    );
-
-    addFallbackLineItem(
-      lineItems,
-      "Expenses",
-      normalized.expenses ?? normalized.totalExpenses,
-      "Expense",
-      date,
-    );
-
-    addFallbackLineItem(
-      lineItems,
-      "Profit",
-      normalized.profit,
-      "Net Income",
-      date,
-    );
-
-    addFallbackLineItem(
-      lineItems,
-      "Loss",
-      isValidNumber(normalized.loss) ? -Math.abs(normalized.loss) : null,
-      "Net Loss",
-      date,
-    );
-
-    addFallbackLineItem(
-      lineItems,
-      "Net income",
-      normalized.netIncome,
-      "Net Income",
-      date,
-    );
-
-    addFallbackLineItem(
-      lineItems,
-      "Assets",
-      normalized.assets,
-      "Asset",
-      date,
-    );
-
-    addFallbackLineItem(
-      lineItems,
-      "Liabilities",
-      normalized.liabilities,
-      "Liability",
-      date,
-    );
-
-    addFallbackLineItem(
-      lineItems,
-      "Equity",
-      normalized.equity,
-      "Equity",
-      date,
-    );
-
-    addFallbackLineItem(
-      lineItems,
-      "Cash",
-      normalized.cash ?? normalized.closingBalance ?? normalized.balance,
-      "Asset",
-      date,
-    );
-  }
-
-  if (lineItems.length === 0) {
-    addFallbackLineItem(
-      lineItems,
-      normalized.totalAmountLabel ?? "Total amount",
-      normalized.totalAmount,
-      category === "SALES_INVOICE"
-        ? "Revenue"
-        : category === "BANK_STATEMENT"
-          ? "Balance"
-          : "Total",
-      date,
-    );
-  }
-
-  normalized.lineItems = lineItems
-    .filter(
-      (item) =>
-        typeof item.description === "string" &&
-        item.description.trim() &&
-        isValidNumber(item.amount),
-    )
-    .slice(0, 80)
-    .map((item) => ({
-      description: item.description.trim(),
-      amount: item.amount,
-      category: item.category ?? "Other",
-      date: item.date ?? null,
-    }));
-
-  return normalized;
+function normalizeExtractedData(data: ExtractedDocumentData): ExtractedDocumentData {
+  return ensureExtractedLineItems(data);
 }
 
 export async function extractDocumentData(params: {
@@ -852,7 +694,7 @@ export async function extractDocumentData(params: {
         };
 
   const response = await generateContentWithRetry({
-    model: MODEL,
+    model: PRIMARY_MODEL,
     contents: [
       {
         role: "user",
@@ -862,6 +704,8 @@ export async function extractDocumentData(params: {
     config: {
       responseMimeType: "application/json",
       responseSchema: EXTRACTION_SCHEMA,
+      temperature: 0.1,
+      maxOutputTokens: 8192,
     },
   });
 
@@ -871,7 +715,7 @@ export async function extractDocumentData(params: {
     throw new Error("Gemini returned an empty response.");
   }
 
-  const parsed = safeJsonParse(text);
-
-  return normalizeExtractedData(parsed, category);
+  return normalizeExtractedData(safeJsonParse(text));
 }
+
+
