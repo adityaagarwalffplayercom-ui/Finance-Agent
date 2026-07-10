@@ -42,11 +42,6 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
-    label: "Tax Knowledge",
-    href: "/admin/tax-knowledge",
-    enabled: true,
-  },
-  {
     label: "CFO Report",
     href: "/reports/cfo",
     enabled: true,
@@ -57,13 +52,18 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
+    label: "Tax Coverage",
+    href: "/tax-coverage",
+    enabled: true,
+  },
+  {
     label: "Privacy",
     href: "/privacy",
     enabled: true,
   },
   {
-    label: "Terms",
-    href: "/terms",
+    label: "Legal & Tax Info",
+    href: "/legal",
     enabled: true,
   },
 ];
@@ -71,10 +71,6 @@ const NAV_ITEMS = [
 function isActiveLink(pathname: string, href: string) {
   if (href === "/dashboard") {
     return pathname === "/dashboard";
-  }
-
-  if (href === "/privacy" || href === "/terms") {
-    return pathname === href;
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -153,6 +149,9 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
         .sidebar-nav {
           flex: 1 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 8px !important;
           overflow-y: auto !important;
           overflow-x: hidden !important;
           padding-right: 2px !important;
@@ -166,6 +165,12 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
         .sidebar-nav::-webkit-scrollbar-thumb {
           background: rgba(245, 158, 11, 0.3);
           border-radius: 999px;
+        }
+
+        .sidebar-link {
+          width: 100% !important;
+          min-width: 0 !important;
+          flex: 0 0 auto !important;
         }
 
         .sidebar-footer {
@@ -264,6 +269,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           }
 
           .sidebar-nav {
+            flex: none !important;
             display: flex !important;
             flex-direction: row !important;
             gap: 8px !important;

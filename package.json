@@ -6,8 +6,8 @@
     "node": "24.x"
   },
   "prisma": {
-  "schema": "prisma/schema.prisma"
-},
+    "schema": "prisma/schema.prisma"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate --schema=prisma/schema.prisma && next build",
@@ -19,6 +19,7 @@
     "@google/genai": "^1.34.0",
     "@prisma/client": "^6.19.3",
     "better-auth": "^1.4.2",
+    "jspdf": "^4.2.1",
     "next": "16.2.7",
     "react": "19.2.3",
     "react-dom": "19.2.3",
