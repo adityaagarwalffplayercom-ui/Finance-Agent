@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 import { DocumentStatus, type Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
@@ -11,11 +12,22 @@ import {
   releaseProcessingLock,
   tryAcquireProcessingLock,
 } from "@/lib/usage-events";
+import {
+  extractLineItemsFromText,
+  extractLineItemsFromWorkbook,
+  mergeExtractedLineItems,
+  type RawFinancialLineItem,
+} from "@/lib/raw-financial-line-items";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const XLSX_MIME_TYPES = [
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ];
+
+const PDF_MIME_TYPES = ["application/pdf"];
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -42,6 +54,84 @@ function isQuotaErrorMessage(message: string) {
     lower.includes("resource_exhausted") ||
     lower.includes("rate limit")
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getPreviousExtractedData(value: unknown): ExtractedDocumentData | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return value as unknown as ExtractedDocumentData;
+}
+
+async function extractPdfText(_buffer: Buffer) {
+  return "";
+}
+
+function getSafeTextForAi(text: string) {
+  return text.slice(0, USAGE_LIMITS.MAX_TEXT_CHARS_FOR_AI);
+}
+
+function buildDeterministicOnlyExtraction(params: {
+  previous: ExtractedDocumentData | null;
+  rawLineItems: RawFinancialLineItem[];
+  fileName: string;
+}): ExtractedDocumentData {
+  const base: ExtractedDocumentData = params.previous ?? {
+    summary:
+      "Deterministic line-item extraction completed. AI extraction did not finish, so totals may be incomplete.",
+    lineItems: [],
+    transactions: [],
+  };
+
+  return mergeExtractedLineItems(base, params.rawLineItems);
+}
+
+async function saveProcessedDocument(params: {
+  id: string;
+  userId: string;
+  fileName: string;
+  category: string;
+  extracted: ExtractedDocumentData;
+  rawLineItemCount: number;
+}) {
+  await prisma.document.update({
+    where: {
+      id: params.id,
+    },
+    data: {
+      status: DocumentStatus.PROCESSED,
+      extractedData: params.extracted as unknown as Prisma.InputJsonValue,
+      extractedAt: new Date(),
+      processingError: null,
+    },
+  });
+
+  await createAuditEvent({
+    userId: params.userId,
+    eventType: "DOCUMENT_PROCESSING_COMPLETED",
+    title: "AI processing completed",
+    description: `${params.fileName} was processed successfully and is ready for review.`,
+    documentId: params.id,
+    fileName: params.fileName,
+    metadata: {
+      category: params.category,
+      status: DocumentStatus.PROCESSED,
+      currency: params.extracted.currency ?? null,
+      reportedUnit: params.extracted.reportedUnit ?? null,
+      scaleMultiplier: params.extracted.scaleMultiplier ?? null,
+      lineItemsCount: params.extracted.lineItems?.length ?? 0,
+      deterministicRawLineItems: params.rawLineItemCount,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${params.id}`);
 }
 
 export async function POST(
@@ -73,6 +163,7 @@ export async function POST(
       category: true,
       status: true,
       content: true,
+      extractedData: true,
     },
   });
 
@@ -87,13 +178,12 @@ export async function POST(
     await createAuditEvent({
       userId,
       eventType: "PROCESSING_BLOCKED",
-      title: "Processing blocked",
+      title: "AI processing blocked",
       description: message,
       documentId: document.id,
       fileName: document.fileName,
       metadata: {
         reason: "already_processing",
-        status: document.status,
       },
     });
 
@@ -101,9 +191,7 @@ export async function POST(
   }
 
   if (document.fileSize > USAGE_LIMITS.MAX_AI_PROCESS_FILE_SIZE_BYTES) {
-    const message = `This file is ${formatUsageSize(
-      document.fileSize,
-    )}. AI processing is limited to ${formatUsageSize(
+    const message = `AI processing is limited to ${formatUsageSize(
       USAGE_LIMITS.MAX_AI_PROCESS_FILE_SIZE_BYTES,
     )} to protect Gemini quota. Upload a smaller statement, invoice, bank export, or compressed PDF.`;
 
@@ -175,6 +263,8 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 429 });
   }
 
+  let rawLineItems: RawFinancialLineItem[] = [];
+
   try {
     const markProcessing = await prisma.document.updateMany({
       where: {
@@ -223,24 +313,37 @@ export async function POST(
       },
     });
 
+    const buffer = Buffer.from(document.content);
+    const previousExtracted = getPreviousExtractedData(document.extractedData);
+
     let extracted: ExtractedDocumentData;
 
     if (document.mimeType === "text/csv") {
-      const text = Buffer.from(document.content)
-        .toString("utf-8")
-        .slice(0, USAGE_LIMITS.MAX_TEXT_CHARS_FOR_AI);
+      const text = buffer.toString("utf-8");
+
+      rawLineItems = extractLineItemsFromText(text, {
+        documentDate: previousExtracted?.documentDate ?? null,
+        scaleMultiplier: previousExtracted?.scaleMultiplier ?? null,
+        defaultCategory: document.category,
+      });
 
       extracted = await extractDocumentData({
         fileName: document.fileName,
         category: document.category,
         content: {
           kind: "text",
-          text,
+          text: getSafeTextForAi(text),
         },
       });
     } else if (XLSX_MIME_TYPES.includes(document.mimeType)) {
-      const workbook = XLSX.read(Buffer.from(document.content), {
+      const workbook = XLSX.read(buffer, {
         type: "buffer",
+      });
+
+      rawLineItems = extractLineItemsFromWorkbook(workbook, {
+        documentDate: previousExtracted?.documentDate ?? null,
+        scaleMultiplier: previousExtracted?.scaleMultiplier ?? null,
+        defaultCategory: document.category,
       });
 
       const csv = workbook.SheetNames.slice(
@@ -251,17 +354,45 @@ export async function POST(
           (name) =>
             `Sheet: ${name}\n${XLSX.utils.sheet_to_csv(workbook.Sheets[name])}`,
         )
-        .join("\n\n")
-        .slice(0, USAGE_LIMITS.MAX_TEXT_CHARS_FOR_AI);
+        .join("\n\n");
 
       extracted = await extractDocumentData({
         fileName: document.fileName,
         category: document.category,
         content: {
           kind: "text",
-          text: csv,
+          text: getSafeTextForAi(csv),
         },
       });
+    } else if (PDF_MIME_TYPES.includes(document.mimeType)) {
+      const pdfText = await extractPdfText(buffer);
+
+      rawLineItems = extractLineItemsFromText(pdfText, {
+        documentDate: previousExtracted?.documentDate ?? null,
+        scaleMultiplier: previousExtracted?.scaleMultiplier ?? null,
+        defaultCategory: document.category,
+      });
+
+      if (pdfText.trim().length > 2000) {
+        extracted = await extractDocumentData({
+          fileName: document.fileName,
+          category: document.category,
+          content: {
+            kind: "text",
+            text: getSafeTextForAi(pdfText),
+          },
+        });
+      } else {
+        extracted = await extractDocumentData({
+          fileName: document.fileName,
+          category: document.category,
+          content: {
+            kind: "inline",
+            mimeType: document.mimeType,
+            base64Data: buffer.toString("base64"),
+          },
+        });
+      }
     } else {
       extracted = await extractDocumentData({
         fileName: document.fileName,
@@ -269,47 +400,60 @@ export async function POST(
         content: {
           kind: "inline",
           mimeType: document.mimeType,
-          base64Data: Buffer.from(document.content).toString("base64"),
+          base64Data: buffer.toString("base64"),
         },
       });
     }
 
-    await prisma.document.update({
-      where: {
-        id,
-      },
-      data: {
-        status: DocumentStatus.PROCESSED,
-        extractedData: extracted as unknown as Prisma.InputJsonValue,
-        extractedAt: new Date(),
-        processingError: null,
-      },
-    });
+    const mergedExtraction = mergeExtractedLineItems(extracted, rawLineItems);
 
-    await createAuditEvent({
+    await saveProcessedDocument({
+      id: document.id,
       userId,
-      eventType: "DOCUMENT_PROCESSING_COMPLETED",
-      title: "AI processing completed",
-      description: `${document.fileName} was processed successfully and is ready for review.`,
-      documentId: document.id,
       fileName: document.fileName,
-      metadata: {
-        category: document.category,
-        status: DocumentStatus.PROCESSED,
-        currency: extracted.currency ?? null,
-        reportedUnit: extracted.reportedUnit ?? null,
-        scaleMultiplier: extracted.scaleMultiplier ?? null,
-      },
+      category: document.category,
+      extracted: mergedExtraction,
+      rawLineItemCount: rawLineItems.length,
     });
 
     return NextResponse.json({
       status: DocumentStatus.PROCESSED,
-      extractedData: extracted,
+      extractedData: mergedExtraction,
+      rawLineItemsDetected: rawLineItems.length,
+      finalLineItemsStored: mergedExtraction.lineItems?.length ?? 0,
     });
   } catch (error) {
     console.error(`Document processing failed for ${id}:`, error);
 
     const message = getErrorMessage(error);
+    const previousExtracted = getPreviousExtractedData(document.extractedData);
+
+    if (rawLineItems.length > 0) {
+      const deterministicOnlyExtraction = buildDeterministicOnlyExtraction({
+        previous: previousExtracted,
+        rawLineItems,
+        fileName: document.fileName,
+      });
+
+      await saveProcessedDocument({
+        id: document.id,
+        userId,
+        fileName: document.fileName,
+        category: document.category,
+        extracted: deterministicOnlyExtraction,
+        rawLineItemCount: rawLineItems.length,
+      });
+
+      return NextResponse.json({
+        status: DocumentStatus.PROCESSED,
+        warning:
+          "Gemini did not finish, but deterministic raw line-item extraction succeeded.",
+        geminiError: cleanProcessingError(message),
+        extractedData: deterministicOnlyExtraction,
+        rawLineItemsDetected: rawLineItems.length,
+        finalLineItemsStored: deterministicOnlyExtraction.lineItems?.length ?? 0,
+      });
+    }
 
     const friendlyMessage = isQuotaErrorMessage(message)
       ? [
@@ -343,6 +487,7 @@ export async function POST(
         fileSize: document.fileSize,
         mimeType: document.mimeType,
         quotaError: isQuotaErrorMessage(message),
+        rawLineItemsDetected: rawLineItems.length,
       },
     });
 
@@ -350,9 +495,12 @@ export async function POST(
       {
         error: cleanProcessingError(friendlyMessage),
       },
-      { status: isQuotaErrorMessage(message) ? 429 : 500 },
+      {
+        status: 500,
+      },
     );
   } finally {
     releaseProcessingLock(userId);
   }
 }
+
