@@ -24,3 +24,19 @@ npm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Local tax source files - not committed
+india-cgst-act.pdf
+india-cgst-rules-part-a.pdf
+india-cgst-rules-part-b-forms.pdf
+india-income-tax-act.pdf
+test-gst-knowledge.txt
+uk-corporation-tax-rates.txt
+uk-corporation-tax.txt
+uk-how-vat-works.txt
+uk-self-assessment.txt
+uk-self-employed-records.txt
+uk-vat-rates.txt
+us-irs-employer-tax-guide.pdf
+us-irs-estimated-tax-withholding.pdf
+us-irs-small-business-tax-guide.pdf
+us-irs-starting-business-recordkeeping.pdf
