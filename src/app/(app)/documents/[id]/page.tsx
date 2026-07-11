@@ -457,7 +457,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
               textDecoration: "none",
             }}
           >
-            &lt;- Back to documents
+            ← Back to documents
           </Link>
 
           <p

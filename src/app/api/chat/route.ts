@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+﻿import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const question = typeof body?.question === "string" ? body.question.trim() : "";
-    const agentId = typeof body?.agentId === "string" ? body.agentId : "cfo";
+    const agentId = typeof body?.agentId === "string" ? body.agentId : "team";
 
     if (!question) {
       return NextResponse.json(

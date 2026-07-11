@@ -664,7 +664,7 @@ async function generateAiAnswer(prompt: string) {
           "",
           "Your Aureli data is safe. This is an AI model availability issue, not a database or app issue.",
           "",
-          "Please try again in 1-2 minutes. If it keeps happening, ask a smaller question like: â€œSummarize my tax coverage only.â€",
+          "Please try again in 1-2 minutes. If it keeps happening, ask a smaller question like: "Summarize my tax coverage only."",
         ].join("\n");
       }
 

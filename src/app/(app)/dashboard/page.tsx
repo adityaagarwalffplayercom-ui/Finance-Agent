@@ -818,7 +818,7 @@ function ActionRow({
           flex: "0 0 auto",
         }}
       >
-        -&gt;
+        →
       </span>
     </Link>
   );
@@ -1599,7 +1599,7 @@ function AgentCard({ agent }: { agent: AgentCardData }) {
           color: toneStyle.color,
         }}
       >
-        Ask agent -&gt;
+        Ask agent →
       </Link>
     </article>
   );
@@ -2178,7 +2178,7 @@ return (
           <SectionHeading
             eyebrow="Business context"
             title={businessName}
-            hint={`${industry} Â· ${country} Â· Currency: ${currency}`}
+            hint={`${industry} · ${country} · Currency: ${currency}`}
             action={
               <Link href="/business" className="btn-ghost">
                 Edit profile

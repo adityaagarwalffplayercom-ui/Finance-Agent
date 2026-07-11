@@ -73,7 +73,7 @@ function toNumber(value: unknown): number | null {
 
   const clean = value
     .replace(/,/g, "")
-    .replace(/[â‚¹$â‚¬Â£]/g, "")
+    .replace(/[Rs. $â‚¬£]/g, "")
     .replace(/Rs\./gi, "")
     .trim();
 

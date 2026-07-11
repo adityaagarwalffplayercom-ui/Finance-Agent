@@ -240,7 +240,7 @@ export default function AiTeamPage() {
             </div>
 
             <Link href="/chat" className="btn-ghost">
-              Open chat -&gt;
+              Open chat →
             </Link>
           </div>
         </section>
@@ -283,7 +283,7 @@ export default function AiTeamPage() {
                   href={`/chat?agent=${agent.id}`}
                   className="btn-ghost agent-action"
                 >
-                  Ask agent -&gt;
+                  Ask agent →
                 </Link>
               </article>
             ))}

@@ -426,7 +426,7 @@ export default async function ForecastPage() {
           </div>
 
           <Link href="/chat?agent=cfo" className="btn-ghost">
-            Ask CFO Agent {"->"}
+            Ask CFO Agent →
           </Link>
         </div>
       </header>

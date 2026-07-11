@@ -225,7 +225,7 @@ function LineItemCard({
           overflowWrap: "anywhere",
         }}
       >
-        {item.type} Â· {item.sourceFileName}
+        {item.type} · {item.sourceFileName}
       </span>
     </article>
   );
@@ -431,7 +431,7 @@ export default async function AnomalyInsightsPage() {
           </div>
 
           <Link href="/chat?agent=analyst" className="btn-ghost">
-            Ask Analyst Agent -&gt;
+            Ask Analyst Agent →
           </Link>
         </div>
       </header>
@@ -711,7 +711,7 @@ export default async function AnomalyInsightsPage() {
                         lineHeight: 1.45,
                       }}
                     >
-                      {document.category} Â· Quality: {document.quality}
+                      {document.category} · Quality: {document.quality}
                     </span>
                   </span>
 

@@ -311,7 +311,7 @@ export default async function CfoDecisionsPage() {
           </div>
 
           <Link href="/chat?agent=cfo" className="btn-ghost">
-            Ask CFO Agent -&gt;
+            Ask CFO Agent →
           </Link>
         </div>
       </header>

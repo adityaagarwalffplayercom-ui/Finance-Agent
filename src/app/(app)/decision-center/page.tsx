@@ -372,7 +372,7 @@ export default async function DecisionCenterPage() {
           </div>
 
           <Link href="/chat?agent=team" className="btn-ghost">
-            Ask AI Finance Team {"->"}
+            Ask AI Finance Team →
           </Link>
         </div>
       </header>

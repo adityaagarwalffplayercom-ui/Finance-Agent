@@ -404,7 +404,7 @@ export default async function CashFlowPage() {
           </div>
 
           <Link href="/chat?agent=cashflow" className="btn-ghost">
-            Ask Cash Flow Agent {"->"}
+            Ask Cash Flow Agent →
           </Link>
         </div>
       </header>

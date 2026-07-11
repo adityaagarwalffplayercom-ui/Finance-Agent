@@ -455,7 +455,7 @@ export default async function CfoReportPage() {
               textDecoration: "none",
             }}
           >
-            &lt;- Back to dashboard
+            ← Back to dashboard
           </Link>
 
           <p
