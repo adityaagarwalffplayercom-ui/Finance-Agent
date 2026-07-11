@@ -129,7 +129,7 @@ function FlowCard({
           fontWeight: 900,
         }}
       >
-        Open {"->"}
+        Open page
       </span>
     </Link>
   );
@@ -302,7 +302,7 @@ export default function DemoModePage() {
         >
           <div>
             <p className="eyebrow" style={{ margin: 0 }}>
-              Hackathon Demo Mode
+              User Demo Mode
             </p>
 
             <h1
@@ -315,7 +315,7 @@ export default function DemoModePage() {
                 maxWidth: 960,
               }}
             >
-              Stable presentation flow.
+              Explore Aureli with sample data.
             </h1>
 
             <p
@@ -350,7 +350,7 @@ export default function DemoModePage() {
                 background: "rgba(46,213,115,0.08)",
               }}
             >
-              {isWorking ? "Working..." : "Seed demo data"}
+              {isWorking ? "Working..." : "Start demo"}
             </button>
 
             <button
@@ -365,7 +365,7 @@ export default function DemoModePage() {
                 background: "rgba(255,138,149,0.08)",
               }}
             >
-              Reset demo data
+              Clear demo
             </button>
           </div>
         </div>
@@ -386,11 +386,11 @@ export default function DemoModePage() {
         >
           <MetricCard
             label="Demo status"
-            value={isLoading ? "Loading" : hasDemoData ? "Ready" : "Not seeded"}
+            value={isLoading ? "Loading" : hasDemoData ? "Ready" : "Not started"}
             hint={
               hasDemoData
                 ? "Demo documents are approved"
-                : "Click seed demo data first"
+                : "Click Start demo first"
             }
             tone={hasDemoData ? "good" : "warning"}
           />
@@ -403,16 +403,16 @@ export default function DemoModePage() {
           />
 
           <MetricCard
-            label="Presentation safety"
+            label="Demo safety"
             value="High"
-            hint="No live upload required"
+            hint="No upload needed"
             tone="good"
           />
 
           <MetricCard
             label="Demo flow"
             value="8 steps"
-            hint="From dashboard to AI chat"
+            hint="Dashboard to AI chat"
             tone="good"
           />
         </div>
@@ -459,7 +459,7 @@ export default function DemoModePage() {
         >
           <div>
             <p className="eyebrow" style={{ margin: 0 }}>
-              Demo script
+              User demo flow
             </p>
 
             <h2
@@ -470,7 +470,7 @@ export default function DemoModePage() {
                 lineHeight: 1.15,
               }}
             >
-              Follow this order during presentation
+              Explore these pages in order
             </h2>
           </div>
 
@@ -487,62 +487,7 @@ export default function DemoModePage() {
           </div>
         </section>
 
-        <section
-          className="section-card"
-          style={{
-            padding: 22,
-            display: "grid",
-            gap: 14,
-          }}
-        >
-          <div>
-            <p className="eyebrow" style={{ margin: 0 }}>
-              Speaking points
-            </p>
-
-            <h2
-              style={{
-                margin: "8px 0 0",
-                color: "var(--color-text-primary)",
-                fontSize: 24,
-                lineHeight: 1.15,
-              }}
-            >
-              What to say in hackathon
-            </h2>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gap: 10,
-            }}
-          >
-            {[
-              "Aureli converts financial documents into trusted business intelligence.",
-              "Only approved extracted data powers the dashboard and AI agents.",
-              "The platform acts like a CFO, accountant, analyst, cash-flow manager, tax assistant, risk agent, and consultant.",
-              "Forecast shows predictive analytics and what-if decisions.",
-              "Learning Center demonstrates a feedback reward loop similar to reinforcement learning.",
-              "Decision Center combines all engines and tells the owner what to fix first.",
-            ].map((point) => (
-              <div
-                key={point}
-                style={{
-                  border: "1px solid rgba(255,255,255,0.09)",
-                  background: "rgba(255,255,255,0.035)",
-                  borderRadius: 16,
-                  padding: 13,
-                  color: "var(--color-text-secondary)",
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                }}
-              >
-                {point}
-              </div>
-            ))}
-          </div>
-        </section>
+        
       </section>
     </main>
   );

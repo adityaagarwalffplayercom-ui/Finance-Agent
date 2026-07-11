@@ -383,7 +383,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         action: "reset",
-        message: "Demo data removed.",
+        message: "User demo data cleared.",
       });
     }
 
@@ -423,7 +423,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       action: "seed",
-      message: "Demo business and approved demo documents created.",
+      message: "User demo business and approved sample documents created.",
       documentsCreated: documents.length,
     });
   } catch (error) {

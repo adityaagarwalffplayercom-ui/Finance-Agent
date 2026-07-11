@@ -17,6 +17,12 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
+    label: "User Demo",
+    href: "/demo",
+    enabled: true,
+  },
+
+  {
     label: "Setup",
     href: "/onboarding",
     enabled: true,
@@ -89,11 +95,6 @@ const NAV_ITEMS = [
 {
     label: "Learning Center",
     href: "/learning-center",
-    enabled: true,
-  },
-{
-    label: "Demo Mode",
-    href: "/demo",
     enabled: true,
   },
 {
