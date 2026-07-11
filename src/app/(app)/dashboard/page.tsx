@@ -1,147 +1,80 @@
 ﻿import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  getFinancialProfile,
-  type Alert,
-  type StatBlock,
-} from "@/lib/financial-profile";
+import { getFinancialProfile } from "@/lib/financial-profile";
 
-type Tone = "sage" | "amber" | "gold" | "danger" | "neutral";
+type Tone = "good" | "warning" | "danger" | "neutral" | "gold";
 
-type AgentCardData = {
+type DashboardDocument = {
   id: string;
-  icon: string;
-  name: string;
-  role: string;
-  insight: string;
-  tone: Tone;
+  fileName: string;
+  category: string;
+  status: string;
+  reviewStatus: string | null;
+  uploadedAt: Date;
 };
 
-type ChartMetric = {
-  label: string;
-  value: number | null;
-  displayValue: string;
-  tone: Tone;
-};
-
-function getToneStyle(tone: Tone) {
+function toneStyle(tone: Tone) {
   return {
-    sage: {
+    good: {
       color: "var(--color-sage)",
       border: "rgba(46,213,115,0.28)",
       background: "rgba(46,213,115,0.085)",
-      glow: "rgba(46,213,115,0.12)",
     },
-    amber: {
-      color: "var(--color-amber)",
-      border: "rgba(245,158,11,0.30)",
-      background: "rgba(245,158,11,0.095)",
-      glow: "rgba(245,158,11,0.13)",
-    },
-    gold: {
+    warning: {
       color: "var(--color-gold)",
       border: "rgba(255,209,102,0.30)",
       background: "rgba(255,209,102,0.085)",
-      glow: "rgba(255,209,102,0.12)",
     },
     danger: {
       color: "var(--color-danger)",
       border: "rgba(255,138,149,0.30)",
       background: "rgba(255,138,149,0.085)",
-      glow: "rgba(255,138,149,0.10)",
+    },
+    gold: {
+      color: "var(--color-gold)",
+      border: "rgba(245,158,11,0.32)",
+      background: "rgba(245,158,11,0.10)",
     },
     neutral: {
       color: "var(--color-text-secondary)",
       border: "var(--color-border)",
       background: "rgba(255,255,255,0.045)",
-      glow: "rgba(255,255,255,0.06)",
     },
   }[tone];
 }
 
-function normalizeValue(value: string) {
-  if (!value || value.trim() === "" || value === "â€”") {
-    return "Not available";
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
   }
 
-  return value;
-}
-
-function displayValue(value?: string | null) {
-  return value && value.trim().length > 0 ? value.trim() : "Not set";
-}
-
-function getGreetingName(value?: string | null) {
-  if (!value) return "there";
-
-  const cleanValue = value.trim();
-  const name = cleanValue.includes("@") ? cleanValue.split("@")[0] : cleanValue;
-
-  return name || "there";
-}
-
-function getAlertTone(severity: Alert["severity"]): Tone {
-  if (severity === "critical") return "danger";
-  if (severity === "warning") return "gold";
-  return "sage";
-}
-
-function getAlertLabel(severity: Alert["severity"]) {
-  if (severity === "critical") return "Critical";
-  if (severity === "warning") return "Warning";
-  return "Info";
-}
-
-function formatCompactNumber(value: number) {
-  if (!Number.isFinite(value)) return "0";
-
-  const absolute = Math.abs(value);
-
-  if (absolute >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(1)}B`;
-  }
-
-  if (absolute >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-
-  if (absolute >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  }
-
-  return `${Math.round(value)}`;
-}
-
-function formatMoneyShort(value: number | null, currency: string) {
-  if (value === null || !Number.isFinite(value)) {
-    return "Not available";
-  }
-
-  const sign = value < 0 ? "-" : "";
-  const prefix = currency && currency !== "Not set" ? `${currency} ` : "";
-
-  return `${sign}${prefix}${formatCompactNumber(Math.abs(value))}`;
-}
-
-function parseMetricValue(value: string) {
-  if (!value || value === "â€”" || value === "Not available") {
+  if (typeof value !== "string") {
     return null;
   }
 
-  const clean = value.replace(/,/g, "").trim();
-  const numberMatch = clean.match(/-?\d+(\.\d+)?/);
+  const clean = value
+    .replace(/,/g, "")
+    .replace(/Rs\./gi, "")
+    .replace(/[₹$€£]/g, "")
+    .trim();
 
-  if (!numberMatch) {
+  if (!clean || clean === "—" || clean === "Not available") {
     return null;
   }
 
-  const baseValue = Number(numberMatch[0]);
+  const isParenthesesNegative = /^\(.*\)$/.test(clean);
+  const match = clean.match(/-?\d+(\.\d+)?/);
 
-  if (!Number.isFinite(baseValue)) {
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number(match[0]);
+
+  if (!Number.isFinite(parsed)) {
     return null;
   }
 
@@ -160,554 +93,103 @@ function parseMetricValue(value: string) {
     multiplier = 1_000;
   }
 
-  return baseValue * multiplier;
+  const signed = isParenthesesNegative ? -Math.abs(parsed) : parsed;
+
+  return signed * multiplier;
 }
 
-function buildLinePath(values: number[], width: number, height: number) {
-  const paddingX = 20;
-  const paddingY = 18;
-  const min = Math.min(...values, 0);
-  const max = Math.max(...values, 0);
-  const range = max - min || 1;
+function compactNumber(value: number) {
+  const absolute = Math.abs(value);
 
-  return values
-    .map((value, index) => {
-      const x =
-        values.length === 1
-          ? width / 2
-          : paddingX +
-            (index / (values.length - 1)) * (width - paddingX * 2);
+  if (absolute >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(2)}B`;
+  }
 
-      const y =
-        height -
-        paddingY -
-        ((value - min) / range) * (height - paddingY * 2);
+  if (absolute >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(2)}M`;
+  }
 
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
+  if (absolute >= 1_000) {
+    return `${(value / 1_000).toFixed(2)}K`;
+  }
+
+  return `${Math.round(value)}`;
 }
 
-function buildAreaPath(values: number[], width: number, height: number) {
-  const linePath = buildLinePath(values, width, height);
-  const paddingX = 20;
+function currencySymbol(currency: string) {
+  const clean = currency.trim().toUpperCase();
 
-  return `${linePath} L ${width - paddingX} ${height - 18} L ${paddingX} ${
-    height - 18
-  } Z`;
+  if (clean === "INR") return "Rs. ";
+  if (clean === "USD" || currency.trim() === "$") return "$";
+  if (clean === "GBP") return "GBP ";
+  if (clean === "EUR") return "EUR ";
+
+  return currency ? `${currency} ` : "";
 }
 
-function SectionHeading({
-  eyebrow,
-  title,
+function formatMoney(value: number | null, currency: string) {
+  if (value === null || !Number.isFinite(value)) {
+    return "Not available";
+  }
+
+  const sign = value < 0 ? "-" : "";
+
+  return `${sign}${currencySymbol(currency)}${compactNumber(Math.abs(value))}`;
+}
+
+function formatPercent(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "Not available";
+  }
+
+  return `${value.toFixed(1)}%`;
+}
+
+function getProfitTone(profit: number | null): Tone {
+  if (profit === null) return "neutral";
+  return profit >= 0 ? "good" : "danger";
+}
+
+function getRatioTone(value: number | null, goodBelow = 80): Tone {
+  if (value === null) return "neutral";
+  if (value <= goodBelow) return "good";
+  if (value <= 100) return "warning";
+  return "danger";
+}
+
+function getDocumentTrustTone(approved: number, processed: number): Tone {
+  if (processed === 0) return "warning";
+  const ratio = approved / processed;
+
+  if (ratio >= 0.8) return "good";
+  if (ratio >= 0.45) return "warning";
+  return "danger";
+}
+
+function MetricCard({
+  label,
+  value,
   hint,
-  action,
-}: {
-  eyebrow?: string;
-  title: string;
-  hint?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 14,
-        alignItems: "flex-start",
-        flexWrap: "wrap",
-        minWidth: 0,
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gap: 6,
-          minWidth: 0,
-        }}
-      >
-        {eyebrow ? (
-          <p className="eyebrow" style={{ margin: 0 }}>
-            {eyebrow}
-          </p>
-        ) : null}
-
-        <h2
-          style={{
-            margin: 0,
-            color: "var(--color-text-primary)",
-            fontSize: 22,
-            lineHeight: 1.15,
-            fontWeight: 950,
-            letterSpacing: "-0.045em",
-            overflowWrap: "anywhere",
-          }}
-        >
-          {title}
-        </h2>
-
-        {hint ? (
-          <p
-            className="section-hint"
-            style={{
-              margin: 0,
-              lineHeight: 1.55,
-              maxWidth: 760,
-            }}
-          >
-            {hint}
-          </p>
-        ) : null}
-      </div>
-
-      {action}
-    </div>
-  );
-}
-
-function HeroBadge({
-  children,
   tone = "neutral",
-}: {
-  children: ReactNode;
-  tone?: Tone;
-}) {
-  const toneStyle = getToneStyle(tone);
-
-  return (
-    <span
-      style={{
-        border: `1px solid ${toneStyle.border}`,
-        background: toneStyle.background,
-        color: toneStyle.color,
-        borderRadius: 999,
-        padding: "9px 12px",
-        fontSize: 11,
-        fontWeight: 950,
-        lineHeight: 1,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
-function DashboardStatCard({
-  label,
-  stat,
-  tone,
-}: {
-  label: string;
-  stat: StatBlock;
-  tone: Tone;
-}) {
-  const toneStyle = getToneStyle(tone);
-  const value = normalizeValue(stat.value);
-
-  return (
-    <article
-      style={{
-        border: `1px solid ${toneStyle.border}`,
-        background: `linear-gradient(135deg, ${toneStyle.background}, rgba(255,255,255,0.024))`,
-        borderRadius: 24,
-        padding: 18,
-        display: "grid",
-        gap: 12,
-        minHeight: 150,
-        minWidth: 0,
-        overflow: "hidden",
-        boxShadow: `0 18px 48px ${toneStyle.glow}, inset 0 1px 0 rgba(255,255,255,0.05)`,
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          color: "var(--color-text-secondary)",
-          fontSize: 11,
-          fontWeight: 950,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-        }}
-      >
-        {label}
-      </p>
-
-      <strong
-        style={{
-          color: "var(--color-text-primary)",
-          fontSize: "clamp(25px, 3vw, 36px)",
-          lineHeight: 1,
-          fontWeight: 950,
-          letterSpacing: "-0.06em",
-          overflowWrap: "anywhere",
-        }}
-      >
-        {value}
-      </strong>
-
-      <span
-        style={{
-          color: toneStyle.color,
-          fontSize: 12,
-          lineHeight: 1.45,
-          fontWeight: 800,
-          overflowWrap: "anywhere",
-        }}
-      >
-        {stat.delta}
-      </span>
-    </article>
-  );
-}
-
-function HealthScoreCard({
-  score,
-  label,
-  hasData,
-}: {
-  score: number;
-  label: string;
-  hasData: boolean;
-}) {
-  const safeScore = Math.max(0, Math.min(score, 100));
-  const tone: Tone = !hasData
-    ? "neutral"
-    : safeScore >= 75
-      ? "sage"
-      : safeScore >= 45
-        ? "gold"
-        : "danger";
-
-  const toneStyle = getToneStyle(tone);
-
-  const statusText = !hasData
-    ? "Waiting for data"
-    : safeScore >= 75
-      ? "Strong position"
-      : safeScore >= 45
-        ? "Needs attention"
-        : "High risk";
-
-  return (
-    <article
-      style={{
-        border: `1px solid ${toneStyle.border}`,
-        background:
-          "radial-gradient(circle at 18% 10%, rgba(245,158,11,0.16), transparent 30%), radial-gradient(circle at 90% 20%, rgba(46,213,115,0.10), transparent 28%), linear-gradient(135deg, rgba(255,255,255,0.064), rgba(255,255,255,0.024))",
-        borderRadius: 30,
-        padding: 22,
-        minHeight: 285,
-        display: "grid",
-        gap: 18,
-        minWidth: 0,
-        overflow: "hidden",
-        boxShadow:
-          "0 24px 90px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.065)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 12,
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gap: 6,
-            minWidth: 0,
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              color: "var(--color-text-secondary)",
-              fontSize: 12,
-              fontWeight: 950,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            Finance health
-          </p>
-
-          <h2
-            style={{
-              margin: 0,
-              color: "var(--color-text-primary)",
-              fontSize: 22,
-              lineHeight: 1.15,
-              fontWeight: 950,
-              letterSpacing: "-0.045em",
-            }}
-          >
-            {statusText}
-          </h2>
-        </div>
-
-        <span
-          style={{
-            border: `1px solid ${toneStyle.border}`,
-            background: toneStyle.background,
-            color: toneStyle.color,
-            borderRadius: 999,
-            padding: "8px 11px",
-            fontSize: 11,
-            lineHeight: 1,
-            fontWeight: 950,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {hasData ? "Live score" : "No trusted data"}
-        </span>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "180px minmax(0, 1fr)",
-          gap: 18,
-          alignItems: "center",
-          minWidth: 0,
-        }}
-      >
-        <div
-          style={{
-            width: 176,
-            height: 176,
-            borderRadius: "50%",
-            padding: 10,
-            background: `conic-gradient(${toneStyle.color} ${
-              safeScore * 3.6
-            }deg, rgba(255,255,255,0.075) 0deg)`,
-            boxShadow: `0 22px 70px ${toneStyle.glow}, inset 0 1px 0 rgba(255,255,255,0.08)`,
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              borderRadius: "50%",
-              display: "grid",
-              placeItems: "center",
-              background:
-                "radial-gradient(circle at 35% 25%, rgba(255,255,255,0.08), transparent 30%), rgba(9,13,20,0.94)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <div
-              style={{
-                textAlign: "center",
-                display: "grid",
-                gap: 2,
-              }}
-            >
-              <strong
-                style={{
-                  color: "var(--color-text-primary)",
-                  fontSize: 54,
-                  lineHeight: 0.95,
-                  fontWeight: 950,
-                  letterSpacing: "-0.08em",
-                }}
-              >
-                {safeScore}
-              </strong>
-
-              <span
-                style={{
-                  color: "var(--color-text-secondary)",
-                  fontSize: 12,
-                  fontWeight: 900,
-                }}
-              >
-                /100
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gap: 12,
-            minWidth: 0,
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              color: toneStyle.color,
-              fontSize: 15,
-              lineHeight: 1.55,
-              fontWeight: 900,
-              overflowWrap: "anywhere",
-            }}
-          >
-            {label}
-          </p>
-
-          <p
-            style={{
-              margin: 0,
-              color: "var(--color-text-secondary)",
-              fontSize: 13,
-              lineHeight: 1.65,
-              overflowWrap: "anywhere",
-            }}
-          >
-            Score is calculated from approved financial documents only. Pending
-            and rejected files are excluded from this health signal.
-          </p>
-
-          <div
-            style={{
-              display: "grid",
-              gap: 8,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 10,
-                color: "var(--color-text-muted)",
-                fontSize: 11,
-                fontWeight: 850,
-              }}
-            >
-              <span>Risk</span>
-              <span>Stable</span>
-              <span>Strong</span>
-            </div>
-
-            <div
-              style={{
-                height: 9,
-                borderRadius: 999,
-                background:
-                  "linear-gradient(90deg, var(--color-danger), var(--color-gold), var(--color-sage))",
-                opacity: 0.92,
-                position: "relative",
-              }}
-            >
-              <span
-                style={{
-                  position: "absolute",
-                  left: `calc(${safeScore}% - 7px)`,
-                  top: -5,
-                  width: 18,
-                  height: 18,
-                  borderRadius: "50%",
-                  background: toneStyle.color,
-                  border: "3px solid rgba(9,13,20,0.95)",
-                  boxShadow: `0 0 0 5px ${toneStyle.glow}`,
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function MiniTrustCard({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  hint: string;
-  tone: Tone;
-}) {
-  const toneStyle = getToneStyle(tone);
-
-  return (
-    <article
-      style={{
-        border: `1px solid ${toneStyle.border}`,
-        background: toneStyle.background,
-        borderRadius: 20,
-        padding: 16,
-        display: "grid",
-        gap: 8,
-        minWidth: 0,
-        overflow: "hidden",
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          color: "var(--color-text-secondary)",
-          fontSize: 11,
-          fontWeight: 950,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-        }}
-      >
-        {label}
-      </p>
-
-      <strong
-        style={{
-          color: "var(--color-text-primary)",
-          fontSize: 28,
-          lineHeight: 1,
-          fontWeight: 950,
-          letterSpacing: "-0.055em",
-          overflowWrap: "anywhere",
-        }}
-      >
-        {value}
-      </strong>
-
-      <span
-        style={{
-          color: toneStyle.color,
-          fontSize: 12,
-          lineHeight: 1.45,
-          fontWeight: 800,
-          overflowWrap: "anywhere",
-        }}
-      >
-        {hint}
-      </span>
-    </article>
-  );
-}
-
-function FinanceMetricCard({
-  label,
-  value,
-  hint,
-  tone,
 }: {
   label: string;
   value: string;
   hint: string;
-  tone: Tone;
+  tone?: Tone;
 }) {
-  const toneStyle = getToneStyle(tone);
+  const style = toneStyle(tone);
 
   return (
     <article
       style={{
-        border: `1px solid ${toneStyle.border}`,
-        background:
-          "linear-gradient(135deg, rgba(255,255,255,0.050), rgba(255,255,255,0.024))",
-        borderRadius: 20,
-        padding: 16,
+        border: `1px solid ${style.border}`,
+        background: style.background,
+        borderRadius: 22,
+        padding: 18,
         display: "grid",
-        gap: 8,
+        gap: 11,
         minWidth: 0,
-        overflow: "hidden",
+        boxShadow: "0 18px 50px rgba(0,0,0,0.14)",
       }}
     >
       <p
@@ -726,10 +208,10 @@ function FinanceMetricCard({
       <strong
         style={{
           color: "var(--color-text-primary)",
-          fontSize: "clamp(22px, 2.6vw, 31px)",
+          fontSize: "clamp(26px, 3vw, 40px)",
           lineHeight: 1,
           fontWeight: 950,
-          letterSpacing: "-0.055em",
+          letterSpacing: "-0.065em",
           overflowWrap: "anywhere",
         }}
       >
@@ -738,11 +220,10 @@ function FinanceMetricCard({
 
       <span
         style={{
-          color: toneStyle.color,
+          color: style.color,
           fontSize: 12,
-          lineHeight: 1.45,
-          fontWeight: 800,
-          overflowWrap: "anywhere",
+          lineHeight: 1.5,
+          fontWeight: 850,
         }}
       >
         {hint}
@@ -751,40 +232,233 @@ function FinanceMetricCard({
   );
 }
 
-function ActionRow({
+function QuickAction({
   title,
-  hint,
+  detail,
   href,
-  tone,
+  tone = "neutral",
 }: {
   title: string;
-  hint: string;
+  detail: string;
   href: string;
-  tone: Tone;
+  tone?: Tone;
 }) {
-  const toneStyle = getToneStyle(tone);
+  const style = toneStyle(tone);
 
   return (
     <Link
       href={href}
       style={{
-        border: `1px solid ${toneStyle.border}`,
-        background: toneStyle.background,
+        border: `1px solid ${style.border}`,
+        background:
+          "linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.022))",
+        borderRadius: 20,
+        padding: 16,
+        display: "grid",
+        gap: 10,
         color: "inherit",
+        textDecoration: "none",
+        minWidth: 0,
+        boxShadow: "0 16px 46px rgba(0,0,0,0.14)",
+      }}
+    >
+      <strong
+        style={{
+          color: "var(--color-text-primary)",
+          fontSize: 17,
+          lineHeight: 1.22,
+        }}
+      >
+        {title}
+      </strong>
+
+      <p
+        style={{
+          margin: 0,
+          color: "var(--color-text-secondary)",
+          fontSize: 13,
+          lineHeight: 1.6,
+        }}
+      >
+        {detail}
+      </p>
+
+      <span
+        style={{
+          color: style.color,
+          fontSize: 12,
+          fontWeight: 950,
+        }}
+      >
+        Open {"->"}
+      </span>
+    </Link>
+  );
+}
+
+function AgentCard({
+  name,
+  role,
+  href,
+  tone,
+}: {
+  name: string;
+  role: string;
+  href: string;
+  tone: Tone;
+}) {
+  const style = toneStyle(tone);
+
+  return (
+    <Link
+      href={href}
+      style={{
+        border: `1px solid ${style.border}`,
+        background: style.background,
         borderRadius: 18,
-        padding: 14,
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 14,
-        alignItems: "center",
+        padding: 15,
+        display: "grid",
+        gap: 8,
+        color: "inherit",
         textDecoration: "none",
         minWidth: 0,
       }}
     >
       <span
         style={{
+          color: style.color,
+          fontSize: 11,
+          fontWeight: 950,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+        }}
+      >
+        AI Agent
+      </span>
+
+      <strong
+        style={{
+          color: "var(--color-text-primary)",
+          fontSize: 16,
+          lineHeight: 1.25,
+        }}
+      >
+        {name}
+      </strong>
+
+      <p
+        style={{
+          margin: 0,
+          color: "var(--color-text-secondary)",
+          fontSize: 12,
+          lineHeight: 1.55,
+        }}
+      >
+        {role}
+      </p>
+    </Link>
+  );
+}
+
+function SectionHeader({
+  eyebrow,
+  title,
+  detail,
+}: {
+  eyebrow: string;
+  title: string;
+  detail?: string;
+}) {
+  return (
+    <div>
+      <p className="eyebrow" style={{ margin: 0 }}>
+        {eyebrow}
+      </p>
+
+      <h2
+        style={{
+          margin: "8px 0 0",
+          color: "var(--color-text-primary)",
+          fontSize: 24,
+          lineHeight: 1.15,
+          letterSpacing: "-0.03em",
+        }}
+      >
+        {title}
+      </h2>
+
+      {detail ? (
+        <p
+          style={{
+            margin: "8px 0 0",
+            color: "var(--color-text-secondary)",
+            fontSize: 13,
+            lineHeight: 1.65,
+            maxWidth: 760,
+          }}
+        >
+          {detail}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function StatusPill({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: Tone;
+}) {
+  const style = toneStyle(tone);
+
+  return (
+    <span
+      style={{
+        border: `1px solid ${style.border}`,
+        background: style.background,
+        color: style.color,
+        borderRadius: 999,
+        padding: "7px 10px",
+        fontSize: 11,
+        lineHeight: 1,
+        fontWeight: 950,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function RecentDocumentRow({ document }: { document: DashboardDocument }) {
+  const approved = String(document.reviewStatus) === "APPROVED";
+  const failed = String(document.status) === "FAILED";
+  const tone: Tone = failed ? "danger" : approved ? "good" : "warning";
+
+  return (
+    <Link
+      href={`/documents/${document.id}`}
+      style={{
+        border: "1px solid rgba(255,255,255,0.09)",
+        background: "rgba(255,255,255,0.035)",
+        borderRadius: 16,
+        padding: 13,
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 14,
+        alignItems: "center",
+        flexWrap: "wrap",
+        color: "inherit",
+        textDecoration: "none",
+      }}
+    >
+      <span
+        style={{
           display: "grid",
-          gap: 4,
+          gap: 5,
           minWidth: 0,
         }}
       >
@@ -792,11 +466,11 @@ function ActionRow({
           style={{
             color: "var(--color-text-primary)",
             fontSize: 14,
-            lineHeight: 1.25,
+            lineHeight: 1.35,
             overflowWrap: "anywhere",
           }}
         >
-          {title}
+          {document.fileName}
         </strong>
 
         <span
@@ -804,1094 +478,17 @@ function ActionRow({
             color: "var(--color-text-secondary)",
             fontSize: 12,
             lineHeight: 1.45,
-            overflowWrap: "anywhere",
           }}
         >
-          {hint}
+          {document.category} - {new Date(document.uploadedAt).toLocaleDateString()}
         </span>
       </span>
 
-      <span
-        style={{
-          color: toneStyle.color,
-          fontWeight: 950,
-          flex: "0 0 auto",
-        }}
-      >
-        →
-      </span>
+      <StatusPill
+        label={`${document.status} / ${document.reviewStatus ?? "UNREVIEWED"}`}
+        tone={tone}
+      />
     </Link>
-  );
-}
-
-function MetricBarChart({
-  metrics,
-  currency,
-}: {
-  metrics: ChartMetric[];
-  currency: string;
-}) {
-  const availableMetrics = metrics.filter((metric) => metric.value !== null);
-  const maxValue = Math.max(
-    ...availableMetrics.map((metric) => Math.abs(metric.value ?? 0)),
-    1,
-  );
-
-  return (
-    <section
-      className="section-card"
-      style={{
-        padding: 22,
-        display: "grid",
-        gap: 18,
-        overflow: "hidden",
-        minHeight: 360,
-        background:
-          "radial-gradient(circle at 10% 0%, rgba(245,158,11,0.10), transparent 30%), linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.022))",
-      }}
-    >
-      <SectionHeading
-        eyebrow="Chart"
-        title="Finance metric comparison"
-        hint="A quick visual comparison of revenue, expenses, profit, and cash."
-      />
-
-      {availableMetrics.length === 0 ? (
-        <p
-          style={{
-            margin: 0,
-            color: "var(--color-text-secondary)",
-            fontSize: 13,
-            lineHeight: 1.6,
-          }}
-        >
-          Not enough approved financial data to draw this chart yet.
-        </p>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gap: 14,
-          }}
-        >
-          {metrics.map((metric) => {
-            const toneStyle = getToneStyle(metric.tone);
-            const value = metric.value ?? 0;
-            const width = Math.max(4, (Math.abs(value) / maxValue) * 100);
-            const isNegative = value < 0;
-
-            return (
-              <div
-                key={metric.label}
-                style={{
-                  display: "grid",
-                  gap: 8,
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    color: "var(--color-text-secondary)",
-                    fontSize: 12,
-                    fontWeight: 850,
-                  }}
-                >
-                  <span>{metric.label}</span>
-                  <span>{metric.displayValue}</span>
-                </div>
-
-                <div
-                  style={{
-                    height: 16,
-                    borderRadius: 999,
-                    background: "rgba(255,255,255,0.075)",
-                    overflow: "hidden",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${width}%`,
-                      height: "100%",
-                      borderRadius: 999,
-                      background: isNegative
-                        ? "linear-gradient(90deg, var(--color-danger), rgba(255,138,149,0.35))"
-                        : `linear-gradient(90deg, ${toneStyle.color}, rgba(255,255,255,0.18))`,
-                      boxShadow: `0 10px 34px ${toneStyle.glow}`,
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <p
-        style={{
-          margin: 0,
-          color: "var(--color-text-muted)",
-          fontSize: 11,
-          lineHeight: 1.5,
-        }}
-      >
-        Values are normalized visually for comparison. Currency context:{" "}
-        {currency}.
-      </p>
-    </section>
-  );
-}
-
-function RevenueExpenseDonut({
-  revenue,
-  expenses,
-  currency,
-}: {
-  revenue: number | null;
-  expenses: number | null;
-  currency: string;
-}) {
-  const safeRevenue = Math.max(0, revenue ?? 0);
-  const safeExpenses = Math.max(0, expenses ?? 0);
-  const total = safeRevenue + safeExpenses;
-  const revenueShare = total > 0 ? (safeRevenue / total) * 100 : 0;
-  const expensesShare = total > 0 ? (safeExpenses / total) * 100 : 0;
-
-  return (
-    <section
-      className="section-card"
-      style={{
-        padding: 22,
-        display: "grid",
-        gap: 18,
-        minHeight: 360,
-        overflow: "hidden",
-        background:
-          "radial-gradient(circle at 85% 0%, rgba(46,213,115,0.10), transparent 30%), linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.022))",
-      }}
-    >
-      <SectionHeading
-        eyebrow="Chart"
-        title="Revenue vs expenses mix"
-        hint="Shows how much of the visible operating movement is income versus cost."
-      />
-
-      {total <= 0 ? (
-        <p
-          style={{
-            margin: 0,
-            color: "var(--color-text-secondary)",
-            fontSize: 13,
-            lineHeight: 1.6,
-          }}
-        >
-          Add approved revenue and expense documents to activate this chart.
-        </p>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "170px minmax(0, 1fr)",
-            gap: 18,
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              width: 168,
-              height: 168,
-              borderRadius: "50%",
-              padding: 12,
-              background: `conic-gradient(var(--color-sage) 0 ${revenueShare}%, var(--color-gold) ${revenueShare}% 100%)`,
-              boxShadow:
-                "0 22px 70px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)",
-            }}
-          >
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                borderRadius: "50%",
-                display: "grid",
-                placeItems: "center",
-                background: "rgba(9,13,20,0.95)",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gap: 2,
-                  textAlign: "center",
-                }}
-              >
-                <strong
-                  style={{
-                    color: "var(--color-text-primary)",
-                    fontSize: 32,
-                    lineHeight: 1,
-                    letterSpacing: "-0.06em",
-                  }}
-                >
-                  {Math.round(revenueShare)}%
-                </strong>
-
-                <span
-                  style={{
-                    color: "var(--color-text-secondary)",
-                    fontSize: 11,
-                    fontWeight: 900,
-                  }}
-                >
-                  revenue share
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gap: 12,
-              minWidth: 0,
-            }}
-          >
-            <MiniTrustCard
-              label="Revenue"
-              value={`${Math.round(revenueShare)}%`}
-              hint={formatMoneyShort(safeRevenue, currency)}
-              tone="sage"
-            />
-
-            <MiniTrustCard
-              label="Expenses"
-              value={`${Math.round(expensesShare)}%`}
-              hint={formatMoneyShort(safeExpenses, currency)}
-              tone="gold"
-            />
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function CashFlowTrendChart({
-  trend,
-  caption,
-}: {
-  trend: number[];
-  caption: string;
-}) {
-  const values = trend.length > 0 ? trend.slice(-6) : [0, 0, 0, 0, 0, 0];
-  const maxAbs = Math.max(...values.map((item) => Math.abs(item)), 1);
-  const netMovement = values.reduce((total, item) => total + item, 0);
-  const positivePeriods = values.filter((item) => item >= 0).length;
-  const lineWidth = 620;
-  const lineHeight = 180;
-  const linePath = buildLinePath(values, lineWidth, lineHeight);
-  const areaPath = buildAreaPath(values, lineWidth, lineHeight);
-  const tone: Tone = netMovement >= 0 ? "sage" : "danger";
-  const toneStyle = getToneStyle(tone);
-
-  return (
-    <section
-      className="section-card"
-      style={{
-        display: "grid",
-        gap: 18,
-        padding: 22,
-        minHeight: 420,
-        overflow: "hidden",
-        background:
-          "radial-gradient(circle at 16% 0%, rgba(46,213,115,0.10), transparent 28%), radial-gradient(circle at 92% 12%, rgba(245,158,11,0.10), transparent 30%), linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.022))",
-      }}
-    >
-      <SectionHeading
-        eyebrow="Cash flow chart"
-        title="Cash movement trend"
-        hint={caption}
-        action={
-          <span
-            style={{
-              border: `1px solid ${toneStyle.border}`,
-              background: toneStyle.background,
-              color: toneStyle.color,
-              borderRadius: 999,
-              padding: "8px 11px",
-              fontSize: 11,
-              fontWeight: 950,
-              whiteSpace: "nowrap",
-            }}
-          >
-            Net {netMovement >= 0 ? "+" : ""}
-            {formatCompactNumber(netMovement)}
-          </span>
-        }
-      />
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))",
-          gap: 12,
-        }}
-      >
-        <MiniTrustCard
-          label="Net movement"
-          value={`${netMovement >= 0 ? "+" : ""}${formatCompactNumber(
-            netMovement,
-          )}`}
-          hint="Latest periods"
-          tone={netMovement >= 0 ? "sage" : "danger"}
-        />
-
-        <MiniTrustCard
-          label="Positive periods"
-          value={`${positivePeriods}/${values.length}`}
-          hint="Inflow stability"
-          tone={positivePeriods >= Math.ceil(values.length / 2) ? "sage" : "gold"}
-        />
-
-        <MiniTrustCard
-          label="Largest swing"
-          value={formatCompactNumber(
-            values.reduce(
-              (largest, item) =>
-                Math.abs(item) > Math.abs(largest) ? item : largest,
-              0,
-            ),
-          )}
-          hint="Highest movement"
-          tone="amber"
-        />
-      </div>
-
-      <div
-        style={{
-          border: "1px solid rgba(245,158,11,0.14)",
-          background: "rgba(0,0,0,0.12)",
-          borderRadius: 24,
-          padding: 18,
-          display: "grid",
-          gap: 18,
-          minWidth: 0,
-          overflow: "hidden",
-        }}
-      >
-        <svg
-          viewBox={`0 0 ${lineWidth} ${lineHeight}`}
-          role="img"
-          aria-label="Cash flow line chart"
-          style={{
-            width: "100%",
-            height: 180,
-            display: "block",
-            overflow: "visible",
-          }}
-        >
-          <defs>
-            <linearGradient id="cashFlowAreaGradient" x1="0" x2="0" y1="0" y2="1">
-              <stop
-                offset="0%"
-                stopColor={netMovement >= 0 ? "#2ed573" : "#ff8a95"}
-                stopOpacity="0.22"
-              />
-              <stop
-                offset="100%"
-                stopColor={netMovement >= 0 ? "#2ed573" : "#ff8a95"}
-                stopOpacity="0"
-              />
-            </linearGradient>
-          </defs>
-
-          <line
-            x1="20"
-            x2={lineWidth - 20}
-            y1={lineHeight / 2}
-            y2={lineHeight / 2}
-            stroke="rgba(255,255,255,0.14)"
-            strokeDasharray="6 8"
-          />
-
-          <path d={areaPath} fill="url(#cashFlowAreaGradient)" />
-
-          <path
-            d={linePath}
-            fill="none"
-            stroke={netMovement >= 0 ? "var(--color-sage)" : "var(--color-danger)"}
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {values.map((value, index) => {
-            const min = Math.min(...values, 0);
-            const max = Math.max(...values, 0);
-            const range = max - min || 1;
-            const x =
-              values.length === 1
-                ? lineWidth / 2
-                : 20 + (index / (values.length - 1)) * (lineWidth - 40);
-
-            const y = lineHeight - 18 - ((value - min) / range) * (lineHeight - 36);
-
-            return (
-              <g key={`${value}-${index}`}>
-                <circle
-                  cx={x}
-                  cy={y}
-                  r="5"
-                  fill={value >= 0 ? "var(--color-sage)" : "var(--color-danger)"}
-                  stroke="rgba(9,13,20,0.95)"
-                  strokeWidth="3"
-                />
-
-                <text
-                  x={x}
-                  y={value >= 0 ? y - 12 : y + 22}
-                  textAnchor="middle"
-                  fill="rgba(226,232,240,0.76)"
-                  fontSize="11"
-                  fontWeight="800"
-                >
-                  {value >= 0 ? "+" : ""}
-                  {formatCompactNumber(value)}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${values.length}, minmax(38px, 1fr))`,
-            gap: 10,
-            alignItems: "end",
-            minHeight: 130,
-          }}
-        >
-          {values.map((value, index) => {
-            const isPositive = value >= 0;
-            const height = Math.max(16, (Math.abs(value) / maxAbs) * 110);
-
-            return (
-              <div
-                key={`${value}-bar-${index}`}
-                style={{
-                  display: "grid",
-                  gap: 8,
-                  alignItems: "end",
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{
-                    height,
-                    borderRadius: isPositive
-                      ? "14px 14px 7px 7px"
-                      : "7px 7px 14px 14px",
-                    background: isPositive
-                      ? "linear-gradient(180deg, var(--color-sage), rgba(46,213,115,0.22))"
-                      : "linear-gradient(180deg, rgba(255,138,149,0.22), var(--color-danger))",
-                    border: isPositive
-                      ? "1px solid rgba(46,213,115,0.30)"
-                      : "1px solid rgba(255,138,149,0.30)",
-                    boxShadow: isPositive
-                      ? "0 16px 42px rgba(46,213,115,0.12)"
-                      : "0 16px 42px rgba(255,138,149,0.10)",
-                  }}
-                />
-
-                <span
-                  style={{
-                    color: "var(--color-text-muted)",
-                    fontSize: 10,
-                    fontWeight: 900,
-                    textAlign: "center",
-                  }}
-                >
-                  P{index + 1}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function AnalyticsChartsSection({
-  revenue,
-  expenses,
-  profit,
-  cash,
-  currency,
-}: {
-  revenue: string;
-  expenses: string;
-  profit: string;
-  cash: string;
-  currency: string;
-}) {
-  const revenueValue = parseMetricValue(revenue);
-  const expensesValue = parseMetricValue(expenses);
-  const profitValue = parseMetricValue(profit);
-  const cashValue = parseMetricValue(cash);
-
-  const metrics: ChartMetric[] = [
-    {
-      label: "Revenue",
-      value: revenueValue,
-      displayValue: revenue,
-      tone: "sage",
-    },
-    {
-      label: "Expenses",
-      value: expensesValue,
-      displayValue: expenses,
-      tone: "gold",
-    },
-    {
-      label: "Profit",
-      value: profitValue,
-      displayValue: profit,
-      tone: profit.includes("-") ? "danger" : "amber",
-    },
-    {
-      label: "Cash",
-      value: cashValue,
-      displayValue: cash,
-      tone: "sage",
-    },
-  ];
-
-  return (
-    <section
-      style={{
-        display: "grid",
-        gap: 18,
-      }}
-    >
-      <SectionHeading
-        eyebrow="Charts and analytics"
-        title="Visual finance intelligence"
-        hint="Charts are generated from the latest trusted dashboard numbers."
-      />
-
-      <div
-        className="dashboard-chart-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.78fr)",
-          gap: 18,
-          alignItems: "stretch",
-        }}
-      >
-        <MetricBarChart metrics={metrics} currency={currency} />
-
-        <RevenueExpenseDonut
-          revenue={revenueValue}
-          expenses={expensesValue}
-          currency={currency}
-        />
-      </div>
-    </section>
-  );
-}
-
-function buildDashboardAgents({
-  approvedDocuments,
-  pendingReview,
-  healthScore,
-  revenue,
-  profit,
-  cash,
-}: {
-  approvedDocuments: number;
-  pendingReview: number;
-  healthScore: number;
-  revenue: string;
-  profit: string;
-  cash: string;
-}): AgentCardData[] {
-  return [
-    {
-      id: "cfo",
-      icon: "📊",
-      name: "CFO Agent",
-      role: "Executive decisions",
-      insight:
-        approvedDocuments > 0
-          ? `Health score is ${healthScore}/100. Ask for runway, profitability, and strategic next steps.`
-          : "Approve documents to unlock CFO-level decisions.",
-      tone: "sage",
-    },
-    {
-      id: "accountant",
-      icon: "🧾",
-      name: "Accountant Agent",
-      role: "Document review",
-      insight:
-        pendingReview > 0
-          ? `${pendingReview} document(s) need review before dashboard can trust them.`
-          : "All processed trusted documents are ready for finance intelligence.",
-      tone: pendingReview > 0 ? "gold" : "sage",
-    },
-    {
-      id: "analyst",
-      icon: "📈",
-      name: "Analyst Agent",
-      role: "Trends and ratios",
-      insight:
-        profit !== "Not available"
-          ? `Profit signal is ${profit}. Ask for margin, growth, and expense ratio analysis.`
-          : "Approve income and expense documents to unlock deeper analysis.",
-      tone: "amber",
-    },
-    {
-      id: "cashflow",
-      icon: "💧",
-      name: "Cash Flow Agent",
-      role: "Liquidity monitor",
-      insight:
-        cash !== "Not available"
-          ? `Cash signal is ${cash}. Ask about runway, burn rate, and cash gaps.`
-          : "Upload bank statements to improve cash visibility.",
-      tone: "sage",
-    },
-    {
-      id: "risk",
-      icon: "🛡️",
-      name: "Risk Agent",
-      role: "Red flags",
-      insight:
-        revenue !== "Not available"
-          ? "Revenue is visible. Ask for risk, concentration, and document gap checks."
-          : "Revenue is not visible yet. Add sales or financial statement data.",
-      tone: revenue !== "Not available" ? "sage" : "gold",
-    },
-    {
-      id: "consultant",
-      icon: "🧭",
-      name: "Business Consultant Agent",
-      role: "Growth, pricing, hiring, and cost-control advisor",
-      insight:
-        profit !== "Not available"
-          ? "Turns your finance signals into practical business actions for growth, pricing, hiring, cost control, and operations."
-          : "Approve financial documents to unlock business consulting recommendations.",
-      tone: "sage",
-    },
-    {
-      id: "tax",
-      icon: "🧾",
-      name: "Tax Agent",
-      role: "Tax readiness and compliance checklist",
-      insight:
-        approvedDocuments > 0
-          ? "Checks tax readiness from approved documents and verified tax rules. Use it as a checklist before CA verification."
-          : "Approve documents and upload tax sources to improve tax readiness checks.",
-      tone: "gold",
-    },
-  ];
-}
-
-function AgentCard({ agent }: { agent: AgentCardData }) {
-  const toneStyle = getToneStyle(agent.tone);
-
-  return (
-    <article
-      style={{
-        border: `1px solid ${toneStyle.border}`,
-        background:
-          "linear-gradient(135deg, rgba(255,255,255,0.052), rgba(255,255,255,0.024))",
-        borderRadius: 22,
-        padding: 16,
-        display: "grid",
-        gap: 12,
-        minHeight: 210,
-        minWidth: 0,
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "flex-start",
-          minWidth: 0,
-        }}
-      >
-        <span
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 15,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: `1px solid ${toneStyle.border}`,
-            background: toneStyle.background,
-            fontSize: 18,
-            flex: "0 0 auto",
-          }}
-        >
-          {agent.icon}
-        </span>
-
-        <span
-          style={{
-            display: "grid",
-            gap: 5,
-            minWidth: 0,
-          }}
-        >
-          <strong
-            style={{
-              color: "var(--color-text-primary)",
-              fontSize: 16,
-              lineHeight: 1.2,
-              overflowWrap: "anywhere",
-            }}
-          >
-            {agent.name}
-          </strong>
-
-          <span
-            style={{
-              color: "var(--color-text-secondary)",
-              fontSize: 12,
-              lineHeight: 1.35,
-              fontWeight: 750,
-              overflowWrap: "anywhere",
-            }}
-          >
-            {agent.role}
-          </span>
-        </span>
-      </div>
-
-      <p
-        style={{
-          margin: 0,
-          color: "var(--color-text-secondary)",
-          fontSize: 13,
-          lineHeight: 1.65,
-          overflowWrap: "anywhere",
-        }}
-      >
-        {agent.insight}
-      </p>
-
-      <Link
-        href={`/chat?agent=${agent.id}`}
-        className="btn-ghost"
-        style={{
-          width: "fit-content",
-          marginTop: "auto",
-          border: `1px solid ${toneStyle.border}`,
-          background: toneStyle.background,
-          color: toneStyle.color,
-        }}
-      >
-        Ask agent →
-      </Link>
-    </article>
-  );
-}
-
-function DashboardAiTeam({ agents }: { agents: AgentCardData[] }) {
-  return (
-    <section
-      className="section-card"
-      style={{
-        display: "grid",
-        gap: 18,
-        padding: 22,
-        overflow: "hidden",
-      }}
-    >
-      <SectionHeading
-        eyebrow="AI finance team"
-        title="Agents watching your business"
-        hint="Each agent uses your business profile and approved documents only."
-        action={
-          <Link href="/ai-team" className="btn-ghost">
-            View full team
-          </Link>
-        }
-      />
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-          gap: 14,
-          alignItems: "stretch",
-          minWidth: 0,
-        }}
-      >
-        {agents.map((agent) => (
-          <AgentCard key={agent.id} agent={agent} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ExecutiveSummary({
-  approvedDocuments,
-  pendingReview,
-  rejectedDocuments,
-  hasData,
-}: {
-  approvedDocuments: number;
-  pendingReview: number;
-  rejectedDocuments: number;
-  hasData: boolean;
-}) {
-  return (
-    <section
-      className="section-card"
-      style={{
-        display: "grid",
-        gap: 16,
-        padding: 22,
-        overflow: "hidden",
-      }}
-    >
-      <SectionHeading
-        eyebrow="Executive summary"
-        title={
-          hasData
-            ? "Workspace is using trusted data."
-            : "Workspace needs trusted data."
-        }
-        hint={
-          hasData
-            ? "Dashboard, report, and AI chat are based only on approved processed documents."
-            : "Upload, process, and approve finance documents to activate dashboard intelligence."
-        }
-      />
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-          gap: 12,
-        }}
-      >
-        <MiniTrustCard
-          label="Approved"
-          value={approvedDocuments}
-          hint="Trusted by AI"
-          tone="sage"
-        />
-
-        <MiniTrustCard
-          label="Pending"
-          value={pendingReview}
-          hint="Needs review"
-          tone={pendingReview > 0 ? "gold" : "neutral"}
-        />
-
-        <MiniTrustCard
-          label="Rejected"
-          value={rejectedDocuments}
-          hint="Excluded"
-          tone={rejectedDocuments > 0 ? "danger" : "neutral"}
-        />
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gap: 10,
-        }}
-      >
-        <ActionRow
-          title="Upload more documents"
-          hint="Add financial statements, bank statements, invoices, or expenses."
-          href="/documents"
-          tone="amber"
-        />
-
-        <ActionRow
-          title="Ask AI about this business"
-          hint="Get CFO, accountant, analyst, and cash-flow answers."
-          href="/chat"
-          tone="sage"
-        />
-      </div>
-    </section>
-  );
-}
-
-function AlertsPanel({ alerts }: { alerts: Alert[] }) {
-  return (
-    <section
-      className="section-card"
-      style={{
-        display: "grid",
-        gap: 16,
-        padding: 22,
-        minHeight: 320,
-        overflow: "hidden",
-      }}
-    >
-      <SectionHeading
-        eyebrow="Risk watch"
-        title="Alerts and recommendations"
-        hint="Important signals detected from approved documents."
-      />
-
-      <div
-        style={{
-          display: "grid",
-          gap: 10,
-        }}
-      >
-        {alerts.length > 0 ? (
-          alerts.map((alert) => {
-            const tone = getAlertTone(alert.severity);
-            const toneStyle = getToneStyle(tone);
-
-            return (
-              <article
-                key={alert.id}
-                style={{
-                  border: `1px solid ${toneStyle.border}`,
-                  background: toneStyle.background,
-                  borderRadius: 18,
-                  padding: 14,
-                  display: "grid",
-                  gap: 7,
-                  minWidth: 0,
-                }}
-              >
-                <span
-                  style={{
-                    color: toneStyle.color,
-                    fontSize: 11,
-                    fontWeight: 950,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  {getAlertLabel(alert.severity)}
-                </span>
-
-                <p
-                  style={{
-                    margin: 0,
-                    color: "var(--color-text-primary)",
-                    fontSize: 13,
-                    lineHeight: 1.55,
-                    fontWeight: 760,
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {alert.message}
-                </p>
-              </article>
-            );
-          })
-        ) : (
-          <article
-            style={{
-              border: "1px solid rgba(46,213,115,0.22)",
-              background: "rgba(46,213,115,0.08)",
-              borderRadius: 18,
-              padding: 14,
-            }}
-          >
-            <p
-              style={{
-                margin: 0,
-                color: "var(--color-sage)",
-                fontSize: 13,
-                lineHeight: 1.55,
-                fontWeight: 800,
-              }}
-            >
-              No major alerts right now.
-            </p>
-          </article>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function FinanceMetricsSection({
-  revenue,
-  expenses,
-  profit,
-  cash,
-}: {
-  revenue: string;
-  expenses: string;
-  profit: string;
-  cash: string;
-}) {
-  return (
-    <section
-      className="section-card"
-      style={{
-        display: "grid",
-        gap: 18,
-        padding: 22,
-        overflow: "hidden",
-      }}
-    >
-      <SectionHeading
-        eyebrow="Finance metrics"
-        title="Latest trusted numbers"
-        hint="These values come from approved processed documents only."
-      />
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-          gap: 14,
-          alignItems: "stretch",
-        }}
-      >
-        <FinanceMetricCard
-          label="Revenue"
-          value={revenue}
-          hint="Income signal"
-          tone="sage"
-        />
-
-        <FinanceMetricCard
-          label="Expenses"
-          value={expenses}
-          hint="Cost signal"
-          tone="gold"
-        />
-
-        <FinanceMetricCard
-          label="Profit"
-          value={profit}
-          hint="Profitability signal"
-          tone={profit.includes("-") ? "danger" : "sage"}
-        />
-
-        <FinanceMetricCard
-          label="Cash"
-          value={cash}
-          hint="Liquidity signal"
-          tone="amber"
-        />
-      </div>
-    </section>
   );
 }
 
@@ -1901,86 +498,135 @@ export default async function DashboardPage() {
   });
 
   if (!session?.user?.id) {
-    redirect("/login");
+    redirect("/sign-in");
   }
 
-  const sessionUser = session.user as {
-    id: string;
-    name?: string | null;
-    email?: string | null;
-  };
+  const userId = session.user.id;
 
-  const [profile, business, approvedDocuments, pendingReview, rejectedDocuments] =
-    await Promise.all([
-      getFinancialProfile(sessionUser.id),
-      prisma.business.findUnique({
-        where: {
-          userId: sessionUser.id,
-        },
-        select: {
-          name: true,
-          industry: true,
-          businessType: true,
-          financialYear: true,
-          country: true,
-          currency: true,
-        },
-      }),
-      prisma.document.count({
-        where: {
-          userId: sessionUser.id,
-          status: "PROCESSED",
-          reviewStatus: "APPROVED",
-        },
-      }),
-      prisma.document.count({
-        where: {
-          userId: sessionUser.id,
-          status: "PROCESSED",
-          reviewStatus: "NEEDS_REVIEW",
-        },
-      }),
-      prisma.document.count({
-        where: {
-          userId: sessionUser.id,
-          reviewStatus: "REJECTED",
-        },
-      }),
-    ]);
+  const [profile, business, documents] = await Promise.all([
+    getFinancialProfile(userId),
+    prisma.business.findUnique({
+      where: {
+        userId,
+      },
+      select: {
+        name: true,
+        industry: true,
+        businessType: true,
+        financialYear: true,
+        currency: true,
+        country: true,
+      },
+    }),
+    prisma.document.findMany({
+      where: {
+        userId,
+      },
+      select: {
+        id: true,
+        fileName: true,
+        category: true,
+        status: true,
+        reviewStatus: true,
+        uploadedAt: true,
+      },
+      orderBy: {
+        uploadedAt: "desc",
+      },
+      take: 8,
+    }),
+  ]);
 
-  const revenue = normalizeValue(profile.revenue.value);
-  const expenses = normalizeValue(profile.expenses.value);
-  const profit = normalizeValue(profile.profit.value);
-  const cash = normalizeValue(profile.cash.value);
+  const currency = business?.currency || "INR";
 
-  const userLabel = getGreetingName(sessionUser.name ?? sessionUser.email);
-  const businessName = displayValue(business?.name);
-  const industry = displayValue(business?.industry);
-  const country = displayValue(business?.country);
-  const currency = displayValue(business?.currency);
+  const revenue = toNumber(profile.revenue.value);
+  const expenses = toNumber(profile.expenses.value);
+  let profit = toNumber(profile.profit.value);
+  const cash = toNumber(profile.cash.value);
 
-  const agents = buildDashboardAgents({
-    approvedDocuments,
-    pendingReview,
-    healthScore: profile.healthScore,
-    revenue,
-    profit,
-    cash,
-  });
-return (
-    <>
+  if (profit === null && revenue !== null && expenses !== null) {
+    profit = revenue - expenses;
+  }
+
+  const profitMargin =
+    revenue !== null && revenue > 0 && profit !== null
+      ? (profit / revenue) * 100
+      : null;
+
+  const expenseRatio =
+    revenue !== null && revenue > 0 && expenses !== null
+      ? (expenses / revenue) * 100
+      : null;
+
+  const monthlyBurn =
+    profit !== null && profit < 0
+      ? Math.abs(profit / 12)
+      : expenses !== null
+        ? expenses / 12
+        : null;
+
+  const runway =
+    cash !== null && monthlyBurn !== null && monthlyBurn > 0
+      ? cash / monthlyBurn
+      : null;
+
+  const processedDocuments = documents.filter(
+    (document) => String(document.status) === "PROCESSED",
+  ).length;
+
+  const approvedDocuments = documents.filter(
+    (document) => String(document.reviewStatus) === "APPROVED",
+  ).length;
+
+  const failedDocuments = documents.filter(
+    (document) => String(document.status) === "FAILED",
+  ).length;
+
+  const demoDocuments = documents.filter((document) =>
+    document.fileName.startsWith("[DEMO]"),
+  ).length;
+
+  const healthTone: Tone =
+    profile.healthScore >= 75
+      ? "good"
+      : profile.healthScore >= 50
+        ? "warning"
+        : "danger";
+
+  const documentTone = getDocumentTrustTone(approvedDocuments, processedDocuments);
+
+  const ownerFocus =
+    profit !== null && profit < 0
+      ? "Fix loss before scaling"
+      : runway !== null && runway < 3
+        ? "Protect cash runway"
+        : approvedDocuments < 2
+          ? "Approve more documents"
+          : "Monitor growth and risk";
+
+  const ownerFocusTone: Tone =
+    profit !== null && profit < 0
+      ? "danger"
+      : runway !== null && runway < 3
+        ? "danger"
+        : approvedDocuments < 2
+          ? "warning"
+          : "good";
+
+  return (
+    <main>
       <header
         style={{
           marginBottom: 24,
-          border: "1px solid rgba(245,158,11,0.22)",
+          border: "1px solid rgba(245,158,11,0.24)",
           background:
-            "radial-gradient(circle at top left, rgba(245,158,11,0.16), transparent 34%), radial-gradient(circle at bottom right, rgba(46,213,115,0.08), transparent 32%), linear-gradient(135deg, rgba(255,255,255,0.062), rgba(255,255,255,0.026))",
-          borderRadius: 30,
-          padding: 26,
+            "radial-gradient(circle at top left, rgba(245,158,11,0.20), transparent 34%), radial-gradient(circle at bottom right, rgba(46,213,115,0.10), transparent 30%), linear-gradient(135deg, rgba(255,255,255,0.070), rgba(255,255,255,0.026))",
+          borderRadius: 34,
+          padding: 28,
           display: "grid",
-          gap: 18,
+          gap: 20,
           boxShadow:
-            "0 24px 80px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)",
+            "0 28px 90px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.07)",
           overflow: "hidden",
           minWidth: 0,
         }}
@@ -1989,64 +635,60 @@ return (
           style={{
             display: "flex",
             justifyContent: "space-between",
-            gap: 16,
+            gap: 18,
             alignItems: "flex-start",
             flexWrap: "wrap",
-            minWidth: 0,
           }}
         >
-          <div
-            style={{
-              display: "grid",
-              gap: 12,
-              minWidth: 0,
-            }}
-          >
+          <div>
             <p className="eyebrow" style={{ margin: 0 }}>
-              Executive command center
+              Executive Command Center
             </p>
 
             <h1
               style={{
-                margin: 0,
+                margin: "12px 0 0",
                 color: "var(--color-text-primary)",
-                fontSize: "clamp(38px, 5.2vw, 72px)",
-                lineHeight: 0.98,
-                letterSpacing: "-0.078em",
-                maxWidth: 880,
-                overflowWrap: "anywhere",
+                fontSize: "clamp(42px, 6vw, 84px)",
+                lineHeight: 0.94,
+                letterSpacing: "-0.085em",
+                maxWidth: 1040,
               }}
             >
-              Welcome back, {userLabel}.
+              {business?.name || "Aureli Finance Dashboard"}
             </h1>
 
             <p
               className="page-intro"
               style={{
-                margin: 0,
+                margin: "16px 0 0",
                 lineHeight: 1.7,
-                maxWidth: 850,
+                maxWidth: 880,
               }}
             >
-              Your dashboard is built from approved financial documents only.
-              Review pending files before they affect AI answers, reports, and
-              finance metrics.
+              Live executive view of financial health, trusted documents,
+              runway, risks, decisions, forecasts, and AI finance agents.
             </p>
           </div>
 
           <div
             style={{
               display: "flex",
-              gap: 8,
+              gap: 10,
               flexWrap: "wrap",
-              justifyContent: "flex-end",
             }}
           >
-            <HeroBadge tone={profile.hasData ? "sage" : "gold"}>
-              {profile.hasData ? "Live trusted data" : "Needs approved data"}
-            </HeroBadge>
+            <Link href="/demo" className="btn-ghost">
+              User Demo {"->"}
+            </Link>
 
-            <HeroBadge tone="amber">{approvedDocuments} approved</HeroBadge>
+            <Link href="/documents" className="btn-ghost">
+              Upload Documents {"->"}
+            </Link>
+
+            <Link href="/chat?agent=team" className="btn-ghost">
+              Ask AI Team {"->"}
+            </Link>
           </div>
         </div>
 
@@ -2057,168 +699,476 @@ return (
             flexWrap: "wrap",
           }}
         >
-          <Link href="/chat" className="btn-ghost">
-            Ask AI team
-          </Link>
-
-          <Link href="/documents" className="btn-ghost">
-            Review documents
-          </Link>
-
-          <Link href="/reports/cfo" className="btn-ghost">
-            Open CFO report
-          </Link>
+          <StatusPill
+            label={`Health ${profile.healthScore}/100`}
+            tone={healthTone}
+          />
+          <StatusPill label={profile.healthLabel} tone={healthTone} />
+          <StatusPill
+            label={`${approvedDocuments} approved docs`}
+            tone={documentTone}
+          />
+          <StatusPill
+            label={demoDocuments > 0 ? "Demo data active" : "Live user data"}
+            tone={demoDocuments > 0 ? "gold" : "neutral"}
+          />
+          <StatusPill
+            label={business?.financialYear || "FY not set"}
+            tone="neutral"
+          />
         </div>
       </header>
 
       <section
-        className="dashboard-top-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(360px, 1fr) minmax(0, 1fr)",
           gap: 18,
-          alignItems: "stretch",
-          marginBottom: 18,
         }}
       >
-        <HealthScoreCard
-          score={profile.healthScore}
-          label={profile.healthLabel}
-          hasData={profile.hasData}
-        />
-
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 14,
-            minWidth: 0,
           }}
         >
-          <DashboardStatCard label="Revenue" stat={profile.revenue} tone="sage" />
+          <MetricCard
+            label="Revenue"
+            value={formatMoney(revenue, currency)}
+            hint={profile.revenue.delta || "Approved revenue signal"}
+            tone="good"
+          />
 
-          <DashboardStatCard
+          <MetricCard
             label="Expenses"
-            stat={profile.expenses}
-            tone="gold"
+            value={formatMoney(expenses, currency)}
+            hint={profile.expenses.delta || "Approved expense signal"}
+            tone={getRatioTone(expenseRatio)}
           />
 
-          <DashboardStatCard label="Profit" stat={profile.profit} tone="amber" />
-
-          <DashboardStatCard label="Cash" stat={profile.cash} tone="sage" />
-        </div>
-      </section>
-
-      <div
-        style={{
-          display: "grid",
-          gap: 18,
-        }}
-      >
-        <AnalyticsChartsSection
-          revenue={revenue}
-          expenses={expenses}
-          profit={profit}
-          cash={cash}
-          currency={currency}
-        />
-
-        <DashboardAiTeam agents={agents} />
-
-        <div
-          className="dashboard-middle-grid"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(280px, 0.82fr) minmax(0, 1.18fr)",
-            gap: 18,
-            alignItems: "stretch",
-          }}
-        >
-          <ExecutiveSummary
-            approvedDocuments={approvedDocuments}
-            pendingReview={pendingReview}
-            rejectedDocuments={rejectedDocuments}
-            hasData={profile.hasData}
+          <MetricCard
+            label="Profit / Loss"
+            value={formatMoney(profit, currency)}
+            hint={`Margin: ${formatPercent(profitMargin)}`}
+            tone={getProfitTone(profit)}
           />
 
-          <FinanceMetricsSection
-            revenue={revenue}
-            expenses={expenses}
-            profit={profit}
-            cash={cash}
+          <MetricCard
+            label="Cash runway"
+            value={runway === null ? "Not available" : `${runway.toFixed(1)} months`}
+            hint={`Cash: ${formatMoney(cash, currency)}`}
+            tone={
+              runway === null
+                ? "neutral"
+                : runway >= 6
+                  ? "good"
+                  : runway >= 3
+                    ? "warning"
+                    : "danger"
+            }
           />
         </div>
 
         <div
-          className="dashboard-bottom-grid"
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)",
+            gridTemplateColumns: "minmax(0, 1.1fr) minmax(280px, 0.9fr)",
             gap: 18,
-            alignItems: "stretch",
+            alignItems: "start",
           }}
         >
-          <CashFlowTrendChart
-            trend={profile.cashFlowTrend}
-            caption={profile.cashFlowCaption}
-          />
+          <section
+            className="section-card"
+            style={{
+              padding: 22,
+              display: "grid",
+              gap: 16,
+            }}
+          >
+            <SectionHeader
+              eyebrow="Owner priority"
+              title={ownerFocus}
+              detail="Aureli combines profit, cash, document trust, and risk signals to show what the owner should focus on first."
+            />
 
-          <AlertsPanel alerts={profile.alerts} />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <MetricCard
+                label="Health score"
+                value={`${profile.healthScore}/100`}
+                hint={profile.healthLabel}
+                tone={healthTone}
+              />
+
+              <MetricCard
+                label="Document trust"
+                value={`${approvedDocuments}/${Math.max(processedDocuments, 1)}`}
+                hint={`${failedDocuments} failed document(s)`}
+                tone={documentTone}
+              />
+
+              <MetricCard
+                label="Monthly burn"
+                value={formatMoney(monthlyBurn, currency)}
+                hint="Estimated monthly cash need"
+                tone={
+                  profit !== null && profit < 0
+                    ? "danger"
+                    : monthlyBurn !== null
+                      ? "warning"
+                      : "neutral"
+                }
+              />
+            </div>
+
+            <div
+              style={{
+                border: `1px solid ${toneStyle(ownerFocusTone).border}`,
+                background: toneStyle(ownerFocusTone).background,
+                borderRadius: 18,
+                padding: 15,
+                display: "grid",
+                gap: 8,
+              }}
+            >
+              <strong
+                style={{
+                  color: "var(--color-text-primary)",
+                  fontSize: 16,
+                }}
+              >
+                Recommended next move
+              </strong>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--color-text-secondary)",
+                  fontSize: 13,
+                  lineHeight: 1.65,
+                }}
+              >
+                Open Decision Center to get ranked actions for today, this
+                week, and this month based on your financial signals.
+              </p>
+
+              <Link
+                href="/decision-center"
+                style={{
+                  color: toneStyle(ownerFocusTone).color,
+                  fontSize: 13,
+                  fontWeight: 950,
+                  textDecoration: "none",
+                }}
+              >
+                Open Decision Center {"->"}
+              </Link>
+            </div>
+          </section>
+
+          <section
+            className="section-card"
+            style={{
+              padding: 22,
+              display: "grid",
+              gap: 14,
+            }}
+          >
+            <SectionHeader
+              eyebrow="Quick actions"
+              title="Run the executive workflow"
+            />
+
+            <div
+              style={{
+                display: "grid",
+                gap: 10,
+              }}
+            >
+              <QuickAction
+                title="Start user demo"
+                detail="Seed sample business data and explore the full product."
+                href="/demo"
+                tone="gold"
+              />
+
+              <QuickAction
+                title="Forecast what-if"
+                detail="See predictive analytics for 3, 6, and 12 months."
+                href="/forecast"
+                tone="good"
+              />
+
+              <QuickAction
+                title="Cash flow runway"
+                detail="Check burn, runway, inflows, outflows, and cash gap."
+                href="/cash-flow"
+                tone="warning"
+              />
+
+              <QuickAction
+                title="Risk score"
+                detail="Review financial risk and unsafe decision signals."
+                href="/risk-score"
+                tone="danger"
+              />
+            </div>
+          </section>
         </div>
 
         <section
           className="section-card"
           style={{
-            padding: 20,
+            padding: 22,
             display: "grid",
-            gap: 12,
-            overflow: "hidden",
+            gap: 14,
           }}
         >
-          <SectionHeading
-            eyebrow="Business context"
-            title={businessName}
-            hint={`${industry} · ${country} · Currency: ${currency}`}
-            action={
-              <Link href="/business" className="btn-ghost">
-                Edit profile
-              </Link>
-            }
+          <SectionHeader
+            eyebrow="AI executive team"
+            title="Specialized agents connected to your finance data"
+            detail="Each agent focuses on one business problem, while AI Team gives the combined executive answer."
           />
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+              gap: 12,
+            }}
+          >
+            <AgentCard
+              name="AI Finance Team"
+              role="Combined CFO, accountant, analyst, tax, risk, and consultant view."
+              href="/chat?agent=team"
+              tone="gold"
+            />
+            <AgentCard
+              name="CFO Agent"
+              role="Profit, break-even, hiring, and owner-level decisions."
+              href="/chat?agent=cfo"
+              tone="good"
+            />
+            <AgentCard
+              name="Cash Flow Agent"
+              role="Runway, burn, liquidity, inflows, and outflows."
+              href="/chat?agent=cashflow"
+              tone="warning"
+            />
+            <AgentCard
+              name="Risk Agent"
+              role="Red flags, missing data, losses, and unsafe decisions."
+              href="/chat?agent=risk"
+              tone="danger"
+            />
+            <AgentCard
+              name="Tax Agent"
+              role="Tax readiness, GST checklist, and CA verification."
+              href="/chat?agent=tax"
+              tone="gold"
+            />
+            <AgentCard
+              name="Analyst Agent"
+              role="Line items, anomalies, trends, and cost patterns."
+              href="/chat?agent=analyst"
+              tone="neutral"
+            />
+          </div>
         </section>
-      </div>
 
-      <style>
-        {`
-          @media (max-width: 1260px) {
-            .dashboard-top-grid,
-            .dashboard-middle-grid,
-            .dashboard-bottom-grid,
-            .dashboard-chart-grid {
-              grid-template-columns: 1fr !important;
-            }
-          }
+        <section
+          className="section-card"
+          style={{
+            padding: 22,
+            display: "grid",
+            gap: 14,
+          }}
+        >
+          <SectionHeader
+            eyebrow="Intelligence modules"
+            title="Your finance engines"
+            detail="Jump directly into the modules powering the executive dashboard."
+          />
 
-          @media (max-width: 760px) {
-            main header {
-              padding: 20px !important;
-              border-radius: 24px !important;
-            }
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <QuickAction
+              title="Document Check"
+              detail="Find missing documents and weak extraction quality."
+              href="/document-completeness"
+              tone="warning"
+            />
+            <QuickAction
+              title="Anomaly Insights"
+              detail="Find unusual expenses, duplicates, and risky line items."
+              href="/anomaly-insights"
+              tone="danger"
+            />
+            <QuickAction
+              title="CFO Decisions"
+              detail="Break-even, expense reduction, hiring, and profit actions."
+              href="/cfo-decisions"
+              tone="good"
+            />
+            <QuickAction
+              title="Decision Center"
+              detail="One ranked owner action plan for today, week, and month."
+              href="/decision-center"
+              tone="gold"
+            />
+            <QuickAction
+              title="Learning Center"
+              detail="Feedback reward loop that improves recommendations."
+              href="/learning-center"
+              tone="good"
+            />
+            <QuickAction
+              title="Tax Coverage"
+              detail="Tax source readiness and verification coverage."
+              href="/tax-coverage"
+              tone="warning"
+            />
+          </div>
+        </section>
 
-            .dashboard-top-grid article div[style*="180px"],
-            .dashboard-chart-grid section div[style*="170px"] {
-              grid-template-columns: 1fr !important;
-            }
-          }
-        `}
-      </style>
-    </>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 0.78fr)",
+            gap: 18,
+            alignItems: "start",
+          }}
+        >
+          <section
+            className="section-card"
+            style={{
+              padding: 22,
+              display: "grid",
+              gap: 14,
+            }}
+          >
+            <SectionHeader
+              eyebrow="Recent documents"
+              title="Latest trusted data sources"
+              detail="Approved processed documents power Aureli’s dashboard and agents."
+            />
+
+            {documents.length > 0 ? (
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
+                {documents.map((document) => (
+                  <RecentDocumentRow
+                    key={document.id}
+                    document={{
+                      id: document.id,
+                      fileName: document.fileName,
+                      category: String(document.category),
+                      status: String(document.status),
+                      reviewStatus: document.reviewStatus
+                        ? String(document.reviewStatus)
+                        : null,
+                      uploadedAt: document.uploadedAt,
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--color-text-secondary)",
+                  fontSize: 13,
+                  lineHeight: 1.65,
+                }}
+              >
+                No documents yet. Upload documents or start User Demo Mode.
+              </p>
+            )}
+          </section>
+
+          <section
+            className="section-card"
+            style={{
+              padding: 22,
+              display: "grid",
+              gap: 14,
+            }}
+          >
+            <SectionHeader
+              eyebrow="Business profile"
+              title="Current setup"
+            />
+
+            <div
+              style={{
+                display: "grid",
+                gap: 10,
+              }}
+            >
+              {[
+                ["Industry", business?.industry || "Not set"],
+                ["Business type", business?.businessType || "Not set"],
+                ["Country", business?.country || "Not set"],
+                ["Currency", currency],
+                ["Financial year", business?.financialYear || "Not set"],
+                ["Documents", `${documents.length} recent file(s)`],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(255,255,255,0.035)",
+                    borderRadius: 14,
+                    padding: 12,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "var(--color-text-secondary)",
+                      fontSize: 12,
+                      fontWeight: 850,
+                    }}
+                  >
+                    {label}
+                  </span>
+
+                  <strong
+                    style={{
+                      color: "var(--color-text-primary)",
+                      fontSize: 13,
+                      textAlign: "right",
+                    }}
+                  >
+                    {value}
+                  </strong>
+                </div>
+              ))}
+            </div>
+
+            <Link href="/business" className="btn-ghost">
+              Update Business Profile {"->"}
+            </Link>
+          </section>
+        </div>
+      </section>
+    </main>
   );
 }
-
-
-
-
-
-
-
