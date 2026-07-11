@@ -257,7 +257,7 @@ function ActionCard({
             fontWeight: 900,
           }}
         >
-          Rank {action.originalRank} â†’ Score {Math.round(action.optimizedScore)}
+          Rank {action.originalRank} → Score {Math.round(action.optimizedScore)}
         </span>
       </div>
 
@@ -293,7 +293,7 @@ function ActionCard({
           fontWeight: 850,
         }}
       >
-        {action.learningLabel} Â· Reward score {action.rewardScore}
+        {action.learningLabel} · Reward score {action.rewardScore}
       </p>
 
       <div
@@ -543,7 +543,7 @@ export default function LearningCenterPage() {
                     lineHeight: 1.65,
                   }}
                 >
-                  Original Decision Center score: {report?.score}/100 Â· Focus:{" "}
+                  Original Decision Center score: {report?.score}/100 · Focus:{" "}
                   {report?.ownerFocus}
                 </p>
               </div>
@@ -624,7 +624,7 @@ export default function LearningCenterPage() {
                             fontWeight: 900,
                           }}
                         >
-                          {event.rewardType} Â· Reward {event.rewardValue} Â·{" "}
+                          {event.rewardType} · Reward {event.rewardValue} ·{" "}
                           {event.category}
                         </span>
                       </article>
