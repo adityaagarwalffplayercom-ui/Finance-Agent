@@ -77,6 +77,11 @@ const NAV_ITEMS = [
     enabled: true,
   },
 {
+    label: "Forecast",
+    href: "/forecast",
+    enabled: true,
+  },
+{
     label: "Activity",
     href: "/activity",
     enabled: true,
@@ -536,6 +541,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
     </>
   );
 }
+
 
 
 
