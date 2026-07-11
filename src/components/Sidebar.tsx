@@ -82,6 +82,11 @@ const NAV_ITEMS = [
     enabled: true,
   },
 {
+    label: "Decision Center",
+    href: "/decision-center",
+    enabled: true,
+  },
+{
     label: "Activity",
     href: "/activity",
     enabled: true,
@@ -541,6 +546,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
     </>
   );
 }
+
 
 
 
