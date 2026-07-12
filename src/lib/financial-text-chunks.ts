@@ -270,26 +270,39 @@ export function splitFinancialTextIntoChunks(
 
 const SUMMARY_SECTION_GROUPS = [
   [
+    "statement of profit and loss",
     "statement of profit",
     "profit and loss",
     "income statement",
+    "statement of comprehensive income",
+    "revenue from operations",
     "total revenue",
     "total income",
     "total expenses",
     "profit after tax",
     "loss after tax",
+    "profit for the year",
+    "loss for the year",
   ],
   [
     "balance sheet",
     "statement of financial position",
+    "statement of assets and liabilities",
+    "equity and liabilities",
+    "liabilities and equity",
     "total assets",
     "total liabilities",
     "total equity",
     "shareholders' equity",
+    "shareholders funds",
   ],
   [
+    "statement of cash flows",
+    "statement of cash flow",
     "cash flow",
     "cash and cash equivalents",
+    "cash equivalents at the end",
+    "net cash",
     "operating activities",
     "investing activities",
     "financing activities",
@@ -298,15 +311,13 @@ const SUMMARY_SECTION_GROUPS = [
 
 function summarySectionScore(chunk: string, phrases: string[]) {
   const lower = chunk.toLowerCase();
-  let score = scoreChunk(chunk);
+  const phraseHits = phrases.filter((phrase) => lower.includes(phrase)).length;
 
-  for (const phrase of phrases) {
-    if (lower.includes(phrase)) {
-      score += 80;
-    }
+  if (phraseHits === 0) {
+    return null;
   }
 
-  return score;
+  return scoreChunk(chunk) + phraseHits * 80;
 }
 
 function buildSummaryContext(text: string) {
@@ -368,7 +379,7 @@ export function buildFinancialSummaryText(
     for (let index = 0; index < chunks.length; index += 1) {
       const score = summarySectionScore(chunks[index], phrases);
 
-      if (score > bestScore) {
+      if (score !== null && score > bestScore) {
         bestScore = score;
         bestIndex = index;
       }
