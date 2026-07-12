@@ -814,7 +814,11 @@ export async function extractDocumentLineItemsFromTextChunks(params: {
     throw new Error("GEMINI_API_KEY is not configured.");
   }
 
-  const chunks = splitFinancialTextIntoChunks(params.text);
+  const configuredMaxChunks = Number(process.env.GEMINI_MAX_PDF_CHUNKS ?? "3");
+  const maxChunks = Number.isFinite(configuredMaxChunks)
+    ? Math.min(4, Math.max(1, Math.trunc(configuredMaxChunks)))
+    : 3;
+  const chunks = splitFinancialTextIntoChunks(params.text, { maxChunks });
   const collected: FinancialLineItem[] = [];
   let completedChunks = 0;
   let failedChunks = 0;
@@ -842,7 +846,7 @@ export async function extractDocumentLineItemsFromTextChunks(params: {
           responseMimeType: "application/json",
           responseSchema: LINE_ITEM_ONLY_SCHEMA,
           temperature: 0,
-          maxOutputTokens: 8192,
+          maxOutputTokens: 4096,
         },
       });
 
