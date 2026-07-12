@@ -1,5 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { ensureExtractedLineItems } from "./extracted-line-items";
+import {
+  normalizeAndDedupeFinancialLineItems,
+  splitFinancialTextIntoChunks,
+  type FinancialLineItem,
+} from "./financial-text-chunks";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -12,10 +17,9 @@ const CONFIGURED_FALLBACK_MODELS =
     .map((model) => model.trim())
     .filter(Boolean) ?? [];
 
-const FALLBACK_MODELS = [
-  PRIMARY_MODEL,
-  ...CONFIGURED_FALLBACK_MODELS,
-].filter((model, index, models) => model && models.indexOf(model) === index);
+const FALLBACK_MODELS = [PRIMARY_MODEL, ...CONFIGURED_FALLBACK_MODELS].filter(
+  (model, index, models) => model && models.indexOf(model) === index,
+);
 
 const EXTRACTION_SCHEMA = {
   type: "object",
@@ -267,6 +271,28 @@ const EXTRACTION_SCHEMA = {
     },
   },
   required: ["summary"],
+};
+
+const LINE_ITEM_ONLY_SCHEMA = {
+  type: "object",
+  properties: {
+    lineItems: {
+      type: "array",
+      description:
+        "Every readable financial table row in this text chunk. Return each numeric period/column as its own item when a row contains multiple values.",
+      items: {
+        type: "object",
+        properties: {
+          description: { type: "string" },
+          amount: { type: "number" },
+          category: { type: "string", nullable: true },
+          date: { type: "string", nullable: true },
+        },
+        required: ["description", "amount"],
+      },
+    },
+  },
+  required: ["lineItems"],
 };
 
 export type ExtractedDocumentData = {
@@ -654,9 +680,9 @@ async function generateContentWithRetry(request: GenerateContentRequest) {
   );
 }
 
-function safeJsonParse(text: string): ExtractedDocumentData {
+function safeJsonParse<T>(text: string): T {
   try {
-    return JSON.parse(text) as ExtractedDocumentData;
+    return JSON.parse(text) as T;
   } catch {
     const match = text.match(/\{[\s\S]*\}/);
 
@@ -664,11 +690,13 @@ function safeJsonParse(text: string): ExtractedDocumentData {
       throw new Error("Gemini returned invalid JSON.");
     }
 
-    return JSON.parse(match[0]) as ExtractedDocumentData;
+    return JSON.parse(match[0]) as T;
   }
 }
 
-function normalizeExtractedData(data: ExtractedDocumentData): ExtractedDocumentData {
+function normalizeExtractedData(
+  data: ExtractedDocumentData,
+): ExtractedDocumentData {
   return ensureExtractedLineItems(data);
 }
 
@@ -717,7 +745,137 @@ export async function extractDocumentData(params: {
     throw new Error("Gemini returned an empty response.");
   }
 
-  return normalizeExtractedData(safeJsonParse(text));
+  return normalizeExtractedData(safeJsonParse<ExtractedDocumentData>(text));
 }
 
+type ChunkLineItemResponse = {
+  lineItems?: FinancialLineItem[];
+};
 
+export type ChunkedLineItemExtractionResult = {
+  lineItems: FinancialLineItem[];
+  candidateChunks: number;
+  completedChunks: number;
+  failedChunks: number;
+};
+
+function buildLineItemChunkPrompt(params: {
+  fileName: string;
+  category: string;
+  chunkIndex: number;
+  chunkCount: number;
+  reportedUnit?: string | null;
+  scaleMultiplier?: number | null;
+  documentDate?: string | null;
+}) {
+  const multiplier =
+    typeof params.scaleMultiplier === "number" &&
+    Number.isFinite(params.scaleMultiplier) &&
+    params.scaleMultiplier > 0
+      ? params.scaleMultiplier
+      : 1;
+
+  return `
+You are extracting individual financial table rows from chunk ${params.chunkIndex + 1} of ${params.chunkCount} of "${params.fileName}".
+
+Document category: ${params.category}
+Whole-document reported unit: ${params.reportedUnit ?? "unknown"}
+Whole-document scale multiplier: ${multiplier}
+Fallback document date: ${params.documentDate ?? "unknown"}
+
+Return JSON containing lineItems only. Do not summarize the document.
+
+Rules:
+- Extract EVERY readable row in this chunk that has a label and a financial amount.
+- Include detail rows, subtotals, totals, assets, liabilities, equity, revenue, expenses, tax, finance cost, and cash-flow rows.
+- When one row contains current-year and previous-year amounts, return a separate item for each value and include the visible column header or period in the description.
+- Apply the whole-document scale multiplier ${multiplier} to displayed amounts before returning them.
+- Preserve negative values shown with a minus sign or parentheses.
+- Do not invent missing rows or numbers.
+- Ignore page numbers, note reference numbers, percentages, years used only as headings, and narrative prose.
+- Infer a concise category such as Revenue, Expense, Asset, Liability, Equity, Tax, Finance Cost, Cash Flow, or Other.
+`;
+}
+
+/**
+ * Extracts detailed statement rows in multiple focused calls. The normal
+ * whole-document extraction remains responsible for summary metrics; these
+ * rows are merged as non-posting audit details by the ledger layer.
+ */
+export async function extractDocumentLineItemsFromTextChunks(params: {
+  fileName: string;
+  category: string;
+  text: string;
+  reportedUnit?: string | null;
+  scaleMultiplier?: number | null;
+  documentDate?: string | null;
+}): Promise<ChunkedLineItemExtractionResult> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured.");
+  }
+
+  const chunks = splitFinancialTextIntoChunks(params.text);
+  const collected: FinancialLineItem[] = [];
+  let completedChunks = 0;
+  let failedChunks = 0;
+
+  for (let index = 0; index < chunks.length; index += 1) {
+    try {
+      const response = await generateContentWithRetry({
+        model: PRIMARY_MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: buildLineItemChunkPrompt({
+                  ...params,
+                  chunkIndex: index,
+                  chunkCount: chunks.length,
+                }),
+              },
+              { text: `Financial table text chunk:\n\n${chunks[index]}` },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: LINE_ITEM_ONLY_SCHEMA,
+          temperature: 0,
+          maxOutputTokens: 8192,
+        },
+      });
+
+      if (!response.text) {
+        failedChunks += 1;
+        continue;
+      }
+
+      const parsed = safeJsonParse<ChunkLineItemResponse>(response.text);
+      const normalized = normalizeAndDedupeFinancialLineItems(
+        Array.isArray(parsed.lineItems) ? parsed.lineItems : [],
+      );
+
+      collected.push(...normalized);
+      completedChunks += 1;
+    } catch (error) {
+      failedChunks += 1;
+      console.warn(
+        `Financial line-item chunk ${index + 1}/${chunks.length} failed: ${errorToText(error)}`,
+      );
+
+      // Quota failures are unlikely to recover on every remaining chunk and
+      // would only create unnecessary retries. Keep rows already collected.
+      if (isQuotaLikeError(error)) {
+        break;
+      }
+    }
+  }
+
+  return {
+    lineItems: normalizeAndDedupeFinancialLineItems(collected),
+    candidateChunks: chunks.length,
+    completedChunks,
+    failedChunks,
+  };
+}

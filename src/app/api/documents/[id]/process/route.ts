@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
-import { DocumentStatus, type Prisma } from "@prisma/client";
+import {
+  DocumentCategory,
+  DocumentReviewStatus,
+  DocumentStatus,
+  type Prisma,
+} from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
-import { extractDocumentData, type ExtractedDocumentData } from "@/lib/gemini";
+import {
+  extractDocumentData,
+  extractDocumentLineItemsFromTextChunks,
+  type ExtractedDocumentData,
+} from "@/lib/gemini";
+import { syncLedgerEntriesFromDocument } from "@/lib/transaction-ledger";
 import { USAGE_LIMITS, formatUsageSize } from "@/lib/usage-limits";
 import {
   checkAndRecordAiProcessUsage,
@@ -21,6 +31,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const XLSX_MIME_TYPES = [
   "application/vnd.ms-excel",
@@ -60,7 +71,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function getPreviousExtractedData(value: unknown): ExtractedDocumentData | null {
+function getPreviousExtractedData(
+  value: unknown,
+): ExtractedDocumentData | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -73,9 +86,7 @@ async function extractPdfText(buffer: Buffer) {
     const pdfParseModule = await import("pdf-parse");
     const result = await pdfParseModule.default(buffer);
 
-    return result.text
-      .replace(/\u0000/g, " ")
-      .trim();
+    return result.text.replace(/\u0000/g, " ").trim();
   } catch (error) {
     console.warn(
       "Deterministic PDF text extraction failed; using inline AI fallback.",
@@ -112,6 +123,10 @@ async function saveProcessedDocument(params: {
   category: string;
   extracted: ExtractedDocumentData;
   rawLineItemCount: number;
+  chunkLineItemCount?: number;
+  candidateChunks?: number;
+  completedChunks?: number;
+  failedChunks?: number;
 }) {
   await prisma.document.update({
     where: {
@@ -140,6 +155,10 @@ async function saveProcessedDocument(params: {
       scaleMultiplier: params.extracted.scaleMultiplier ?? null,
       lineItemsCount: params.extracted.lineItems?.length ?? 0,
       deterministicRawLineItems: params.rawLineItemCount,
+      chunkLineItems: params.chunkLineItemCount ?? 0,
+      candidateChunks: params.candidateChunks ?? 0,
+      completedChunks: params.completedChunks ?? 0,
+      failedChunks: params.failedChunks ?? 0,
     },
   });
 
@@ -176,6 +195,7 @@ export async function POST(
       fileSize: true,
       category: true,
       status: true,
+      reviewStatus: true,
       content: true,
       extractedData: true,
     },
@@ -239,7 +259,8 @@ export async function POST(
   const usage = await checkAndRecordAiProcessUsage(userId);
 
   if (!usage.allowed) {
-    const message = usage.message ?? "AI processing limit reached. Try again later.";
+    const message =
+      usage.message ?? "AI processing limit reached. Try again later.";
 
     await createAuditEvent({
       userId,
@@ -331,6 +352,10 @@ export async function POST(
     const previousExtracted = getPreviousExtractedData(document.extractedData);
 
     let extracted: ExtractedDocumentData;
+    let chunkLineItems: RawFinancialLineItem[] = [];
+    let candidateChunks = 0;
+    let completedChunks = 0;
+    let failedChunks = 0;
 
     if (document.mimeType === "text/csv") {
       const text = buffer.toString("utf-8");
@@ -396,6 +421,24 @@ export async function POST(
             text: getSafeTextForAi(pdfText),
           },
         });
+
+        if (document.category === DocumentCategory.FINANCIAL_STATEMENT) {
+          const chunkedExtraction =
+            await extractDocumentLineItemsFromTextChunks({
+              fileName: document.fileName,
+              category: document.category,
+              text: pdfText,
+              reportedUnit: extracted.reportedUnit,
+              scaleMultiplier: extracted.scaleMultiplier,
+              documentDate:
+                extracted.documentDate ?? extracted.periodEnd ?? null,
+            });
+
+          chunkLineItems = chunkedExtraction.lineItems;
+          candidateChunks = chunkedExtraction.candidateChunks;
+          completedChunks = chunkedExtraction.completedChunks;
+          failedChunks = chunkedExtraction.failedChunks;
+        }
       } else {
         extracted = await extractDocumentData({
           fileName: document.fileName,
@@ -419,7 +462,10 @@ export async function POST(
       });
     }
 
-    const mergedExtraction = mergeExtractedLineItems(extracted, rawLineItems);
+    const mergedExtraction = mergeExtractedLineItems(extracted, [
+      ...rawLineItems,
+      ...chunkLineItems,
+    ]);
 
     await saveProcessedDocument({
       id: document.id,
@@ -428,12 +474,33 @@ export async function POST(
       category: document.category,
       extracted: mergedExtraction,
       rawLineItemCount: rawLineItems.length,
+      chunkLineItemCount: chunkLineItems.length,
+      candidateChunks,
+      completedChunks,
+      failedChunks,
     });
+
+    const ledgerEntriesSynced =
+      document.reviewStatus === DocumentReviewStatus.APPROVED
+        ? await syncLedgerEntriesFromDocument({
+            documentId: document.id,
+            userId,
+          })
+        : 0;
+
+    if (ledgerEntriesSynced > 0) {
+      revalidatePath("/ledger");
+    }
 
     return NextResponse.json({
       status: DocumentStatus.PROCESSED,
       extractedData: mergedExtraction,
       rawLineItemsDetected: rawLineItems.length,
+      chunkLineItemsDetected: chunkLineItems.length,
+      candidateChunks,
+      completedChunks,
+      failedChunks,
+      ledgerEntriesSynced,
       finalLineItemsStored: mergedExtraction.lineItems?.length ?? 0,
     });
   } catch (error) {
@@ -465,7 +532,8 @@ export async function POST(
         geminiError: cleanProcessingError(message),
         extractedData: deterministicOnlyExtraction,
         rawLineItemsDetected: rawLineItems.length,
-        finalLineItemsStored: deterministicOnlyExtraction.lineItems?.length ?? 0,
+        finalLineItemsStored:
+          deterministicOnlyExtraction.lineItems?.length ?? 0,
       });
     }
 
@@ -517,4 +585,3 @@ export async function POST(
     releaseProcessingLock(userId);
   }
 }
-
