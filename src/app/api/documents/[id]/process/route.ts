@@ -143,6 +143,7 @@ async function saveProcessedDocument(params: {
   completedChunks?: number;
   failedChunks?: number;
   summaryFieldsBackfilled?: string[];
+  summaryMetricEvidence?: Record<string, string>;
 }) {
   await prisma.document.update({
     where: {
@@ -176,6 +177,7 @@ async function saveProcessedDocument(params: {
       completedChunks: params.completedChunks ?? 0,
       failedChunks: params.failedChunks ?? 0,
       summaryFieldsBackfilled: params.summaryFieldsBackfilled ?? [],
+      summaryMetricEvidence: params.summaryMetricEvidence ?? {},
     },
   });
 
@@ -316,6 +318,7 @@ export async function POST(
   }
 
   let rawLineItems: RawFinancialLineItem[] = [];
+  let sourceTextForSummary = "";
 
   try {
     const markProcessing = await prisma.document.updateMany({
@@ -378,6 +381,7 @@ export async function POST(
 
     if (document.mimeType === "text/csv") {
       const text = buffer.toString("utf-8");
+      sourceTextForSummary = text;
 
       rawLineItems = extractLineItemsFromText(text, {
         documentDate: previousExtracted?.documentDate ?? null,
@@ -414,6 +418,7 @@ export async function POST(
             `Sheet: ${name}\n${XLSX.utils.sheet_to_csv(workbook.Sheets[name])}`,
         )
         .join("\n\n");
+      sourceTextForSummary = csv;
 
       extracted = await extractDocumentData({
         fileName: document.fileName,
@@ -426,6 +431,7 @@ export async function POST(
       });
     } else if (PDF_MIME_TYPES.includes(document.mimeType)) {
       const pdfText = await extractPdfText(buffer);
+      sourceTextForSummary = pdfText;
 
       rawLineItems = extractLineItemsFromText(pdfText, {
         documentDate: previousExtracted?.documentDate ?? null,
@@ -500,8 +506,10 @@ export async function POST(
     ]);
     const summaryBackfill =
       document.category === DocumentCategory.FINANCIAL_STATEMENT
-        ? backfillFinancialStatementSummary(mergedWithLineItems)
-        : { data: mergedWithLineItems, backfilledFields: [] };
+        ? backfillFinancialStatementSummary(mergedWithLineItems, {
+            rawText: sourceTextForSummary,
+          })
+        : { data: mergedWithLineItems, backfilledFields: [], evidence: {} };
     const mergedExtraction = summaryBackfill.data;
 
     await saveProcessedDocument({
@@ -516,6 +524,7 @@ export async function POST(
       completedChunks,
       failedChunks,
       summaryFieldsBackfilled: summaryBackfill.backfilledFields,
+      summaryMetricEvidence: summaryBackfill.evidence,
     });
 
     const ledgerEntriesSynced =
@@ -539,6 +548,7 @@ export async function POST(
       completedChunks,
       failedChunks,
       summaryFieldsBackfilled: summaryBackfill.backfilledFields,
+      summaryMetricEvidence: summaryBackfill.evidence,
       ledgerEntriesSynced,
       finalLineItemsStored: mergedExtraction.lineItems?.length ?? 0,
     });
@@ -556,8 +566,10 @@ export async function POST(
       });
       const deterministicSummary =
         document.category === DocumentCategory.FINANCIAL_STATEMENT
-          ? backfillFinancialStatementSummary(deterministicBase)
-          : { data: deterministicBase, backfilledFields: [] };
+          ? backfillFinancialStatementSummary(deterministicBase, {
+              rawText: sourceTextForSummary,
+            })
+          : { data: deterministicBase, backfilledFields: [], evidence: {} };
       const deterministicOnlyExtraction = deterministicSummary.data;
 
       await saveProcessedDocument({
@@ -568,6 +580,7 @@ export async function POST(
         extracted: deterministicOnlyExtraction,
         rawLineItemCount: rawLineItems.length,
         summaryFieldsBackfilled: deterministicSummary.backfilledFields,
+        summaryMetricEvidence: deterministicSummary.evidence,
       });
 
       return NextResponse.json({
@@ -578,6 +591,7 @@ export async function POST(
         extractedData: deterministicOnlyExtraction,
         rawLineItemsDetected: rawLineItems.length,
         summaryFieldsBackfilled: deterministicSummary.backfilledFields,
+        summaryMetricEvidence: deterministicSummary.evidence,
         finalLineItemsStored:
           deterministicOnlyExtraction.lineItems?.length ?? 0,
       });
