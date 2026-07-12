@@ -26,6 +26,7 @@ type LedgerPageProps = {
     direction?: string;
     status?: string;
     source?: string;
+    entryType?: string;
   }>;
 };
 
@@ -249,11 +250,18 @@ export default async function LedgerPage({
     ? params.source
     : undefined;
 
+  const entryType =
+    params.entryType === "posting" ||
+    params.entryType === "detail"
+      ? params.entryType
+      : undefined;
+
   const filtersActive = Boolean(
     query ||
       direction ||
       selectedStatus ||
-      source,
+      source ||
+      entryType,
   );
 
   const where: Prisma.LedgerEntryWhereInput = {
@@ -274,6 +282,12 @@ export default async function LedgerPage({
     ...(source
       ? {
           sourceType: source,
+        }
+      : {}),
+
+    ...(entryType
+      ? {
+          isPosting: entryType === "posting",
         }
       : {}),
 
@@ -319,6 +333,8 @@ export default async function LedgerPage({
     reviewCount,
     approvedCount,
     rejectedCount,
+    postingCount,
+    detailCount,
     approvedDocuments,
   ] = await Promise.all([
     prisma.ledgerEntry.findMany({
@@ -372,6 +388,20 @@ export default async function LedgerPage({
       },
     }),
 
+    prisma.ledgerEntry.count({
+      where: {
+        userId: session.user.id,
+        isPosting: true,
+      },
+    }),
+
+    prisma.ledgerEntry.count({
+      where: {
+        userId: session.user.id,
+        isPosting: false,
+      },
+    }),
+
     prisma.document.count({
       where: {
         userId: session.user.id,
@@ -384,13 +414,16 @@ export default async function LedgerPage({
   ]);
 
   const primaryCurrency =
-    entries.find((entry) => entry.currency)
-      ?.currency ?? "INR";
+    entries.find(
+      (entry) => entry.isPosting && entry.currency,
+    )?.currency ??
+    entries.find((entry) => entry.currency)?.currency ??
+    "INR";
 
   const trustedEntries = entries.filter(
     (entry) =>
-      entry.status ===
-        LedgerEntryStatus.APPROVED &&
+      entry.status === LedgerEntryStatus.APPROVED &&
+      entry.isPosting &&
       entry.currency === primaryCurrency,
   );
 
@@ -435,6 +468,7 @@ export default async function LedgerPage({
       currency: entry.currency,
       confidence: entry.confidence,
       status: entry.status,
+      isPosting: entry.isPosting,
       sourceType: entry.sourceType,
       document: entry.document,
     }));
@@ -458,6 +492,10 @@ export default async function LedgerPage({
 
     if (source) {
       nextParams.set("source", source);
+    }
+
+    if (entryType) {
+      nextParams.set("entryType", entryType);
     }
 
     if (status) {
@@ -522,9 +560,9 @@ export default async function LedgerPage({
 
               <p className={styles.subtitle}>
                 Documents are approved only once.
-                Their ledger entries become trusted
-                automatically, while this page remains
-                available for audit and corrections.
+                Posting totals and every extracted line become trusted
+                automatically. Individual details stay visible for audit and AI
+                analysis without being counted twice in dashboard totals.
               </p>
             </div>
 
@@ -549,7 +587,7 @@ export default async function LedgerPage({
               value={totalEntries.toLocaleString(
                 "en-IN",
               )}
-              caption={`${approvedCount} trusted · ${reviewCount} awaiting review`}
+              caption={`${postingCount} posting · ${detailCount} individual details`}
               tone="accent"
             />
 
@@ -742,6 +780,22 @@ export default async function LedgerPage({
                   {humanize(value)}
                 </option>
               ))}
+            </select>
+          </label>
+
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>
+              Entry type
+            </span>
+
+            <select
+              name="entryType"
+              defaultValue={entryType ?? ""}
+              className={styles.select}
+            >
+              <option value="">All entries</option>
+              <option value="posting">Counts in totals</option>
+              <option value="detail">Individual details</option>
             </select>
           </label>
 

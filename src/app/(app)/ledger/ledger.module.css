@@ -2415,3 +2415,28 @@
 }
 
 /* END_AURELI_REVIEW_QUEUE */
+
+
+.postingLabel,
+.detailOnlyLabel {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.postingLabel {
+  color: rgba(132, 206, 166, 0.96);
+  border: 1px solid rgba(105, 168, 139, 0.25);
+  background: rgba(105, 168, 139, 0.09);
+}
+
+.detailOnlyLabel {
+  color: rgba(176, 196, 223, 0.96);
+  border: 1px solid rgba(112, 145, 184, 0.25);
+  background: rgba(70, 91, 120, 0.12);
+}

@@ -64,6 +64,7 @@ export async function getLedgerDataConfidence(
       },
       select: {
         status: true,
+        isPosting: true,
         direction: true,
         currency: true,
         transactionDate: true,
@@ -75,10 +76,11 @@ export async function getLedgerDataConfidence(
 
   const financialEntries = entries.filter(
     (entry) =>
-      entry.direction ===
-        LedgerDirection.CREDIT ||
-      entry.direction ===
-        LedgerDirection.DEBIT,
+      entry.isPosting &&
+      (
+        entry.direction === LedgerDirection.CREDIT ||
+        entry.direction === LedgerDirection.DEBIT
+      ),
   );
 
   const approvedFinancialEntries =
@@ -99,14 +101,14 @@ export async function getLedgerDataConfidence(
 
   const pendingEntries = entries.filter(
     (entry) =>
-      entry.status ===
-      LedgerEntryStatus.NEEDS_REVIEW,
+      entry.isPosting &&
+      entry.status === LedgerEntryStatus.NEEDS_REVIEW,
   ).length;
 
   const rejectedEntries = entries.filter(
     (entry) =>
-      entry.status ===
-      LedgerEntryStatus.REJECTED,
+      entry.isPosting &&
+      entry.status === LedgerEntryStatus.REJECTED,
   ).length;
 
   const datedApprovedEntries =

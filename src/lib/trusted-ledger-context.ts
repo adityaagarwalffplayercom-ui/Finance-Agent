@@ -26,6 +26,23 @@ export type TrustedLedgerEntryEvidence = {
   sourceCategory: string;
 };
 
+export type TrustedLedgerDetailEvidence = {
+  id: string;
+  transactionDate: Date | null;
+  createdAt: Date;
+  description: string;
+  counterparty: string | null;
+  category: string | null;
+  direction: "CREDIT" | "DEBIT" | "NEUTRAL";
+  amount: number;
+  currency: string;
+  confidence: number | null;
+  sourceType: LedgerSourceType;
+  documentId: string | null;
+  sourceFileName: string;
+  sourceCategory: string;
+};
+
 export type TrustedLedgerMonthlyPoint = {
   key: string;
   label: string;
@@ -54,6 +71,7 @@ export type TrustedLedgerContext = {
     approvedFinancialEntries: number;
     excludedCurrencyEntries: number;
     neutralApprovedEntries: number;
+    detailApprovedEntries: number;
     manualApprovedEntries: number;
     datedApprovedEntries: number;
     sourceCount: number;
@@ -92,6 +110,7 @@ export type TrustedLedgerContext = {
   };
 
   entries: TrustedLedgerEntryEvidence[];
+  detailEntries: TrustedLedgerDetailEvidence[];
   topCredits: TrustedLedgerEntryEvidence[];
   topDebits: TrustedLedgerEntryEvidence[];
   confidence: LedgerDataConfidence;
@@ -291,7 +310,10 @@ function normalizeCurrency(value: string | null | undefined) {
 }
 
 function evidenceDate(
-  entry: TrustedLedgerEntryEvidence,
+  entry: {
+    transactionDate: Date | null;
+    createdAt: Date;
+  },
 ) {
   const date =
     entry.transactionDate ??
@@ -301,7 +323,10 @@ function evidenceDate(
 }
 
 function evidenceSource(
-  entry: TrustedLedgerEntryEvidence,
+  entry: {
+    documentId: string | null;
+    sourceFileName: string;
+  },
 ) {
   return entry.documentId
     ? entry.sourceFileName
@@ -347,6 +372,7 @@ export async function getTrustedLedgerContext(
         currency: true,
         confidence: true,
         status: true,
+        isPosting: true,
         sourceType: true,
         documentId: true,
         document: {
@@ -391,6 +417,7 @@ export async function getTrustedLedgerContext(
       (entry) =>
         entry.status ===
           LedgerEntryStatus.APPROVED &&
+        entry.isPosting &&
         (
           entry.direction ===
             LedgerDirection.CREDIT ||
@@ -480,6 +507,39 @@ export async function getTrustedLedgerContext(
               )
             : entry.category ??
               "MANUAL",
+      }));
+
+  const detailEntries: TrustedLedgerDetailEvidence[] =
+    ledgerEntries
+      .filter(
+        (entry) =>
+          entry.status === LedgerEntryStatus.APPROVED &&
+          !entry.isPosting &&
+          normalizeCurrency(entry.currency) === currency,
+      )
+      .map((entry) => ({
+        id: entry.id,
+        transactionDate: entry.transactionDate,
+        createdAt: entry.createdAt,
+        description: entry.description,
+        counterparty: entry.counterparty,
+        category: entry.category,
+        direction:
+          entry.direction === LedgerDirection.CREDIT
+            ? "CREDIT"
+            : entry.direction === LedgerDirection.DEBIT
+              ? "DEBIT"
+              : "NEUTRAL",
+        amount: Number(entry.amount),
+        currency,
+        confidence: entry.confidence,
+        sourceType: entry.sourceType,
+        documentId: entry.documentId,
+        sourceFileName:
+          entry.document?.fileName ?? "Manual entry",
+        sourceCategory: entry.document
+          ? String(entry.document.category)
+          : entry.category ?? "MANUAL",
       }));
 
   const creditEntries =
@@ -634,23 +694,25 @@ export async function getTrustedLedgerContext(
   const pendingEntries =
     ledgerEntries.filter(
       (entry) =>
-        entry.status ===
-        LedgerEntryStatus.NEEDS_REVIEW,
+        entry.isPosting &&
+        entry.status === LedgerEntryStatus.NEEDS_REVIEW,
     ).length;
 
   const rejectedEntries =
     ledgerEntries.filter(
       (entry) =>
-        entry.status ===
-        LedgerEntryStatus.REJECTED,
+        entry.isPosting &&
+        entry.status === LedgerEntryStatus.REJECTED,
     ).length;
 
   const neutralApprovedEntries =
     approvedEntries.filter(
       (entry) =>
-        entry.direction ===
-        LedgerDirection.NEUTRAL,
+        entry.isPosting &&
+        entry.direction === LedgerDirection.NEUTRAL,
     ).length;
+
+  const detailApprovedEntries = detailEntries.length;
 
   const manualApprovedEntries =
     trustedEntries.filter(
@@ -764,6 +826,7 @@ export async function getTrustedLedgerContext(
         approvedFinancialAllCurrencies.length -
         trustedEntries.length,
       neutralApprovedEntries,
+      detailApprovedEntries,
       manualApprovedEntries,
       datedApprovedEntries,
       sourceCount,
@@ -841,6 +904,7 @@ export async function getTrustedLedgerContext(
     },
 
     entries: trustedEntries,
+    detailEntries,
 
     topCredits:
       [...creditEntries]
@@ -903,6 +967,20 @@ export function buildTrustedLedgerPromptBlock(
           .join("\n")
       : "- No approved debit entries.";
 
+  const individualDetails =
+    context.detailEntries.length > 0
+      ? context.detailEntries
+          .slice(0, 40)
+          .map(
+            (entry) =>
+              `- ${evidenceDate(entry)} | DETAIL ONLY | ${entry.direction} | ${entry.description} | ${formatLedgerMoney(
+                entry.amount,
+                context.currency,
+              )} | Source: ${evidenceSource(entry)}`,
+          )
+          .join("\n")
+      : "- No individual non-posting source details are available.";
+
   const monthlyHistory =
     context.monthly.points.length > 0
       ? context.monthly.points
@@ -930,7 +1008,8 @@ Trusted ledger source of truth:
 - Approved financial entries used: ${context.counts.approvedFinancialEntries}
 - Pending entries excluded: ${context.counts.pendingEntries}
 - Rejected entries excluded: ${context.counts.rejectedEntries}
-- Neutral approved entries excluded from totals: ${context.counts.neutralApprovedEntries}
+- Neutral approved posting entries excluded from totals: ${context.counts.neutralApprovedEntries}
+- Individual approved source details available: ${context.counts.detailApprovedEntries}
 - Different-currency approved entries excluded: ${context.counts.excludedCurrencyEntries}
 - Manual approved entries included: ${context.counts.manualApprovedEntries}
 - Observed months: ${context.monthly.observedMonths}
@@ -977,12 +1056,16 @@ ${topCredits}
 Top approved debits:
 ${topDebits}
 
+Individual approved source details (non-posting; use for explanation, category analysis, and evidence, never add them again to totals):
+${individualDetails}
+
 Approved monthly history:
 ${monthlyHistory}
 
 Ledger evidence rules:
 - Approved CREDIT and DEBIT entries in the selected currency are the source of truth for financial amounts.
-- Pending, rejected, neutral, and different-currency entries are excluded from financial totals.
+- Pending, rejected, neutral, non-posting detail, and different-currency entries are excluded from financial totals.
+- Non-posting individual details are valid supporting evidence but must never be summed on top of posting totals.
 - Manual approved entries are valid ledger evidence.
 - Document extracted totals may support source context, but they must not override approved ledger totals.
 - Never invent a cash balance, runway, tax amount, or forecast input.

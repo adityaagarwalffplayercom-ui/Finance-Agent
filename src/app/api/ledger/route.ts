@@ -229,6 +229,7 @@ export async function POST(request: Request) {
           confidence: 1,
           status:
             LedgerEntryStatus.APPROVED,
+          isPosting: true,
           sourceType:
             LedgerSourceType.MANUAL,
           sourceLineKey:

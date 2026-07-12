@@ -39,6 +39,7 @@ export type ReviewTableEntry = {
   currency: string;
   confidence: number | null;
   status: LedgerStatus;
+  isPosting: boolean;
   sourceType: LedgerSource;
   document: {
     id: string;
@@ -596,6 +597,18 @@ export function LedgerReviewTable({
                       <span>
                         {entry.counterparty ??
                           "No counterparty detected"}
+                      </span>
+
+                      <span
+                        className={
+                          entry.isPosting
+                            ? styles.postingLabel
+                            : styles.detailOnlyLabel
+                        }
+                      >
+                        {entry.isPosting
+                          ? "Counts in totals"
+                          : "Individual detail · excluded from totals"}
                       </span>
                     </div>
                   </td>

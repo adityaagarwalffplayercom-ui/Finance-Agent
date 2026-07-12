@@ -253,6 +253,7 @@ model LedgerEntry {
   currency        String            @default("INR")
   confidence      Float?
   status          LedgerEntryStatus @default(NEEDS_REVIEW)
+  isPosting       Boolean           @default(true)
   sourceType      LedgerSourceType
   sourceLineKey   String
   metadata        Json?
@@ -266,6 +267,7 @@ model LedgerEntry {
   @@unique([documentId, sourceLineKey])
   @@index([userId, transactionDate])
   @@index([userId, direction, status])
+  @@index([userId, isPosting, direction, status])
   @@index([documentId])
   @@map("ledger_entry")
 }

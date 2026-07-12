@@ -295,6 +295,7 @@ export async function getCashFlowReport(
         userId,
         status:
           LedgerEntryStatus.APPROVED,
+        isPosting: true,
       },
       select: {
         id: true,
@@ -333,6 +334,7 @@ export async function getCashFlowReport(
         userId,
         status:
           LedgerEntryStatus.NEEDS_REVIEW,
+        isPosting: true,
       },
     }),
 
@@ -341,6 +343,7 @@ export async function getCashFlowReport(
         userId,
         status:
           LedgerEntryStatus.REJECTED,
+        isPosting: true,
       },
     }),
   ]);
