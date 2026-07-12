@@ -18,6 +18,7 @@ import {
 import { syncLedgerEntriesFromDocument } from "@/lib/transaction-ledger";
 import { buildFinancialSummaryText } from "@/lib/financial-text-chunks";
 import { backfillFinancialStatementSummary } from "@/lib/financial-summary-backfill";
+import { validateFinancialStatementSummary } from "@/lib/financial-summary-validation";
 import { USAGE_LIMITS, formatUsageSize } from "@/lib/usage-limits";
 import {
   checkAndRecordAiProcessUsage,
@@ -510,7 +511,16 @@ export async function POST(
             rawText: sourceTextForSummary,
           })
         : { data: mergedWithLineItems, backfilledFields: [], evidence: {} };
-    const mergedExtraction = summaryBackfill.data;
+    const summaryValidation =
+      document.category === DocumentCategory.FINANCIAL_STATEMENT
+        ? validateFinancialStatementSummary(summaryBackfill.data, {
+            evidence: summaryBackfill.evidence,
+          })
+        : {
+            data: summaryBackfill.data,
+            validation: null,
+          };
+    const mergedExtraction = summaryValidation.data;
 
     await saveProcessedDocument({
       id: document.id,
@@ -549,6 +559,7 @@ export async function POST(
       failedChunks,
       summaryFieldsBackfilled: summaryBackfill.backfilledFields,
       summaryMetricEvidence: summaryBackfill.evidence,
+      metricValidation: summaryValidation.validation,
       ledgerEntriesSynced,
       finalLineItemsStored: mergedExtraction.lineItems?.length ?? 0,
     });
@@ -570,7 +581,13 @@ export async function POST(
               rawText: sourceTextForSummary,
             })
           : { data: deterministicBase, backfilledFields: [], evidence: {} };
-      const deterministicOnlyExtraction = deterministicSummary.data;
+      const deterministicValidation =
+        document.category === DocumentCategory.FINANCIAL_STATEMENT
+          ? validateFinancialStatementSummary(deterministicSummary.data, {
+              evidence: deterministicSummary.evidence,
+            })
+          : { data: deterministicSummary.data, validation: null };
+      const deterministicOnlyExtraction = deterministicValidation.data;
 
       await saveProcessedDocument({
         id: document.id,
@@ -592,6 +609,7 @@ export async function POST(
         rawLineItemsDetected: rawLineItems.length,
         summaryFieldsBackfilled: deterministicSummary.backfilledFields,
         summaryMetricEvidence: deterministicSummary.evidence,
+        metricValidation: deterministicValidation.validation,
         finalLineItemsStored:
           deterministicOnlyExtraction.lineItems?.length ?? 0,
       });

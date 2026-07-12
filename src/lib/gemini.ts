@@ -307,6 +307,29 @@ const LINE_ITEM_ONLY_SCHEMA = {
 export type ExtractedDocumentData = {
   summary: string;
 
+  metricValidation?: {
+    status: "verified" | "partial" | "needs_review";
+    invalidatedFields: Array<
+      | "revenue"
+      | "expenses"
+      | "netIncome"
+      | "cash"
+      | "assets"
+      | "liabilities"
+      | "equity"
+    >;
+    availableFields: Array<
+      | "revenue"
+      | "expenses"
+      | "netIncome"
+      | "cash"
+      | "assets"
+      | "liabilities"
+      | "equity"
+    >;
+    warnings: string[];
+  } | null;
+
   documentDate?: string | null;
   periodStart?: string | null;
   periodEnd?: string | null;
