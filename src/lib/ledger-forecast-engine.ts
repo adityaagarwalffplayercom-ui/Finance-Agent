@@ -533,6 +533,7 @@ export async function getForecastReport(
         select: {
           id: true,
           status: true,
+          isPosting: true,
           direction: true,
           amount: true,
           currency: true,
@@ -561,10 +562,11 @@ export async function getForecastReport(
   const allFinancialEntries =
     entries.filter(
       (entry) =>
-        entry.direction ===
-          LedgerDirection.CREDIT ||
-        entry.direction ===
-          LedgerDirection.DEBIT,
+        entry.isPosting &&
+        (
+          entry.direction === LedgerDirection.CREDIT ||
+          entry.direction === LedgerDirection.DEBIT
+        ),
     );
 
   const approvedFinancialEntries =
@@ -577,15 +579,15 @@ export async function getForecastReport(
   const pendingEntries =
     entries.filter(
       (entry) =>
-        entry.status ===
-        LedgerEntryStatus.NEEDS_REVIEW,
+        entry.isPosting &&
+        entry.status === LedgerEntryStatus.NEEDS_REVIEW,
     ).length;
 
   const rejectedEntries =
     entries.filter(
       (entry) =>
-        entry.status ===
-        LedgerEntryStatus.REJECTED,
+        entry.isPosting &&
+        entry.status === LedgerEntryStatus.REJECTED,
     ).length;
 
   const currencyCounts = new Map<

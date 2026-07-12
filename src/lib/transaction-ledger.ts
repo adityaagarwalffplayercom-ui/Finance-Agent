@@ -187,6 +187,146 @@ function isLikelyAggregateLine(description: string, category: string | null) {
   ].some((phrase) => text.includes(phrase));
 }
 
+function buildNonPostingLineEntries(params: {
+  document: LedgerDocument;
+  extracted: ExtractedDocumentData;
+  currency: string;
+  counterparty: string | null;
+  sourceType: LedgerSourceType;
+  defaultCategory: string;
+}) {
+  const {
+    document,
+    extracted,
+    currency,
+    counterparty,
+    sourceType,
+    defaultCategory,
+  } = params;
+  const lineItems = Array.isArray(extracted.lineItems)
+    ? extracted.lineItems
+    : [];
+
+  return lineItems.flatMap<Prisma.LedgerEntryCreateManyInput>(
+    (item, index) => {
+      const amount = cleanNumber(item.amount);
+
+      if (amount === null || amount === 0) {
+        return [];
+      }
+
+      const description =
+        cleanString(item.description) ??
+        `Extracted line ${index + 1}`;
+      const itemCategory = cleanString(item.category);
+      const direction = inferDirection({
+        description,
+        itemCategory,
+        amount,
+        documentCategory: document.category,
+      });
+      const aggregate = isLikelyAggregateLine(
+        description,
+        itemCategory,
+      );
+
+      return [
+        {
+          userId: document.userId,
+          documentId: document.id,
+          transactionDate:
+            parseDate(item.date) ??
+            parseDate(extracted.documentDate) ??
+            parseDate(extracted.periodEnd),
+          description,
+          counterparty,
+          category: itemCategory ?? defaultCategory,
+          direction,
+          amount: Math.abs(amount),
+          currency,
+          confidence: aggregate ? 0.86 : 0.82,
+          status: LedgerEntryStatus.APPROVED,
+          isPosting: false,
+          sourceType,
+          sourceLineKey: sourceKey([
+            "non-posting-detail",
+            sourceType,
+            index,
+            item.date,
+            description,
+            itemCategory,
+            amount,
+            direction,
+          ]),
+          metadata: {
+            sourceIndex: index,
+            originalAmount: amount,
+            originalCategory: itemCategory ?? "",
+            aggregate,
+            detailOnly: true,
+            approvedThroughDocumentReview: true,
+            accountingTreatment:
+              "Stored as an individual source detail for audit and AI analysis. Excluded from dashboard totals because isPosting is false.",
+          },
+        },
+      ];
+    },
+  );
+}
+
+function buildNonPostingDocumentTotal(params: {
+  document: LedgerDocument;
+  extracted: ExtractedDocumentData;
+  currency: string;
+  counterparty: string | null;
+}) {
+  const { document, extracted, currency, counterparty } = params;
+  const totalAmount = cleanNumber(extracted.totalAmount);
+
+  if (totalAmount === null || totalAmount === 0) {
+    return [];
+  }
+
+  const description =
+    cleanString(extracted.totalAmountLabel) ??
+    `Total from ${document.fileName}`;
+
+  return [
+    {
+      userId: document.userId,
+      documentId: document.id,
+      transactionDate: parseDate(extracted.documentDate),
+      description,
+      counterparty,
+      category: `${document.category.replaceAll("_", " ")} detail`,
+      direction: inferDirection({
+        description,
+        itemCategory: cleanString(extracted.totalAmountLabel),
+        amount: totalAmount,
+        documentCategory: document.category,
+      }),
+      amount: Math.abs(totalAmount),
+      currency,
+      confidence: 0.9,
+      status: LedgerEntryStatus.APPROVED,
+      isPosting: false,
+      sourceType: LedgerSourceType.DOCUMENT_TOTAL,
+      sourceLineKey: sourceKey([
+        "non-posting-document-total",
+        description,
+        totalAmount,
+      ]),
+      metadata: {
+        originalAmount: totalAmount,
+        detailOnly: true,
+        approvedThroughDocumentReview: true,
+        accountingTreatment:
+          "Stored for order/document detail visibility only. Excluded from realised revenue, expenses, cash flow, forecasts, and dashboard totals.",
+      },
+    } satisfies Prisma.LedgerEntryCreateManyInput,
+  ];
+}
+
 function buildFinancialStatementEntries(params: {
   document: LedgerDocument;
   extracted: ExtractedDocumentData;
@@ -285,6 +425,7 @@ function buildFinancialStatementEntries(params: {
         currency,
         confidence: 0.9,
         status: LedgerEntryStatus.APPROVED,
+        isPosting: true,
         sourceType: LedgerSourceType.STATEMENT_LINE,
         sourceLineKey: sourceKey([
           "statement-summary",
@@ -343,6 +484,7 @@ function buildDocumentTotalEntry(params: {
       currency,
       confidence: 0.94,
       status: LedgerEntryStatus.APPROVED,
+      isPosting: true,
       sourceType: LedgerSourceType.DOCUMENT_TOTAL,
       sourceLineKey: sourceKey([
         "document-total",
@@ -407,6 +549,7 @@ function buildFallbackLineEntries(params: {
         currency,
         confidence: 0.78,
         status: LedgerEntryStatus.APPROVED,
+        isPosting: true,
         sourceType: LedgerSourceType.DOCUMENT_LINE,
         sourceLineKey: sourceKey([
           "line-fallback",
@@ -439,22 +582,47 @@ function buildEntries(document: LedgerDocument) {
     return [];
   }
 
-  if (isOrderDocument(document.category)) {
-    return [];
-  }
-
   const extracted =
     document.extractedData as unknown as ExtractedDocumentData;
   const currency = normalizeCurrency(extracted.currency);
   const counterparty = cleanString(extracted.vendorOrCounterparty);
 
+  if (isOrderDocument(document.category)) {
+    return [
+      ...buildNonPostingDocumentTotal({
+        document,
+        extracted,
+        currency,
+        counterparty,
+      }),
+      ...buildNonPostingLineEntries({
+        document,
+        extracted,
+        currency,
+        counterparty,
+        sourceType: LedgerSourceType.DOCUMENT_LINE,
+        defaultCategory: "Order detail",
+      }),
+    ];
+  }
+
   if (document.category === DocumentCategory.FINANCIAL_STATEMENT) {
-    return buildFinancialStatementEntries({
-      document,
-      extracted,
-      currency,
-      counterparty,
-    });
+    return [
+      ...buildFinancialStatementEntries({
+        document,
+        extracted,
+        currency,
+        counterparty,
+      }),
+      ...buildNonPostingLineEntries({
+        document,
+        extracted,
+        currency,
+        counterparty,
+        sourceType: LedgerSourceType.STATEMENT_LINE,
+        defaultCategory: "Financial statement detail",
+      }),
+    ];
   }
 
   const transactions = Array.isArray(extracted.transactions)
@@ -493,6 +661,7 @@ function buildEntries(document: LedgerDocument) {
             currency,
             confidence: 0.96,
             status: LedgerEntryStatus.APPROVED,
+            isPosting: true,
             sourceType: LedgerSourceType.BANK_TRANSACTION,
             sourceLineKey: sourceKey([
               "transaction",
@@ -521,7 +690,17 @@ function buildEntries(document: LedgerDocument) {
   });
 
   if (totalEntries.length > 0) {
-    return totalEntries;
+    return [
+      ...totalEntries,
+      ...buildNonPostingLineEntries({
+        document,
+        extracted,
+        currency,
+        counterparty,
+        sourceType: LedgerSourceType.DOCUMENT_LINE,
+        defaultCategory: `${document.category.replaceAll("_", " ")} detail`,
+      }),
+    ];
   }
 
   return buildFallbackLineEntries({
