@@ -1,13 +1,17 @@
-import { prisma } from "./prisma";
-import type { ExtractedDocumentData } from "./gemini";
 import {
-  buildFinancialIntelligence,
-  formatMoney,
-  type IntelligenceDocument,
-} from "./financial-intelligence";
-import { getJurisdictionProfile } from "./agent-governance";
+  formatLedgerMoney,
+  formatLedgerPercent,
+  getTrustedLedgerContext,
+} from "./trusted-ledger-context";
+import {
+  getJurisdictionProfile,
+} from "./agent-governance";
 
-export type AiAgentStatus = "active" | "waiting" | "warning" | "critical";
+export type AiAgentStatus =
+  | "active"
+  | "waiting"
+  | "warning"
+  | "critical";
 
 export type AiAgent = {
   id: string;
@@ -24,28 +28,45 @@ export type AiAgent = {
 
 export type AiTeamOverview = {
   businessName: string;
+
+  /*
+   * Kept for current UI compatibility.
+   * These values now represent ledger
+   * trust counts rather than document
+   * totals.
+   */
   trustedDocuments: number;
   pendingReview: number;
   rejectedDocuments: number;
   processedDocuments: number;
   totalDocuments: number;
+
   agents: AiAgent[];
 };
 
-function formatPct(value: number | null) {
-  if (value === null || !Number.isFinite(value)) {
-    return "Not available";
-  }
-
-  return `${value.toFixed(2)}%`;
+function clamp(
+  value: number,
+  minimum: number,
+  maximum: number,
+) {
+  return Math.min(
+    maximum,
+    Math.max(minimum, value),
+  );
 }
 
-function cleanActions(actions: Array<string | false | null | undefined>) {
-  return actions.filter(Boolean).slice(0, 4) as string[];
-}
-
-function plural(count: number, singular: string, pluralWord?: string) {
-  return `${count} ${count === 1 ? singular : pluralWord ?? `${singular}s`}`;
+function unique(
+  values: Array<
+    string | null | undefined | false
+  >,
+) {
+  return Array.from(
+    new Set(
+      values.filter(
+        Boolean,
+      ) as string[],
+    ),
+  ).slice(0, 5);
 }
 
 function waitingAgent(params: {
@@ -60,533 +81,693 @@ function waitingAgent(params: {
     name: params.name,
     title: params.title,
     status: "waiting",
-    statusLabel: "Waiting for trusted data",
+    statusLabel:
+      "Waiting for approved ledger data",
     summary: params.summary,
-    focusAreas: params.focusAreas,
+    focusAreas:
+      params.focusAreas,
     currentFindings: [
-      "No approved financial documents are available for this agent yet.",
-      "Upload documents, process them with AI, then approve the extraction.",
+      "No approved credit or debit ledger entries are available.",
+      "Pending and rejected entries are not used as financial facts.",
     ],
     recommendedActions: [
-      "Upload a financial statement, bank statement, invoices, bills, payroll file, or tax document.",
-      "Open the document details page and approve the AI extraction after review.",
+      "Sync approved documents to the Transaction Ledger.",
+      "Review pending entries and approve only verified rows.",
+      "Add missing offline transactions manually.",
     ],
-    confidenceLabel: "Low confidence until approved data is available",
+    confidenceLabel:
+      "Low confidence until ledger entries are approved",
   };
 }
 
-function buildWaitingAgents(): AiAgent[] {
+function buildWaitingAgents() {
   return [
     waitingAgent({
       id: "cfo",
       name: "CFO Agent",
-      title: "Executive finance decision maker",
+      title:
+        "Executive finance decision maker",
       summary:
-        "Monitors overall financial health, business risk, profitability, and strategic priorities.",
+        "Monitors profitability, break-even, hiring safety, and owner-level decisions.",
       focusAreas: [
-        "Health score",
         "Profitability",
-        "Financial risk",
-        "Decision support",
+        "Break-even",
+        "Hiring",
+        "Financial health",
       ],
     }),
     waitingAgent({
       id: "accountant",
       name: "Accountant Agent",
-      title: "Books and document control",
+      title:
+        "Ledger and document control",
       summary:
-        "Checks whether financial documents are processed, reviewed, and reliable enough for reporting.",
+        "Checks approved, pending, rejected, manual, and source-linked entries.",
       focusAreas: [
-        "Document review",
-        "Data completeness",
-        "Transaction quality",
-        "Record hygiene",
+        "Ledger review",
+        "Entry quality",
+        "Source evidence",
+        "Record completeness",
       ],
     }),
     waitingAgent({
       id: "tax",
       name: "Tax Agent",
-      title: "Tax, GST/VAT and compliance review",
+      title:
+        "Tax readiness and compliance review",
       summary:
-        "Reviews tax-related document completeness, GST/VAT signals, deductions to review, compliance uncertainty, and filing preparation.",
+        "Uses verified tax rules and approved source documents for conservative tax readiness.",
       focusAreas: [
+        "Tax coverage",
+        "Verified rules",
         "Tax documents",
-        "GST/VAT signals",
-        "Deductions to review",
-        "Filing readiness",
+        "Professional review",
       ],
     }),
     waitingAgent({
       id: "analyst",
-      name: "Financial Analyst Agent",
-      title: "Margins, ratios, and trend analysis",
+      name:
+        "Financial Analyst Agent",
+      title:
+        "Trend and anomaly analysis",
       summary:
-        "Analyzes revenue, expenses, margins, ratios, and financial trends from trusted data.",
+        "Analyzes approved ledger movement, ratios, categories, and unusual entries.",
       focusAreas: [
-        "Profit margin",
-        "Expense ratio",
-        "Revenue coverage",
-        "Trend analysis",
+        "Monthly trends",
+        "Largest entries",
+        "Duplicates",
+        "Cost concentration",
       ],
     }),
     waitingAgent({
       id: "cashflow",
-      name: "Cash Flow Agent",
-      title: "Cash runway and liquidity monitor",
+      name:
+        "Cash Flow Agent",
+      title:
+        "Cash movement monitor",
       summary:
-        "Tracks cash position, burn rate, runway, and short-term liquidity risks.",
-      focusAreas: ["Cash balance", "Burn rate", "Runway", "Liquidity risk"],
+        "Tracks approved inflows, outflows, monthly net movement, and burn.",
+      focusAreas: [
+        "Inflows",
+        "Outflows",
+        "Monthly movement",
+        "Burn",
+      ],
     }),
     waitingAgent({
       id: "consultant",
-      name: "Business Consultant Agent",
-      title: "Growth and cost-control advisor",
+      name:
+        "Business Consultant Agent",
+      title:
+        "Growth and cost-control advisor",
       summary:
-        "Suggests practical business actions for growth, cost control, and operating improvement.",
+        "Turns trusted financial movement into practical operating actions.",
       focusAreas: [
-        "Cost reduction",
-        "Revenue improvement",
-        "Pricing decisions",
-        "Operational actions",
+        "Pricing",
+        "Cost control",
+        "Growth",
+        "Operations",
       ],
     }),
     waitingAgent({
       id: "risk",
-      name: "Risk & Compliance Agent",
-      title: "Financial risk guardrail",
+      name:
+        "Risk & Compliance Agent",
+      title:
+        "Financial risk guardrail",
       summary:
-        "Flags missing data, rejected extractions, high-risk signals, tax/compliance uncertainty, and areas that need human verification.",
+        "Flags losses, weak coverage, pending review, missing cash evidence, and unusual entries.",
       focusAreas: [
-        "Rejected documents",
-        "Pending reviews",
-        "Risk warnings",
-        "Verification needs",
+        "Risk",
+        "Data confidence",
+        "Missing evidence",
+        "Mitigation",
       ],
     }),
   ];
 }
 
-export async function getAiTeam(userId: string): Promise<AiTeamOverview> {
-  const [business, allDocuments, trustedRawDocuments] = await Promise.all([
-    prisma.business.findUnique({
-      where: {
-        userId,
-      },
-      select: {
-        name: true,
-        currency: true,
-        country: true,
-        financialYear: true,
-      },
-    }),
-    prisma.document.findMany({
-      where: {
-        userId,
-      },
-      select: {
-        id: true,
-        status: true,
-        reviewStatus: true,
-      },
-    }),
-    prisma.document.findMany({
-      where: {
-        userId,
-        status: "PROCESSED",
-        reviewStatus: "APPROVED",
-      },
-      select: {
-        id: true,
-        fileName: true,
-        category: true,
-        extractedData: true,
-        uploadedAt: true,
-      },
-      orderBy: {
-        uploadedAt: "asc",
-      },
-    }),
-  ]);
+export async function getAiTeam(
+  userId: string,
+): Promise<AiTeamOverview> {
+  const context =
+    await getTrustedLedgerContext(
+      userId,
+    );
 
-  const trustedDocuments: IntelligenceDocument[] = trustedRawDocuments.map(
-    (doc) => ({
-      id: doc.id,
-      fileName: doc.fileName,
-      category: doc.category,
-      extractedData: doc.extractedData as ExtractedDocumentData | null,
-      uploadedAt: doc.uploadedAt,
-    }),
-  );
+  const {
+    revenue,
+    expenses,
+    profit,
+    profitMarginPercent,
+    expenseRatioPercent,
+    revenueCoveragePercent,
+  } = context.totals;
 
-  const totalDocuments = allDocuments.length;
-
-  const processedDocuments = allDocuments.filter(
-    (doc) => doc.status === "PROCESSED",
-  ).length;
-
-  const pendingReview = allDocuments.filter(
-    (doc) => doc.reviewStatus === "NEEDS_REVIEW",
-  ).length;
-
-  const rejectedDocuments = allDocuments.filter(
-    (doc) => doc.reviewStatus === "REJECTED",
-  ).length;
-
-  if (trustedDocuments.length === 0) {
+  if (
+    context.counts
+      .approvedFinancialEntries === 0
+  ) {
     return {
-      businessName: business?.name ?? "Your business",
+      businessName:
+        context.business.name,
       trustedDocuments: 0,
-      pendingReview,
-      rejectedDocuments,
-      processedDocuments,
-      totalDocuments,
-      agents: buildWaitingAgents(),
+      pendingReview:
+        context.counts
+          .pendingEntries,
+      rejectedDocuments:
+        context.counts
+          .rejectedEntries,
+      processedDocuments:
+        context.counts
+          .totalEntries,
+      totalDocuments:
+        context.counts
+          .totalEntries,
+      agents:
+        buildWaitingAgents(),
     };
   }
 
-  const intelligence = buildFinancialIntelligence(
-    trustedDocuments,
-    business?.currency ?? "INR",
+  let healthScore = 62;
+
+  healthScore +=
+    profit >= 0 ? 18 : -26;
+
+  if (
+    expenseRatioPercent !== null
+  ) {
+    if (
+      expenseRatioPercent <= 80
+    ) {
+      healthScore += 10;
+    } else if (
+      expenseRatioPercent > 100
+    ) {
+      healthScore -= 16;
+    }
+  }
+
+  healthScore -= Math.min(
+    context.counts
+      .pendingEntries * 2,
+    14,
   );
 
-  const jurisdiction = getJurisdictionProfile(business?.country);
-  const currency = intelligence.currency;
+  if (
+    context.confidence.level ===
+    "LOW"
+  ) {
+    healthScore -= 8;
+  }
 
-  const revenue = intelligence.totals.revenue;
-  const expenses = intelligence.totals.expenses;
-  const profit = intelligence.totals.profit;
-  const cash = intelligence.totals.cash;
-  const riskLevel = intelligence.risk.riskLevel;
-  const healthScore = intelligence.risk.healthScore;
+  healthScore = Math.round(
+    clamp(
+      healthScore,
+      0,
+      100,
+    ),
+  );
 
-  const revenueCoverage =
-    expenses > 0 ? Number(((revenue / expenses) * 100).toFixed(2)) : null;
+  const riskLevel =
+    healthScore >= 75
+      ? "LOW"
+      : healthScore >= 55
+        ? "MODERATE"
+        : healthScore >= 35
+          ? "HIGH"
+          : "CRITICAL";
 
-  const cfoStatus: AiAgentStatus =
-    riskLevel === "critical"
+  const cfoStatus:
+    AiAgentStatus =
+    riskLevel === "CRITICAL"
       ? "critical"
-      : riskLevel === "high"
+      : riskLevel === "HIGH"
         ? "warning"
         : "active";
 
-  const analystStatus: AiAgentStatus =
-    profit < 0 || (revenueCoverage !== null && revenueCoverage < 70)
+  const analystStatus:
+    AiAgentStatus =
+    profit < 0 ||
+    (
+      revenueCoveragePercent !==
+        null &&
+      revenueCoveragePercent <
+        100
+    )
       ? "warning"
       : "active";
 
-  const cashStatus: AiAgentStatus =
-    intelligence.risk.cashRunwayDays !== null &&
-    intelligence.risk.cashRunwayDays < 30
-      ? "critical"
-      : intelligence.risk.cashRunwayDays !== null &&
-          intelligence.risk.cashRunwayDays < 90
-        ? "warning"
-        : "active";
+  const cashStatus:
+    AiAgentStatus =
+    context.monthly
+      .averageProfit !== null &&
+    context.monthly
+      .averageProfit < 0
+      ? "warning"
+      : "active";
 
-  const riskStatus: AiAgentStatus =
-    rejectedDocuments > 0 || pendingReview > 0 ? "warning" : "active";
+  const riskStatus:
+    AiAgentStatus =
+    context.counts
+      .pendingEntries > 0 ||
+    context.counts
+      .rejectedEntries > 0 ||
+    context.confidence.level ===
+      "LOW"
+      ? "warning"
+      : "active";
 
-  const taxStatus: AiAgentStatus =
-    pendingReview > 0 || rejectedDocuments > 0 ? "warning" : "active";
+  const jurisdiction =
+    getJurisdictionProfile(
+      context.business.country,
+    );
 
-  const topRecommendations = intelligence.recommendations.map(
-    (item) => `${item.title}: ${item.action}`,
-  );
+  const confidenceText =
+    `${context.confidence.label} (${context.confidence.score}/100) based on ${context.counts.approvedFinancialEntries} approved ledger entr${
+      context.counts
+        .approvedFinancialEntries === 1
+        ? "y"
+        : "ies"
+    } across ${context.monthly.observedMonths} month${
+      context.monthly
+        .observedMonths === 1
+        ? ""
+        : "s"
+    }`;
 
-  const topAlerts = intelligence.alerts.map(
-    (item) => `${item.title}: ${item.message}`,
-  );
+  const breakEvenGap =
+    Math.max(0, -profit);
+
+  const topDebitNames =
+    context.topDebits
+      .slice(0, 3)
+      .map(
+        (entry) =>
+          entry.description,
+      );
 
   const agents: AiAgent[] = [
     {
       id: "cfo",
       name: "CFO Agent",
-      title: "Executive finance decision maker",
+      title:
+        "Executive finance decision maker",
       status: cfoStatus,
       statusLabel:
         cfoStatus === "active"
-          ? "Monitoring business health"
-          : cfoStatus === "warning"
-            ? "Needs management attention"
-            : "Critical action needed",
+          ? "Monitoring trusted profitability"
+          : cfoStatus ===
+              "critical"
+            ? "Critical action needed"
+            : "Management attention needed",
       summary:
-        "Tracks overall financial health, profit position, and the most important executive decisions.",
+        "Uses approved ledger credits and debits for profitability, break-even, hiring, and financial decisions.",
       focusAreas: [
         "Health score",
         "Profitability",
-        "Financial risk",
-        "Executive priorities",
+        "Break-even",
+        "Hiring safety",
       ],
       currentFindings: [
-        `Health score is ${healthScore}/100.`,
-        `Current risk level is ${riskLevel.toUpperCase()}.`,
-        `Revenue is ${formatMoney(revenue, currency)} and expenses are ${formatMoney(
+        `Ledger health score is ${healthScore}/100.`,
+        `Approved credits are ${formatLedgerMoney(
+          revenue,
+          context.currency,
+        )}.`,
+        `Approved debits are ${formatLedgerMoney(
           expenses,
-          currency,
+          context.currency,
         )}.`,
         profit >= 0
-          ? `The business is profitable by ${formatMoney(profit, currency)}.`
-          : `The business is running a loss of ${formatMoney(
+          ? `Approved ledger profit is ${formatLedgerMoney(
+              profit,
+              context.currency,
+            )}.`
+          : `Approved ledger loss is ${formatLedgerMoney(
               Math.abs(profit),
-              currency,
+              context.currency,
             )}.`,
       ],
-      recommendedActions: cleanActions(topRecommendations),
-      confidenceLabel: `Based on ${plural(
-        trustedDocuments.length,
-        "approved document",
-      )}`,
+      recommendedActions:
+        unique([
+          breakEvenGap > 0
+            ? `Close the break-even gap of ${formatLedgerMoney(
+                breakEvenGap,
+                context.currency,
+              )}.`
+            : "Protect current profitability and margin.",
+          context.counts
+              .pendingEntries >
+            0
+            ? "Complete pending ledger review before major commitments."
+            : "Keep the approved ledger current.",
+          "Do not approve hiring from profit alone; verify cash balance and recurring revenue first.",
+        ]),
+      confidenceLabel:
+        confidenceText,
     },
+
     {
       id: "accountant",
-      name: "Accountant Agent",
-      title: "Books and document control",
-      status: pendingReview > 0 ? "warning" : "active",
+      name:
+        "Accountant Agent",
+      title:
+        "Ledger and document control",
+      status:
+        context.counts
+          .pendingEntries > 0
+          ? "warning"
+          : "active",
       statusLabel:
-        pendingReview > 0
-          ? "Documents need review"
-          : "Trusted document set is clean",
+        context.counts
+          .pendingEntries > 0
+          ? "Ledger entries need review"
+          : "Trusted ledger is reviewed",
       summary:
-        "Checks whether the financial data used by the product is reviewed, approved, and reliable.",
+        "Checks transaction approval, source evidence, manual entries, currencies, dates, and record quality.",
       focusAreas: [
-        "Document review",
         "Approval status",
-        "Rejected extractions",
-        "Data completeness",
+        "Source evidence",
+        "Manual entries",
+        "Record quality",
       ],
       currentFindings: [
-        `${trustedDocuments.length} approved document${
-          trustedDocuments.length === 1 ? "" : "s"
-        } are being used as trusted data.`,
-        `${pendingReview} document${pendingReview === 1 ? "" : "s"} still need review.`,
-        `${rejectedDocuments} document${
-          rejectedDocuments === 1 ? "" : "s"
-        } have been rejected.`,
-        `${processedDocuments} document${
-          processedDocuments === 1 ? "" : "s"
-        } have been processed by AI.`,
+        `${context.counts.approvedFinancialEntries} approved financial ledger entr${
+          context.counts
+            .approvedFinancialEntries ===
+          1
+            ? "y is"
+            : "ies are"
+        } used in totals.`,
+        `${context.counts.pendingEntries} ledger entr${
+          context.counts
+            .pendingEntries === 1
+            ? "y is"
+            : "ies are"
+        } pending review.`,
+        `${context.counts.rejectedEntries} rejected entr${
+          context.counts
+            .rejectedEntries === 1
+            ? "y is"
+            : "ies are"
+        } excluded.`,
+        `${context.counts.manualApprovedEntries} approved manual entr${
+          context.counts
+            .manualApprovedEntries === 1
+            ? "y is"
+            : "ies are"
+        } included.`,
       ],
-      recommendedActions: cleanActions([
-        pendingReview > 0
-          ? "Review pending AI extractions and approve only the correct ones."
-          : "Continue reviewing every new AI extraction before trusting it.",
-        rejectedDocuments > 0
-          ? "Re-upload clearer files for rejected documents or correct the extraction later."
-          : "Keep rejected documents at zero by reviewing extraction quality carefully.",
-        "Upload missing bank statements, invoices, payroll, bills, and tax documents to improve completeness.",
-      ]),
-      confidenceLabel: "High confidence only for approved documents",
+      recommendedActions:
+        unique([
+          context.counts
+              .pendingEntries >
+            0
+            ? "Approve or reject every pending ledger entry."
+            : "Continue reviewing every new synced entry.",
+          context.counts
+              .excludedCurrencyEntries >
+            0
+            ? "Review mixed-currency entries separately."
+            : "Keep transaction currency consistent.",
+          "Add missing dates, counterparties, and categories.",
+        ]),
+      confidenceLabel:
+        confidenceText,
     },
+
     {
       id: "tax",
       name: "Tax Agent",
-      title: "Tax, GST/VAT and compliance review",
-      status: taxStatus,
+      title:
+        "Tax readiness and compliance review",
+      status:
+        context.documents
+            .approved > 0 &&
+        context.business.country !==
+          "Not set"
+          ? "active"
+          : "warning",
       statusLabel:
-        taxStatus === "active"
-          ? "Checklist-ready with approved data"
-          : "Tax review needs verification",
+        context.documents
+            .approved > 0
+          ? "Tax checklist evidence available"
+          : "Tax source documents needed",
       summary:
-        "Reviews approved financial data for tax-document completeness, GST/VAT/tax signals, deductions to review, compliance uncertainty, and filing preparation.",
+        "Uses verified tax rules, verified tax knowledge, approved source documents, and ledger evidence conservatively.",
       focusAreas: [
-        "Tax documents",
-        "GST/VAT signals",
-        "Deductions to review",
-        "Tax payable indicators",
-        "Filing readiness",
+        "Jurisdiction",
+        "Verified tax rules",
+        "Tax source documents",
+        "Professional verification",
       ],
       currentFindings: [
-        `${trustedDocuments.length} approved document${
-          trustedDocuments.length === 1 ? "" : "s"
-        } can be reviewed for tax-related signals.`,
-        `Business country is mapped to ${jurisdiction.name}.`,
-        `${processedDocuments} document${
-          processedDocuments === 1 ? "" : "s"
-        } have been processed by AI and may contain taxable revenue, expenses, invoices, GST/VAT, or deduction details.`,
-        pendingReview > 0
-          ? `${pendingReview} document${
-              pendingReview === 1 ? "" : "s"
-            } still need approval before tax insights can trust them.`
-          : "No pending documents are blocking the current tax checklist.",
+        `Business jurisdiction maps to ${jurisdiction.name}.`,
+        `${context.documents.approved} approved source document${
+          context.documents
+            .approved === 1
+            ? " is"
+            : "s are"
+        } available.`,
+        "Approved ledger entries support transaction evidence but do not determine final tax payable.",
       ],
-      recommendedActions: cleanActions([
-        "Use this Tax Agent for checklist and tax-signal review, not final tax payable calculation.",
-        "Upload tax returns, GST/VAT returns, invoices, purchase bills, payroll records, and financial statements for stronger tax review.",
-        pendingReview > 0
-          ? "Approve pending documents only after verifying tax amounts, invoice dates, tax IDs, GST/VAT details, and extracted totals."
-          : "Continue checking every new upload for invoice, tax, and GST/VAT details before approval.",
-        `Verify official filing, notices, audits, legal interpretation, and compliance decisions with a ${jurisdiction.professionalReviewLabel}.`,
-      ]),
+      recommendedActions:
+        unique([
+          "Use Tax Agent for readiness and document checklist, not final certification.",
+          "Upload verified GST/VAT, payroll, invoice, and filing evidence.",
+          `Verify final filing and liability with a ${jurisdiction.professionalReviewLabel}.`,
+        ]),
       confidenceLabel:
-        "Informational checklist only — exact rules need verified official-source tax engine",
+        "Tax confidence depends on verified official rules and source coverage, not ledger totals alone",
     },
+
     {
       id: "analyst",
-      name: "Financial Analyst Agent",
-      title: "Margins, ratios, and trend analysis",
-      status: analystStatus,
+      name:
+        "Financial Analyst Agent",
+      title:
+        "Performance and anomaly analysis",
+      status:
+        analystStatus,
       statusLabel:
         analystStatus === "active"
-          ? "Analyzing performance"
+          ? "Analyzing trusted movement"
           : "Performance needs attention",
       summary:
-        "Analyzes margins, expense ratios, revenue coverage, and monthly financial movement.",
+        "Analyzes approved ledger trends, ratios, largest entries, duplicates, and cost concentration.",
       focusAreas: [
         "Profit margin",
         "Expense ratio",
-        "Revenue coverage",
         "Monthly trends",
+        "Anomalies",
       ],
       currentFindings: [
-        `Profit margin is ${formatPct(intelligence.ratios.profitMarginPct)}.`,
-        `Expense ratio is ${formatPct(intelligence.ratios.expenseRatioPct)}.`,
-        `Revenue coverage is ${formatPct(revenueCoverage)}.`,
-        intelligence.trends.latestMonthlyNet !== null
-          ? `Latest monthly net movement is ${formatMoney(
-              intelligence.trends.latestMonthlyNet,
-              currency,
+        `Profit margin is ${formatLedgerPercent(
+          profitMarginPercent,
+        )}.`,
+        `Expense ratio is ${formatLedgerPercent(
+          expenseRatioPercent,
+        )}.`,
+        `Revenue coverage is ${formatLedgerPercent(
+          revenueCoveragePercent,
+        )}.`,
+        context.monthly
+            .latestNet !== null
+          ? `Latest monthly net movement is ${formatLedgerMoney(
+              context.monthly
+                .latestNet,
+              context.currency,
             )}.`
-          : "More monthly data is needed for trend analysis.",
+          : "More dated entries are required for a monthly trend.",
       ],
-      recommendedActions: cleanActions([
-        profit < 0
-          ? "Find the biggest expense categories and reduce non-essential costs first."
-          : "Protect margins by tracking expenses every month.",
-        revenueCoverage !== null && revenueCoverage < 100
-          ? "Increase revenue or reduce expenses until revenue fully covers monthly costs."
-          : "Maintain revenue coverage above expenses.",
-        "Upload documents across multiple months to improve trend accuracy.",
-      ]),
-      confidenceLabel: `Calculated from ${plural(
-        trustedDocuments.length,
-        "approved document",
-      )}`,
+      recommendedActions:
+        unique([
+          topDebitNames.length > 0
+            ? `Review the largest debits: ${topDebitNames.join(
+                ", ",
+              )}.`
+            : "Add approved debit entries for cost analysis.",
+          profit < 0
+            ? "Prioritize cost reduction and revenue coverage."
+            : "Protect margin while monitoring expense growth.",
+          "Review duplicate-looking and high-value entries in Anomaly Insights.",
+        ]),
+      confidenceLabel:
+        confidenceText,
     },
+
     {
       id: "cashflow",
-      name: "Cash Flow Agent",
-      title: "Cash runway and liquidity monitor",
-      status: cashStatus,
+      name:
+        "Cash Flow Agent",
+      title:
+        "Cash movement monitor",
+      status:
+        cashStatus,
       statusLabel:
-        cashStatus === "critical"
-          ? "Cash runway critical"
-          : cashStatus === "warning"
-            ? "Cash runway needs attention"
-            : "Monitoring liquidity",
+        cashStatus === "active"
+          ? "Monitoring approved movement"
+          : "Negative movement needs attention",
       summary:
-        "Tracks cash position, burn rate, runway, and whether the business can survive short-term pressure.",
-      focusAreas: ["Cash balance", "Burn rate", "Runway", "Liquidity risk"],
-      currentFindings: [
-        cash !== null
-          ? `Latest cash signal is ${formatMoney(cash, currency)}.`
-          : "No approved bank statement is available for exact cash balance.",
-        intelligence.risk.monthlyBurnRate !== null
-          ? `Monthly burn rate is around ${formatMoney(
-              intelligence.risk.monthlyBurnRate,
-              currency,
-            )}.`
-          : "Monthly burn rate is not available yet.",
-        intelligence.risk.cashRunwayDays !== null
-          ? `Estimated cash runway is ${intelligence.risk.cashRunwayDays} days.`
-          : "Cash runway cannot be calculated without cash and burn data.",
+        "Tracks approved monthly credits, debits, net movement, and burn without inventing a cash balance.",
+      focusAreas: [
+        "Monthly inflow",
+        "Monthly outflow",
+        "Net movement",
+        "Burn",
       ],
-      recommendedActions: cleanActions([
-        cash === null
-          ? "Approve a processed bank statement to calculate cash runway."
-          : "Monitor bank statement uploads regularly.",
-        intelligence.risk.cashRunwayDays !== null &&
-        intelligence.risk.cashRunwayDays < 90
-          ? "Delay large expenses and collect receivables faster to extend runway."
-          : "Keep cash runway above 90 days.",
-        "Upload monthly bank statements for better liquidity forecasting.",
-      ]),
+      currentFindings: [
+        `Average monthly credits are ${formatLedgerMoney(
+          context.monthly
+            .averageRevenue,
+          context.currency,
+        )}.`,
+        `Average monthly debits are ${formatLedgerMoney(
+          context.monthly
+            .averageExpenses,
+          context.currency,
+        )}.`,
+        `Average monthly net movement is ${formatLedgerMoney(
+          context.monthly
+            .averageProfit,
+          context.currency,
+        )}.`,
+        "Verified cash balance and runway are not available.",
+      ],
+      recommendedActions:
+        unique([
+          context.monthly
+              .averageProfit !==
+              null &&
+            context.monthly
+              .averageProfit < 0
+            ? "Reduce monthly outflow or increase recurring inflow."
+            : "Maintain positive monthly movement.",
+          "Upload and verify a current bank balance before using runway.",
+          "Keep transaction dates complete for monthly analysis.",
+        ]),
       confidenceLabel:
-        cash !== null
-          ? "Cash analysis available from approved data"
-          : "Cash analysis limited until bank data is approved",
+        confidenceText,
     },
+
     {
       id: "consultant",
-      name: "Business Consultant Agent",
-      title: "Growth and cost-control advisor",
-      status: profit < 0 ? "warning" : "active",
+      name:
+        "Business Consultant Agent",
+      title:
+        "Growth and cost-control advisor",
+      status:
+        profit < 0
+          ? "warning"
+          : "active",
       statusLabel:
-        profit < 0 ? "Cost control recommended" : "Growth opportunities active",
+        profit < 0
+          ? "Cost control recommended"
+          : "Controlled growth possible",
       summary:
-        "Turns financial signals into practical business actions around pricing, cost control, and growth.",
+        "Turns trusted ledger performance into practical pricing, cost, growth, and operating actions.",
       focusAreas: [
-        "Cost reduction",
-        "Revenue improvement",
         "Pricing",
-        "Operating actions",
+        "Cost control",
+        "Revenue improvement",
+        "Operations",
       ],
       currentFindings: [
         profit < 0
-          ? "The first priority should be reducing losses before aggressive growth."
-          : "The business has room to plan growth actions based on current profitability.",
+          ? "Loss control should come before aggressive expansion."
+          : "Approved ledger movement is profitable.",
         expenses > revenue
-          ? "Expenses are currently higher than revenue."
-          : "Revenue currently covers expenses.",
-        intelligence.recommendations[0]?.title ??
-          "More data will improve business recommendations.",
+          ? "Approved debits are higher than approved credits."
+          : "Approved credits cover approved debits.",
+        topDebitNames.length > 0
+          ? `Largest debit signals include ${topDebitNames.join(
+              ", ",
+            )}.`
+          : "More debit detail is needed.",
       ],
-      recommendedActions: cleanActions([
-        ...topRecommendations,
-        "Use the AI chat to ask scenario questions before making major decisions.",
-      ]),
-      confidenceLabel: "Recommendations improve as more documents are approved",
+      recommendedActions:
+        unique([
+          profit < 0
+            ? "Create a break-even plan before scaling."
+            : "Test controlled growth scenarios.",
+          "Review pricing and the largest recurring cost categories.",
+          "Use Forecast and CFO Decisions before hiring or expansion.",
+        ]),
+      confidenceLabel:
+        confidenceText,
     },
+
     {
       id: "risk",
-      name: "Risk & Compliance Agent",
-      title: "Financial risk guardrail",
-      status: riskStatus,
+      name:
+        "Risk & Compliance Agent",
+      title:
+        "Financial risk guardrail",
+      status:
+        riskStatus,
       statusLabel:
         riskStatus === "active"
-          ? "No major trust issues"
+          ? "No major ledger trust issue"
           : "Review and verification needed",
       summary:
-        "Flags trust gaps, missing approvals, rejected documents, tax/compliance uncertainty, and financial warning signals.",
+        "Flags loss, weak coverage, pending entries, mixed currencies, missing cash evidence, and low data confidence.",
       focusAreas: [
-        "Pending reviews",
-        "Rejected documents",
-        "Financial alerts",
-        "Tax/compliance uncertainty",
-        "Human verification",
+        "Pending review",
+        "Loss risk",
+        "Data confidence",
+        "Missing evidence",
       ],
-      currentFindings: cleanActions([
-        ...topAlerts,
-        pendingReview > 0
-          ? `${pendingReview} document${
-              pendingReview === 1 ? "" : "s"
-            } still need human review.`
-          : "No pending review documents are currently blocking trusted analysis.",
-        rejectedDocuments > 0
-          ? `${rejectedDocuments} rejected document${
-              rejectedDocuments === 1 ? "" : "s"
-            } are excluded from dashboard and chat.`
-          : "No rejected documents are currently affecting the trust workflow.",
-      ]),
-      recommendedActions: cleanActions([
-        pendingReview > 0
-          ? "Review pending documents before relying on the dashboard."
-          : "Keep reviewing new documents as soon as they are processed.",
-        rejectedDocuments > 0
-          ? "Replace rejected documents with clearer uploads."
-          : "Continue using approval workflow before trusting AI extraction.",
-        "Do not use AI output as final legal, tax, audit, or compliance advice without professional review.",
-      ]),
-      confidenceLabel: "Trust score depends on approval quality",
+      currentFindings:
+        unique([
+          `Current financial risk level is ${riskLevel}.`,
+          context.counts
+              .pendingEntries >
+            0
+            ? `${context.counts.pendingEntries} ledger entries remain pending.`
+            : "No ledger entries are pending.",
+          context.counts
+              .excludedCurrencyEntries >
+            0
+            ? `${context.counts.excludedCurrencyEntries} different-currency approved entries are excluded.`
+            : "No mixed-currency exclusion is affecting totals.",
+          "Cash balance and runway remain unverified.",
+        ]),
+      recommendedActions:
+        unique([
+          context.counts
+              .pendingEntries >
+            0
+            ? "Complete ledger review before relying on final decisions."
+            : "Keep review status current.",
+          profit < 0
+            ? "Close the loss and break-even gap."
+            : "Maintain current coverage and monitor monthly changes.",
+          "Do not treat AI output as legal, audit, tax, or compliance certification.",
+        ]),
+      confidenceLabel:
+        confidenceText,
     },
   ];
 
   return {
-    businessName: business?.name ?? "Your business",
-    trustedDocuments: trustedDocuments.length,
-    pendingReview,
-    rejectedDocuments,
-    processedDocuments,
-    totalDocuments,
+    businessName:
+      context.business.name,
+    trustedDocuments:
+      context.counts
+        .approvedFinancialEntries,
+    pendingReview:
+      context.counts
+        .pendingEntries,
+    rejectedDocuments:
+      context.counts
+        .rejectedEntries,
+    processedDocuments:
+      context.counts
+        .totalEntries,
+    totalDocuments:
+      context.counts
+        .totalEntries,
     agents,
   };
 }

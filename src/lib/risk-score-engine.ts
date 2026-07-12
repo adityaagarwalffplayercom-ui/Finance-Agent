@@ -1,6 +1,13 @@
-import { prisma } from "./prisma";
+import {
+  formatLedgerMoney,
+  getTrustedLedgerContext,
+} from "./trusted-ledger-context";
 
-type RiskLevel = "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
+type RiskLevel =
+  | "LOW"
+  | "MODERATE"
+  | "HIGH"
+  | "CRITICAL";
 
 type RiskFactor = {
   id: string;
@@ -22,6 +29,7 @@ export type BusinessRiskScore = {
   level: RiskLevel;
   label: string;
   summary: string;
+
   metrics: {
     revenue: MoneyValue;
     expenses: MoneyValue;
@@ -29,11 +37,20 @@ export type BusinessRiskScore = {
     cash: MoneyValue;
     assets: MoneyValue;
     liabilities: MoneyValue;
-    profitMarginPercent: number | null;
-    expenseRatioPercent: number | null;
-    revenueCoveragePercent: number | null;
-    debtToAssetPercent: number | null;
+    profitMarginPercent:
+      | number
+      | null;
+    expenseRatioPercent:
+      | number
+      | null;
+    revenueCoveragePercent:
+      | number
+      | null;
+    debtToAssetPercent:
+      | number
+      | null;
   };
+
   documentStatus: {
     totalDocuments: number;
     processedDocuments: number;
@@ -42,109 +59,27 @@ export type BusinessRiskScore = {
     rejectedDocuments: number;
     failedDocuments: number;
   };
+
   riskFactors: RiskFactor[];
   strengths: string[];
   recommendedActions: string[];
   missingData: string[];
 };
 
-type ExtractedLike = Record<string, unknown>;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+function clamp(
+  value: number,
+  minimum: number,
+  maximum: number,
+) {
+  return Math.min(
+    maximum,
+    Math.max(minimum, value),
+  );
 }
 
-function toNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const cleaned = value.replace(/[^0-9.-]/g, "");
-    const parsed = Number(cleaned);
-
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  return null;
-}
-
-function cleanString(value: unknown, fallback = "") {
-  return typeof value === "string" && value.trim() ? value.trim() : fallback;
-}
-
-function formatMoney(value: number, currency: string) {
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency,
-      notation: "compact",
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return new Intl.NumberFormat("en-IN", {
-      notation: "compact",
-      maximumFractionDigits: 2,
-    }).format(value);
-  }
-}
-
-function money(value: number, currency: string): MoneyValue {
-  return {
-    raw: value,
-    formatted: formatMoney(value, currency),
-  };
-}
-
-function safeRatio(numerator: number, denominator: number) {
-  if (!Number.isFinite(numerator) || !Number.isFinite(denominator)) {
-    return null;
-  }
-
-  if (denominator === 0) {
-    return null;
-  }
-
-  return Math.round((numerator / denominator) * 10000) / 100;
-}
-
-function getExtractedNumber(data: ExtractedLike, keys: string[]) {
-  for (const key of keys) {
-    const value = toNumber(data[key]);
-
-    if (value !== null) {
-      return value;
-    }
-  }
-
-  return 0;
-}
-
-function getNetIncome(data: ExtractedLike) {
-  const netIncome = toNumber(data.netIncome);
-
-  if (netIncome !== null) {
-    return netIncome;
-  }
-
-  const profit = toNumber(data.profit);
-
-  if (profit !== null && profit > 0) {
-    return profit;
-  }
-
-  const loss = toNumber(data.loss);
-
-  if (loss !== null && loss > 0) {
-    return -Math.abs(loss);
-  }
-
-  return 0;
-}
-
-function getRiskLevel(score: number): RiskLevel {
+function getRiskLevel(
+  score: number,
+): RiskLevel {
   if (score >= 75) {
     return "CRITICAL";
   }
@@ -160,7 +95,9 @@ function getRiskLevel(score: number): RiskLevel {
   return "LOW";
 }
 
-function getRiskLabel(level: RiskLevel) {
+function getRiskLabel(
+  level: RiskLevel,
+) {
   if (level === "CRITICAL") {
     return "Critical financial risk";
   }
@@ -176,515 +113,541 @@ function getRiskLabel(level: RiskLevel) {
   return "Low financial risk";
 }
 
-function clampScore(score: number) {
-  return Math.max(0, Math.min(100, Math.round(score)));
+function money(
+  value: number,
+  currency: string,
+): MoneyValue {
+  return {
+    raw: value,
+    formatted:
+      formatLedgerMoney(
+        value,
+        currency,
+      ),
+  };
+}
+
+function unavailableMoney():
+  MoneyValue {
+  return {
+    raw: 0,
+    formatted:
+      "Not available",
+  };
 }
 
 function addRisk(
   factors: RiskFactor[],
-  factor: Omit<RiskFactor, "id"> & { id?: string },
+  factor: Omit<
+    RiskFactor,
+    "id"
+  > & {
+    id?: string;
+  },
 ) {
   factors.push({
     id:
       factor.id ??
-      `${factor.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${factors.length}`,
+      `${factor.title
+        .toLowerCase()
+        .replace(
+          /[^a-z0-9]+/g,
+          "-",
+        )}-${factors.length}`,
     title: factor.title,
     level: factor.level,
-    scoreImpact: factor.scoreImpact,
+    scoreImpact:
+      factor.scoreImpact,
     message: factor.message,
-    recommendation: factor.recommendation,
+    recommendation:
+      factor.recommendation,
   });
-}
-
-function buildSummary(params: {
-  level: RiskLevel;
-  profit: number;
-  revenue: number;
-  expenses: number;
-  approvedDocuments: number;
-  pendingReviewDocuments: number;
-}) {
-  const { level, profit, revenue, expenses, approvedDocuments, pendingReviewDocuments } =
-    params;
-
-  if (approvedDocuments === 0) {
-    return "Aureli cannot calculate a reliable risk score yet because no approved financial documents are available.";
-  }
-
-  if (level === "CRITICAL") {
-    return `Your business is showing critical financial risk. The biggest concern is ${
-      profit < 0 ? "loss-making performance" : "weak financial coverage"
-    }, with revenue of ${revenue.toLocaleString("en-IN")} and expenses of ${expenses.toLocaleString(
-      "en-IN",
-    )}.`;
-  }
-
-  if (level === "HIGH") {
-    return `Your business has high financial risk. Aureli detected pressure from expenses, profitability, or missing financial evidence. ${
-      pendingReviewDocuments > 0
-        ? "Some documents are still pending review, so the score may improve after approval."
-        : ""
-    }`;
-  }
-
-  if (level === "MODERATE") {
-    return "Your business has moderate financial risk. The current data is usable, but there are areas that need monitoring before they become serious.";
-  }
-
-  return "Your business currently appears financially stable based on approved uploaded documents. Continue monitoring expenses, cash position, and document completeness.";
 }
 
 export async function getBusinessRiskScore(
   userId: string,
 ): Promise<BusinessRiskScore> {
-  const business = await prisma.business.findUnique({
-    where: {
+  const context =
+    await getTrustedLedgerContext(
       userId,
-    },
-    select: {
-      name: true,
-      currency: true,
-      country: true,
-      industry: true,
-      businessType: true,
-      financialYear: true,
-    },
-  });
+    );
 
-  const currency = cleanString(business?.currency, "INR");
+  const {
+    revenue,
+    expenses,
+    profit,
+    profitMarginPercent,
+    expenseRatioPercent,
+    revenueCoveragePercent,
+  } = context.totals;
 
-  const documents = await prisma.document.findMany({
-    where: {
-      userId,
-    },
-    orderBy: {
-      uploadedAt: "desc",
-    },
-    select: {
-      id: true,
-      fileName: true,
-      category: true,
-      status: true,
-      reviewStatus: true,
-      extractedData: true,
-      uploadedAt: true,
-    },
-  });
-
-  const processedDocuments = documents.filter(
-    (document) => String(document.status) === "PROCESSED",
-  );
-
-  const approvedDocuments = processedDocuments.filter(
-    (document) => String(document.reviewStatus) === "APPROVED",
-  );
-
-  const pendingReviewDocuments = processedDocuments.filter(
-    (document) => String(document.reviewStatus) === "NEEDS_REVIEW",
-  );
-
-  const rejectedDocuments = documents.filter(
-    (document) => String(document.reviewStatus) === "REJECTED",
-  );
-
-  const failedDocuments = documents.filter(
-    (document) => String(document.status) === "FAILED",
-  );
-
-  let revenue = 0;
-  let expenses = 0;
-  let profit = 0;
-  let cash = 0;
-  let assets = 0;
-  let liabilities = 0;
-
-  let lineItemCount = 0;
-  let highValueExpenseCount = 0;
-  let largestExpense = 0;
-
-  for (const document of approvedDocuments) {
-    if (!isRecord(document.extractedData)) {
-      continue;
-    }
-
-    const data = document.extractedData;
-
-    const docRevenue = getExtractedNumber(data, [
-      "revenue",
-      "totalRevenue",
-      "sales",
-    ]);
-
-    const docExpenses = getExtractedNumber(data, [
-      "expenses",
-      "totalExpenses",
-    ]);
-
-    const docProfit = getNetIncome(data);
-    const docCash = getExtractedNumber(data, [
-      "cash",
-      "closingBalance",
-      "balance",
-    ]);
-
-    const docAssets = getExtractedNumber(data, ["assets"]);
-    const docLiabilities = getExtractedNumber(data, ["liabilities"]);
-
-    revenue += docRevenue;
-    expenses += docExpenses;
-    profit += docProfit;
-    cash += docCash;
-    assets += docAssets;
-    liabilities += docLiabilities;
-
-    if (Array.isArray(data.lineItems)) {
-      lineItemCount += data.lineItems.length;
-
-      for (const item of data.lineItems) {
-        if (!isRecord(item)) {
-          continue;
-        }
-
-        const amount = Math.abs(toNumber(item.amount) ?? 0);
-        const category = cleanString(item.category).toLowerCase();
-        const description = cleanString(item.description).toLowerCase();
-
-        const looksExpense =
-          category.includes("expense") ||
-          description.includes("expense") ||
-          description.includes("cost") ||
-          description.includes("salary") ||
-          description.includes("finance cost") ||
-          description.includes("purchase");
-
-        if (looksExpense && amount > 0) {
-          largestExpense = Math.max(largestExpense, amount);
-
-          if (revenue > 0 && amount / revenue > 0.1) {
-            highValueExpenseCount += 1;
-          }
-        }
-      }
-    }
-  }
-
-  if (profit === 0 && revenue > 0 && expenses > 0) {
-    profit = revenue - expenses;
-  }
-
-  const profitMarginPercent = safeRatio(profit, revenue);
-  const expenseRatioPercent = safeRatio(expenses, revenue);
-  const revenueCoveragePercent = safeRatio(revenue, expenses);
-  const debtToAssetPercent = safeRatio(liabilities, assets);
-
-  const riskFactors: RiskFactor[] = [];
+  const factors: RiskFactor[] = [];
   const strengths: string[] = [];
-  const recommendedActions: string[] = [];
+  const recommendedActions:
+    string[] = [];
   const missingData: string[] = [];
 
-  let score = 0;
+  let score = 5;
 
-  if (approvedDocuments.length === 0) {
-    score += 40;
-    missingData.push("Approve at least one processed financial document.");
-    addRisk(riskFactors, {
-      title: "No approved financial documents",
-      level: "HIGH",
-      scoreImpact: 40,
+  if (
+    context.counts
+      .approvedFinancialEntries === 0
+  ) {
+    score += 70;
+
+    addRisk(factors, {
+      title:
+        "No approved ledger evidence",
+      level: "CRITICAL",
+      scoreImpact: 70,
       message:
-        "Aureli cannot fully trust the dashboard because no processed document has been approved yet.",
+        "No approved CREDIT or DEBIT ledger entries are available for financial risk analysis.",
       recommendation:
-        "Open Documents, review extracted values, and approve correct documents.",
+        "Sync approved documents, review pending entries, and approve only verified transactions.",
     });
+
+    missingData.push(
+      "Approved credit and debit ledger entries are missing.",
+    );
   }
 
-  if (processedDocuments.length === 0) {
-    score += 25;
-    missingData.push("Upload and process financial statements, invoices, or bank statements.");
-    addRisk(riskFactors, {
-      title: "No processed documents",
-      level: "HIGH",
-      scoreImpact: 25,
-      message: "No AI-processed financial document is available for analysis.",
-      recommendation:
-        "Upload a financial statement, sales invoice, purchase invoice, or bank statement.",
-    });
-  }
+  if (
+    context.counts.pendingEntries > 0
+  ) {
+    const impact = Math.min(
+      18,
+      context.counts
+        .pendingEntries * 2,
+    );
 
-  if (pendingReviewDocuments.length > 0) {
-    const impact = Math.min(15, pendingReviewDocuments.length * 3);
     score += impact;
-    addRisk(riskFactors, {
-      title: "Documents pending review",
-      level: "MODERATE",
-      scoreImpact: impact,
-      message: `${pendingReviewDocuments.length} processed document(s) are still waiting for review.`,
-      recommendation:
-        "Approve correct documents and reject incorrect ones so dashboard decisions use trusted data.",
-    });
-  }
 
-  if (failedDocuments.length > 0) {
-    const impact = Math.min(12, failedDocuments.length * 4);
-    score += impact;
-    addRisk(riskFactors, {
-      title: "Failed AI processing",
-      level: "MODERATE",
+    addRisk(factors, {
+      title:
+        "Ledger review is incomplete",
+      level:
+        impact >= 12
+          ? "HIGH"
+          : "MODERATE",
       scoreImpact: impact,
-      message: `${failedDocuments.length} document(s) failed during AI processing.`,
-      recommendation:
-        "Retry smaller/readable files, avoid huge scanned PDFs, or use billing-enabled Gemini quota.",
-    });
-  }
-
-  if (revenue <= 0 && approvedDocuments.length > 0) {
-    score += 25;
-    missingData.push("No reliable revenue figure found in approved documents.");
-    addRisk(riskFactors, {
-      title: "Revenue missing",
-      level: "HIGH",
-      scoreImpact: 25,
       message:
-        "Approved documents do not contain a reliable revenue/sales figure.",
+        `${context.counts.pendingEntries} ledger entr${
+          context.counts
+            .pendingEntries === 1
+            ? "y is"
+            : "ies are"
+        } excluded while awaiting review.`,
       recommendation:
-        "Upload a sales invoice, income statement, GST sales summary, or revenue report.",
+        "Approve or reject pending ledger entries before relying on final decisions.",
     });
   }
 
-  if (expenses <= 0 && approvedDocuments.length > 0) {
+  if (
+    context.confidence.level ===
+    "LOW"
+  ) {
     score += 15;
-    missingData.push("No reliable expense figure found in approved documents.");
-    addRisk(riskFactors, {
-      title: "Expenses missing",
+
+    addRisk(factors, {
+      title:
+        "Low data confidence",
       level: "MODERATE",
       scoreImpact: 15,
       message:
-        "Approved documents do not contain a reliable total expense figure.",
+        `Ledger data confidence is ${context.confidence.score}/100.`,
       recommendation:
-        "Upload purchase invoices, payroll, utility bills, or a profit and loss statement.",
+        "Add correctly dated entries across more months and improve review coverage.",
     });
-  }
-
-  if (profit < 0) {
-    const lossRatio = revenue > 0 ? Math.abs(profit) / revenue : 1;
-    const impact = lossRatio > 0.25 ? 30 : lossRatio > 0.1 ? 22 : 14;
-
-    score += impact;
-    addRisk(riskFactors, {
-      title: "Business is loss-making",
-      level: impact >= 30 ? "CRITICAL" : "HIGH",
-      scoreImpact: impact,
-      message: `Approved documents show a net loss of ${formatMoney(
-        Math.abs(profit),
-        currency,
-      )}.`,
-      recommendation:
-        "Reduce controllable expenses, check pricing, and identify the biggest cost lines first.",
-    });
-  } else if (profit > 0 && revenue > 0) {
+  } else if (
+    context.confidence.level ===
+    "HIGH"
+  ) {
     strengths.push(
-      `Business is profitable with estimated profit of ${formatMoney(
-        profit,
-        currency,
-      )}.`,
+      `Ledger data confidence is high at ${context.confidence.score}/100.`,
     );
   }
 
-  if (expenseRatioPercent !== null) {
-    if (expenseRatioPercent > 100) {
-      score += 25;
-      addRisk(riskFactors, {
-        title: "Expenses exceed revenue",
-        level: "CRITICAL",
-        scoreImpact: 25,
-        message: `Expense ratio is ${expenseRatioPercent}%, meaning expenses are higher than revenue.`,
-        recommendation:
-          "Prioritize expense reduction and investigate major cost categories.",
-      });
-    } else if (expenseRatioPercent > 85) {
-      score += 15;
-      addRisk(riskFactors, {
-        title: "High expense ratio",
-        level: "HIGH",
-        scoreImpact: 15,
-        message: `Expense ratio is ${expenseRatioPercent}%, leaving limited profit buffer.`,
-        recommendation:
-          "Track top expenses monthly and set category-wise cost controls.",
-      });
-    } else {
-      strengths.push(`Expense ratio is controlled at ${expenseRatioPercent}%.`);
-    }
-  }
+  if (revenue <= 0 && expenses > 0) {
+    score += 30;
 
-  if (revenueCoveragePercent !== null) {
-    if (revenueCoveragePercent < 75) {
-      score += 20;
-      addRisk(riskFactors, {
-        title: "Weak revenue coverage",
-        level: "HIGH",
-        scoreImpact: 20,
-        message: `Revenue covers only ${revenueCoveragePercent}% of expenses.`,
-        recommendation:
-          "Increase revenue or reduce recurring costs until revenue coverage crosses 100%.",
-      });
-    } else if (revenueCoveragePercent < 100) {
-      score += 12;
-      addRisk(riskFactors, {
-        title: "Revenue coverage below break-even",
-        level: "MODERATE",
-        scoreImpact: 12,
-        message: `Revenue coverage is ${revenueCoveragePercent}%, slightly below break-even.`,
-        recommendation:
-          "Improve sales conversion and reduce non-essential expenses.",
-      });
-    } else {
-      strengths.push(`Revenue coverage is ${revenueCoveragePercent}%.`);
-    }
-  }
-
-  if (cash <= 0 && approvedDocuments.length > 0) {
-    score += 10;
-    missingData.push("No clear cash or bank balance found.");
-    addRisk(riskFactors, {
-      title: "Cash position unclear",
-      level: "MODERATE",
-      scoreImpact: 10,
+    addRisk(factors, {
+      title:
+        "Revenue evidence is missing",
+      level: "CRITICAL",
+      scoreImpact: 30,
       message:
-        "Aureli could not identify a reliable cash/bank balance from approved documents.",
+        "Approved ledger debits exist, but no approved credits are available in the selected currency.",
       recommendation:
-        "Upload a recent bank statement or balance sheet with cash and cash equivalents.",
+        "Review sales, income, and receipt entries and approve verified credits.",
     });
-  } else if (cash > 0) {
-    strengths.push(`Cash/balance detected: ${formatMoney(cash, currency)}.`);
+
+    missingData.push(
+      "Approved revenue or credit evidence is missing.",
+    );
   }
 
-  if (debtToAssetPercent !== null) {
-    if (debtToAssetPercent > 80) {
-      score += 20;
-      addRisk(riskFactors, {
-        title: "High liability pressure",
-        level: "HIGH",
-        scoreImpact: 20,
-        message: `Liabilities are ${debtToAssetPercent}% of assets.`,
-        recommendation:
-          "Review borrowings, payables, and debt repayment obligations.",
-      });
-    } else if (debtToAssetPercent > 55) {
-      score += 10;
-      addRisk(riskFactors, {
-        title: "Moderate liability pressure",
-        level: "MODERATE",
-        scoreImpact: 10,
-        message: `Liabilities are ${debtToAssetPercent}% of assets.`,
-        recommendation:
-          "Monitor debt levels and avoid taking new liabilities without revenue growth.",
-      });
-    } else {
-      strengths.push(`Debt-to-asset ratio is ${debtToAssetPercent}%.`);
-    }
-  }
-
-  if (lineItemCount === 0 && approvedDocuments.length > 0) {
+  if (
+    expenses <= 0 &&
+    revenue > 0
+  ) {
     score += 12;
-    missingData.push("No line items found in approved documents.");
-    addRisk(riskFactors, {
-      title: "Line item detail missing",
+
+    addRisk(factors, {
+      title:
+        "Expense evidence is incomplete",
       level: "MODERATE",
       scoreImpact: 12,
       message:
-        "Aureli found totals, but not detailed rows. This limits anomaly detection.",
+        "Approved credits exist, but no approved debits are available.",
       recommendation:
-        "Use readable PDF, CSV, or XLSX files so detailed rows can be extracted.",
+        "Review purchase, payroll, rent, utility, and operating cost entries.",
     });
-  } else if (lineItemCount > 0) {
-    strengths.push(`${lineItemCount} extracted line item(s) available for deeper analysis.`);
-  }
 
-  if (highValueExpenseCount > 0) {
-    score += Math.min(16, highValueExpenseCount * 4);
-    addRisk(riskFactors, {
-      title: "Large expense concentration",
-      level: highValueExpenseCount >= 3 ? "HIGH" : "MODERATE",
-      scoreImpact: Math.min(16, highValueExpenseCount * 4),
-      message: `${highValueExpenseCount} expense line item(s) appear large compared with revenue.`,
-      recommendation:
-        "Open extracted line items and inspect the largest cost categories first.",
-    });
-  }
-
-  if (rejectedDocuments.length > 0) {
-    score += Math.min(8, rejectedDocuments.length * 2);
-    addRisk(riskFactors, {
-      title: "Rejected documents present",
-      level: "MODERATE",
-      scoreImpact: Math.min(8, rejectedDocuments.length * 2),
-      message: `${rejectedDocuments.length} document(s) were rejected and excluded from the dashboard.`,
-      recommendation:
-        "Replace rejected files with correct financial documents if needed.",
-    });
-  }
-
-  if (riskFactors.length === 0) {
-    strengths.push("No major financial risk signals detected from approved documents.");
-    recommendedActions.push("Continue uploading monthly statements to keep risk score accurate.");
-    recommendedActions.push("Review line items monthly for unusual cost spikes.");
-    recommendedActions.push("Keep tax and compliance documents updated.");
-  } else {
-    recommendedActions.push(
-      ...riskFactors
-        .sort((a, b) => b.scoreImpact - a.scoreImpact)
-        .slice(0, 5)
-        .map((factor) => factor.recommendation),
+    missingData.push(
+      "Approved expense or debit evidence is missing.",
     );
   }
 
-  if (!business) {
-    missingData.push("Business onboarding profile is incomplete.");
+  if (profit < 0) {
+    const lossRatio =
+      revenue > 0
+        ? Math.abs(profit) /
+          revenue
+        : 1;
+
+    const impact =
+      lossRatio > 0.25
+        ? 34
+        : lossRatio > 0.1
+          ? 25
+          : 16;
+
+    score += impact;
+
+    addRisk(factors, {
+      title:
+        "Approved ledger is loss-making",
+      level:
+        impact >= 34
+          ? "CRITICAL"
+          : "HIGH",
+      scoreImpact: impact,
+      message:
+        `Approved ledger entries show a loss of ${formatLedgerMoney(
+          Math.abs(profit),
+          context.currency,
+        )}.`,
+      recommendation:
+        "Close the break-even gap before hiring, expansion, or new fixed commitments.",
+    });
+  } else if (
+    context.counts
+      .approvedFinancialEntries > 0
+  ) {
+    strengths.push(
+      `Approved ledger profit is ${formatLedgerMoney(
+        profit,
+        context.currency,
+      )}.`,
+    );
   }
 
-  if (approvedDocuments.length < 2) {
-    missingData.push("Upload more than one document type for better risk accuracy.");
+  if (
+    expenseRatioPercent !== null
+  ) {
+    if (
+      expenseRatioPercent > 100
+    ) {
+      score += 25;
+
+      addRisk(factors, {
+        title:
+          "Debits exceed credits",
+        level: "CRITICAL",
+        scoreImpact: 25,
+        message:
+          `Expense ratio is ${expenseRatioPercent.toFixed(
+            2,
+          )}%.`,
+        recommendation:
+          "Reduce controllable debits and improve recurring credits until coverage exceeds 100%.",
+      });
+    } else if (
+      expenseRatioPercent > 85
+    ) {
+      score += 14;
+
+      addRisk(factors, {
+        title:
+          "Expense ratio is high",
+        level: "HIGH",
+        scoreImpact: 14,
+        message:
+          `Approved debits consume ${expenseRatioPercent.toFixed(
+            2,
+          )}% of approved credits.`,
+        recommendation:
+          "Set category-wise limits and review the largest recurring debit entries.",
+      });
+    } else {
+      strengths.push(
+        `Expense ratio is controlled at ${expenseRatioPercent.toFixed(
+          2,
+        )}%.`,
+      );
+    }
   }
 
-  const finalScore = clampScore(score);
-  const level = getRiskLevel(finalScore);
+  if (
+    revenueCoveragePercent !==
+    null
+  ) {
+    if (
+      revenueCoveragePercent < 75
+    ) {
+      score += 20;
+
+      addRisk(factors, {
+        title:
+          "Revenue coverage is weak",
+        level: "HIGH",
+        scoreImpact: 20,
+        message:
+          `Approved credits cover only ${revenueCoveragePercent.toFixed(
+            2,
+          )}% of approved debits.`,
+        recommendation:
+          "Increase recurring inflow or cut debits until revenue coverage exceeds 100%.",
+      });
+    } else if (
+      revenueCoveragePercent < 100
+    ) {
+      score += 10;
+
+      addRisk(factors, {
+        title:
+          "Revenue coverage is below break-even",
+        level: "MODERATE",
+        scoreImpact: 10,
+        message:
+          `Revenue coverage is ${revenueCoveragePercent.toFixed(
+            2,
+          )}%.`,
+        recommendation:
+          "Create a quantified break-even plan.",
+      });
+    } else {
+      strengths.push(
+        `Revenue coverage is ${revenueCoveragePercent.toFixed(
+          2,
+        )}%.`,
+      );
+    }
+  }
+
+  const largestDebit =
+    context.topDebits[0];
+
+  if (
+    largestDebit &&
+    expenses > 0
+  ) {
+    const concentration =
+      (
+        largestDebit.amount /
+        expenses
+      ) * 100;
+
+    if (concentration >= 45) {
+      score += 12;
+
+      addRisk(factors, {
+        title:
+          "Expense concentration is high",
+        level: "MODERATE",
+        scoreImpact: 12,
+        message:
+          `${largestDebit.description} represents about ${concentration.toFixed(
+            1,
+          )}% of approved debits.`,
+        recommendation:
+          "Verify, negotiate, reduce, or diversify the largest cost concentration.",
+      });
+    }
+  }
+
+  if (
+    context.counts
+      .excludedCurrencyEntries > 0
+  ) {
+    score += 5;
+
+    addRisk(factors, {
+      title:
+        "Mixed-currency entries excluded",
+      level: "MODERATE",
+      scoreImpact: 5,
+      message:
+        `${context.counts.excludedCurrencyEntries} approved financial entr${
+          context.counts
+            .excludedCurrencyEntries === 1
+            ? "y is"
+            : "ies are"
+        } excluded from ${context.currency} totals.`,
+      recommendation:
+        "Review each currency separately or add an explicit verified conversion workflow.",
+    });
+  }
+
+  missingData.push(
+    "Verified opening or closing cash balance is not stored, so runway is unavailable.",
+  );
+
+  if (
+    context.monthly.observedMonths <
+    3
+  ) {
+    missingData.push(
+      "Less than three months of approved ledger history is available.",
+    );
+  }
+
+  if (factors.length === 0) {
+    strengths.push(
+      "No major financial risk signal was detected from approved ledger entries.",
+    );
+  }
+
+  recommendedActions.push(
+    ...factors
+      .sort(
+        (first, second) =>
+          second.scoreImpact -
+          first.scoreImpact,
+      )
+      .slice(0, 5)
+      .map(
+        (factor) =>
+          factor.recommendation,
+      ),
+  );
+
+  if (
+    recommendedActions.length === 0
+  ) {
+    recommendedActions.push(
+      "Keep the ledger current and review financial risk monthly.",
+    );
+  }
+
+  const finalScore =
+    Math.round(
+      clamp(score, 0, 100),
+    );
+
+  const level =
+    getRiskLevel(
+      finalScore,
+    );
+
+  const summary =
+    context.counts
+        .approvedFinancialEntries ===
+      0
+      ? "Aureli cannot calculate a reliable financial risk position until approved ledger entries are available."
+      : level === "CRITICAL"
+        ? `Critical risk is visible in approved ledger movement. Revenue is ${formatLedgerMoney(
+            revenue,
+            context.currency,
+          )}, expenses are ${formatLedgerMoney(
+            expenses,
+            context.currency,
+          )}, and net result is ${formatLedgerMoney(
+            profit,
+            context.currency,
+          )}.`
+        : level === "HIGH"
+          ? "Approved ledger movement shows high financial risk. Prioritize break-even, review pending entries, and control major debits."
+          : level === "MODERATE"
+            ? "Approved ledger movement shows moderate risk that should be monitored and improved."
+            : "Approved ledger movement currently shows low financial risk, subject to data confidence and missing cash balance.";
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt:
+      new Date().toISOString(),
     score: finalScore,
     level,
-    label: getRiskLabel(level),
-    summary: buildSummary({
-      level,
-      profit,
-      revenue,
-      expenses,
-      approvedDocuments: approvedDocuments.length,
-      pendingReviewDocuments: pendingReviewDocuments.length,
-    }),
+    label:
+      getRiskLabel(level),
+    summary,
+
     metrics: {
-      revenue: money(revenue, currency),
-      expenses: money(expenses, currency),
-      profit: money(profit, currency),
-      cash: money(cash, currency),
-      assets: money(assets, currency),
-      liabilities: money(liabilities, currency),
+      revenue:
+        money(
+          revenue,
+          context.currency,
+        ),
+      expenses:
+        money(
+          expenses,
+          context.currency,
+        ),
+      profit:
+        money(
+          profit,
+          context.currency,
+        ),
+      cash:
+        unavailableMoney(),
+      assets:
+        unavailableMoney(),
+      liabilities:
+        unavailableMoney(),
       profitMarginPercent,
       expenseRatioPercent,
       revenueCoveragePercent,
-      debtToAssetPercent,
+      debtToAssetPercent: null,
     },
+
     documentStatus: {
-      totalDocuments: documents.length,
-      processedDocuments: processedDocuments.length,
-      approvedDocuments: approvedDocuments.length,
-      pendingReviewDocuments: pendingReviewDocuments.length,
-      rejectedDocuments: rejectedDocuments.length,
-      failedDocuments: failedDocuments.length,
+      totalDocuments:
+        context.documents.total,
+      processedDocuments:
+        context.documents.processed,
+      approvedDocuments:
+        context.documents.approved,
+      pendingReviewDocuments:
+        context.counts
+          .pendingEntries,
+      rejectedDocuments:
+        context.counts
+          .rejectedEntries,
+      failedDocuments:
+        context.documents.failed,
     },
-    riskFactors: riskFactors.sort((a, b) => b.scoreImpact - a.scoreImpact),
-    strengths: Array.from(new Set(strengths)).slice(0, 8),
-    recommendedActions: Array.from(new Set(recommendedActions)).slice(0, 8),
-    missingData: Array.from(new Set(missingData)).slice(0, 8),
+
+    riskFactors:
+      factors.sort(
+        (first, second) =>
+          second.scoreImpact -
+          first.scoreImpact,
+      ),
+
+    strengths:
+      Array.from(
+        new Set(strengths),
+      ).slice(0, 8),
+
+    recommendedActions:
+      Array.from(
+        new Set(
+          recommendedActions,
+        ),
+      ).slice(0, 8),
+
+    missingData:
+      Array.from(
+        new Set(missingData),
+      ).slice(0, 8),
   };
 }

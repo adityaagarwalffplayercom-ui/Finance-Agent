@@ -1,5 +1,9 @@
-﻿import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
+import {
+  buildTrustedLedgerPromptBlock,
+  getTrustedLedgerContext,
+} from "./trusted-ledger-context";
 import {
   buildAgentLaunchSafetyBlock,
   getAgentSafetyFooter,
@@ -250,7 +254,7 @@ function getLineItemSummary(
 
 async function getFinancialProfileSafely(userId: string) {
   try {
-    const mod = await import("./financial-profile");
+    const mod = await import("./ledger-financial-profile");
 
     if (typeof mod.getFinancialProfile !== "function") {
       return null;
@@ -347,6 +351,7 @@ async function buildPrompt(params: {
   agentId: AiAgentId;
 }) {
   const context = await buildBusinessContext(params.userId);
+  const trustedLedgerContext = await getTrustedLedgerContext(params.userId);
   const agent = AGENT_PROFILES[params.agentId];
   const shouldUseTaxBlocks = isTaxQuestion(params.question, agent.id);
 
@@ -471,6 +476,9 @@ Business profile:
 - Financial year: ${context.business.financialYear}
 - Currency: ${context.business.currency}
 
+Trusted ledger evidence (financial source of truth):
+${buildTrustedLedgerPromptBlock(trustedLedgerContext)}
+
 Document trust status:
 - Processed documents total: ${context.processedDocuments}
 - Approved processed documents used for answers: ${context.approvedDocuments.length}
@@ -513,8 +521,13 @@ Required answer contract:
 ${responseContractBlock}
 
 Strict global rules:
-- Use only the business profile, approved documents, approved line items, financial profile, tax coverage dashboard, verified TaxRule database, verified uploaded tax knowledge, and verified tax source citations shown above.
+- For revenue, expenses, profit, margins, break-even, hiring, cash movement, forecast, risk, and anomaly questions, use the Trusted ledger evidence block as the financial source of truth.
+- Approved document extracted data is supporting source and tax context only; it must not override approved ledger totals.
+- Use only the business profile, trusted ledger evidence, approved source documents, verified tax coverage, verified TaxRule database, verified uploaded tax knowledge, and verified tax source citations shown above.
 - Do not pretend missing data exists.
+- Never claim a verified cash balance or cash runway unless the trusted evidence explicitly provides one.
+- Current net movement is not the same as current bank cash.
+- Pending, rejected, neutral, and different-currency ledger entries must remain excluded from financial totals.
 - If data is missing, clearly say what is missing.
 - Do not provide legal, tax, audit, investment, or filing certification.
 - For tax questions, first check tax coverage dashboard status: STRONG, PARTIAL, or MISSING.

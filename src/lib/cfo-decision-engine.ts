@@ -1,7 +1,14 @@
-import { prisma } from "@/lib/prisma";
-import { getFinancialProfile } from "@/lib/financial-profile";
+import {
+  formatLedgerMoney,
+  formatLedgerPercent,
+  getTrustedLedgerContext,
+} from "./trusted-ledger-context";
 
-type CfoTone = "good" | "warning" | "danger" | "neutral";
+type CfoTone =
+  | "good"
+  | "warning"
+  | "danger"
+  | "neutral";
 
 export type CfoMetric = {
   label: string;
@@ -18,7 +25,10 @@ export type CfoScenario = {
 };
 
 export type CfoAction = {
-  priority: "HIGH" | "MEDIUM" | "LOW";
+  priority:
+    | "HIGH"
+    | "MEDIUM"
+    | "LOW";
   title: string;
   detail: string;
 };
@@ -27,484 +37,344 @@ export type CfoDecisionPlan = {
   generatedAt: string;
   currency: string;
   summary: string;
-  status: "PROFITABLE" | "LOSS_MAKING" | "INSUFFICIENT_DATA";
+  status:
+    | "PROFITABLE"
+    | "LOSS_MAKING"
+    | "INSUFFICIENT_DATA";
+
   metrics: {
     revenue: number | null;
     expenses: number | null;
     profit: number | null;
     cash: number | null;
     breakEvenGap: number | null;
-    monthlyExpenseEstimate: number | null;
-    cashRunwayMonths: number | null;
-    profitMarginPercent: number | null;
-    expenseRatioPercent: number | null;
+    monthlyExpenseEstimate:
+      | number
+      | null;
+    cashRunwayMonths:
+      | number
+      | null;
+    profitMarginPercent:
+      | number
+      | null;
+    expenseRatioPercent:
+      | number
+      | null;
   };
+
   cards: CfoMetric[];
   scenarios: CfoScenario[];
   actions: CfoAction[];
+
   topExpenseSignals: {
     label: string;
     amount: number;
     source: string;
   }[];
+
   hiringDecision: {
     canHire: boolean;
     message: string;
-    safeMonthlyHiringBudget: number | null;
+    safeMonthlyHiringBudget:
+      | number
+      | null;
   };
 };
-
-type JsonRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is JsonRecord {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function toNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const clean = value.replace(/,/g, "").trim();
-  const match = clean.match(/-?\d+(\.\d+)?/);
-
-  if (!match) {
-    return null;
-  }
-
-  const number = Number(match[0]);
-
-  if (!Number.isFinite(number)) {
-    return null;
-  }
-
-  const lower = clean.toLowerCase();
-  let multiplier = 1;
-
-  if (lower.includes("crore") || lower.includes(" cr")) {
-    multiplier = 10_000_000;
-  } else if (lower.includes("lakh") || lower.includes(" lac")) {
-    multiplier = 100_000;
-  } else if (lower.includes("b")) {
-    multiplier = 1_000_000_000;
-  } else if (lower.includes("m")) {
-    multiplier = 1_000_000;
-  } else if (lower.includes("k")) {
-    multiplier = 1_000;
-  }
-
-  return number * multiplier;
-}
-
-function parseMetricValue(value: string) {
-  if (!value || value === "—" || value === "Not available") {
-    return null;
-  }
-
-  return toNumber(value);
-}
-
-function compactNumber(value: number) {
-  const absolute = Math.abs(value);
-
-  if (absolute >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(2)}B`;
-  }
-
-  if (absolute >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(2)}M`;
-  }
-
-  if (absolute >= 1_000) {
-    return `${(value / 1_000).toFixed(2)}K`;
-  }
-
-  return `${Math.round(value)}`;
-}
-
-function currencySymbol(currency: string) {
-  const clean = currency.trim().toUpperCase();
-  const rupee = "Rs. ";
-
-  if (clean === "INR" || currency.trim() === rupee) return rupee;
-  if (clean === "USD" || currency.trim() === "$") return "$";
-  if (clean === "GBP" || currency.trim() === "£") return "£";
-  if (clean === "EUR" || currency.trim() === "€") return "€";
-
-  return currency || "";
-}
-
-function formatMoney(value: number | null, currency: string) {
-  if (value === null || !Number.isFinite(value)) {
-    return "Not available";
-  }
-
-  const symbol = currencySymbol(currency);
-  const sign = value < 0 ? "-" : "";
-
-  return `${sign}${symbol}${compactNumber(Math.abs(value))}`;
-}
-
-function formatPercent(value: number | null) {
-  if (value === null || !Number.isFinite(value)) {
-    return "Not available";
-  }
-
-  return `${value.toFixed(2)}%`;
-}
-
-function readString(record: JsonRecord, keys: string[]) {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-
-  return "";
-}
-
-function readAmount(record: JsonRecord) {
-  const keys = [
-    "amount",
-    "total",
-    "value",
-    "expense",
-    "expenses",
-    "debit",
-    "cost",
-    "balance",
-  ];
-
-  for (const key of keys) {
-    const number = toNumber(record[key]);
-
-    if (number !== null) {
-      return Math.abs(number);
-    }
-  }
-
-  return null;
-}
-
-function collectLineItemsFromJson(
-  value: unknown,
-  source: string,
-  output: { label: string; amount: number; source: string }[],
-) {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectLineItemsFromJson(item, source, output);
-    }
-
-    return;
-  }
-
-  if (!isRecord(value)) {
-    return;
-  }
-
-  const label = readString(value, [
-    "description",
-    "name",
-    "label",
-    "category",
-    "particulars",
-    "account",
-    "item",
-  ]);
-
-  const amount = readAmount(value);
-
-  if (label && amount !== null && amount > 0) {
-    const lower = label.toLowerCase();
-
-    const looksLikeExpense =
-      lower.includes("expense") ||
-      lower.includes("cost") ||
-      lower.includes("salary") ||
-      lower.includes("rent") ||
-      lower.includes("purchase") ||
-      lower.includes("payroll") ||
-      lower.includes("utility") ||
-      lower.includes("marketing") ||
-      lower.includes("interest") ||
-      lower.includes("depreciation") ||
-      lower.includes("logistics") ||
-      lower.includes("employee") ||
-      lower.includes("admin");
-
-    if (looksLikeExpense) {
-      output.push({
-        label,
-        amount,
-        source,
-      });
-    }
-  }
-
-  for (const nestedValue of Object.values(value)) {
-    if (Array.isArray(nestedValue)) {
-      collectLineItemsFromJson(nestedValue, source, output);
-    }
-  }
-}
-
-function makeSummary({
-  revenue,
-  expenses,
-  profit,
-  breakEvenGap,
-  currency,
-}: {
-  revenue: number | null;
-  expenses: number | null;
-  profit: number | null;
-  breakEvenGap: number | null;
-  currency: string;
-}) {
-  if (revenue === null && expenses === null && profit === null) {
-    return "CFO engine needs approved revenue and expense data before giving a reliable break-even decision.";
-  }
-
-  if (profit !== null && profit >= 0) {
-    return `Business is currently showing profit of ${formatMoney(
-      profit,
-      currency,
-    )}. CFO focus should move from survival to margin improvement, cash protection, and controlled growth.`;
-  }
-
-  return `Business is currently below break-even by about ${formatMoney(
-    breakEvenGap,
-    currency,
-  )}. CFO priority should be reducing costs, improving revenue coverage, and avoiding new fixed commitments until profit stabilizes.`;
-}
 
 export async function getCfoDecisionPlan(
   userId: string,
 ): Promise<CfoDecisionPlan> {
-  const [profile, business, documents] = await Promise.all([
-    getFinancialProfile(userId),
-    prisma.business.findUnique({
-      where: {
-        userId,
-      },
-      select: {
-        currency: true,
-      },
-    }),
-    prisma.document.findMany({
-      where: {
-        userId,
-        status: "PROCESSED",
-        reviewStatus: "APPROVED",
-      },
-      select: {
-        fileName: true,
-        extractedData: true,
-      },
-      orderBy: {
-        uploadedAt: "desc",
-      },
-      take: 50,
-    }),
-  ]);
+  const context =
+    await getTrustedLedgerContext(
+      userId,
+    );
 
-  const currency = business?.currency || "INR";
+  const hasData =
+    context.counts
+      .approvedFinancialEntries > 0;
 
-  const revenue = parseMetricValue(profile.revenue.value);
-  const expenses = parseMetricValue(profile.expenses.value);
-  let profit = parseMetricValue(profile.profit.value);
-  const cash = parseMetricValue(profile.cash.value);
+  const revenue =
+    hasData
+      ? context.totals.revenue
+      : null;
 
-  if (profit === null && revenue !== null && expenses !== null) {
-    profit = revenue - expenses;
-  }
+  const expenses =
+    hasData
+      ? context.totals.expenses
+      : null;
 
-  const breakEvenGap = profit !== null && profit < 0 ? Math.abs(profit) : 0;
+  const profit =
+    hasData
+      ? context.totals.profit
+      : null;
+
+  const cash: number | null =
+    null;
+
+  const breakEvenGap =
+    profit !== null &&
+    profit < 0
+      ? Math.abs(profit)
+      : 0;
 
   const monthlyExpenseEstimate =
-    expenses !== null && expenses > 0 ? expenses / 12 : null;
+    context.monthly
+      .averageExpenses;
 
-  const cashRunwayMonths =
-    cash !== null && monthlyExpenseEstimate !== null && monthlyExpenseEstimate > 0
-      ? cash / monthlyExpenseEstimate
-      : null;
+  const monthlyProfit =
+    context.monthly
+      .averageProfit;
+
+  const cashRunwayMonths:
+    number | null = null;
 
   const profitMarginPercent =
-    revenue !== null && revenue > 0 && profit !== null
-      ? (profit / revenue) * 100
-      : null;
+    context.totals
+      .profitMarginPercent;
 
   const expenseRatioPercent =
-    revenue !== null && revenue > 0 && expenses !== null
-      ? (expenses / revenue) * 100
-      : null;
+    context.totals
+      .expenseRatioPercent;
 
-  const status =
-    revenue === null && expenses === null && profit === null
+  const status:
+    CfoDecisionPlan["status"] =
+    !hasData
       ? "INSUFFICIENT_DATA"
-      : profit !== null && profit >= 0
+      : (profit ?? 0) >= 0
         ? "PROFITABLE"
         : "LOSS_MAKING";
 
   const expenseReductionNeededPercent =
-    expenses !== null && expenses > 0 && breakEvenGap !== null
-      ? (breakEvenGap / expenses) * 100
+    expenses !== null &&
+    expenses > 0 &&
+    breakEvenGap !== null
+      ? (
+          breakEvenGap /
+          expenses
+        ) * 100
       : null;
 
   const revenueIncreaseNeededPercent =
-    revenue !== null && revenue > 0 && breakEvenGap !== null
-      ? (breakEvenGap / revenue) * 100
+    revenue !== null &&
+    revenue > 0 &&
+    breakEvenGap !== null
+      ? (
+          breakEvenGap /
+          revenue
+        ) * 100
       : null;
 
   const targetProfit =
-    revenue !== null && revenue > 0 ? revenue * 0.1 : null;
-
-  const targetProfitGap =
-    targetProfit !== null && profit !== null
-      ? Math.max(0, targetProfit - profit)
+    revenue !== null &&
+    revenue > 0
+      ? revenue * 0.1
       : null;
 
-  const topExpenseSignals: {
-    label: string;
-    amount: number;
-    source: string;
-  }[] = [];
+  const targetProfitGap =
+    targetProfit !== null &&
+    profit !== null
+      ? Math.max(
+          0,
+          targetProfit - profit,
+        )
+      : null;
 
-  for (const document of documents) {
-    collectLineItemsFromJson(
-      document.extractedData,
-      document.fileName,
-      topExpenseSignals,
-    );
-  }
-
-  const topExpenses = topExpenseSignals
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 6);
+  const topExpenseSignals =
+    context.topDebits
+      .slice(0, 6)
+      .map((entry) => ({
+        label:
+          entry.description,
+        amount: entry.amount,
+        source:
+          entry.documentId
+            ? entry.sourceFileName
+            : "Manual entry",
+      }));
 
   const safeMonthlyHiringBudget =
-    profit !== null && profit > 0 ? Math.max(0, profit / 12 / 3) : null;
+    monthlyProfit !== null &&
+    monthlyProfit > 0
+      ? monthlyProfit * 0.25
+      : null;
 
-  const canHire =
-    profit !== null &&
-    profit > 0 &&
-    cashRunwayMonths !== null &&
-    cashRunwayMonths >= 3;
+  /*
+   * A positive operating surplus alone
+   * is not enough to approve hiring.
+   * Verified cash balance is intentionally
+   * unavailable at this stage.
+   */
+  const canHire = false;
+
+  const hiringMessage =
+    safeMonthlyHiringBudget !== null &&
+    context.monthly.observedMonths >=
+      3
+      ? `Operating surplus suggests a provisional monthly hiring ceiling near ${formatLedgerMoney(
+          safeMonthlyHiringBudget,
+          context.currency,
+        )}, but hiring is not approved until a verified cash balance, recurring revenue stability, and payroll obligations are confirmed.`
+      : "Hiring is not recommended yet. Build at least three months of approved ledger history, maintain positive monthly surplus, and verify the current cash balance first.";
 
   const cards: CfoMetric[] = [
     {
-      label: "Break-even gap",
-      value: formatMoney(breakEvenGap, currency),
-      hint:
-        breakEvenGap && breakEvenGap > 0
-          ? "Amount needed to reach zero profit/loss"
-          : "Already at or above break-even",
-      tone: breakEvenGap && breakEvenGap > 0 ? "danger" : "good",
-    },
-    {
-      label: "Profit margin",
-      value: formatPercent(profitMarginPercent),
-      hint: "Profit as percentage of revenue",
-      tone:
-        profitMarginPercent === null
-          ? "neutral"
-          : profitMarginPercent >= 10
-            ? "good"
-            : profitMarginPercent >= 0
-              ? "warning"
-              : "danger",
-    },
-    {
-      label: "Expense ratio",
-      value: formatPercent(expenseRatioPercent),
-      hint: "Expenses compared to revenue",
-      tone:
-        expenseRatioPercent === null
-          ? "neutral"
-          : expenseRatioPercent <= 80
-            ? "good"
-            : expenseRatioPercent <= 100
-              ? "warning"
-              : "danger",
-    },
-    {
-      label: "Cash runway",
+      label:
+        "Break-even gap",
       value:
-        cashRunwayMonths === null
-          ? "Not available"
-          : `${cashRunwayMonths.toFixed(1)} months`,
-      hint: "Estimated months cash can cover expenses",
+        formatLedgerMoney(
+          breakEvenGap,
+          context.currency,
+        ),
+      hint:
+        breakEvenGap &&
+        breakEvenGap > 0
+          ? "Approved improvement required to reach zero profit/loss"
+          : "Approved ledger is at or above break-even",
       tone:
-        cashRunwayMonths === null
+        breakEvenGap &&
+        breakEvenGap > 0
+          ? "danger"
+          : "good",
+    },
+    {
+      label:
+        "Profit margin",
+      value:
+        formatLedgerPercent(
+          profitMarginPercent,
+        ),
+      hint:
+        "Approved ledger profit divided by approved credits",
+      tone:
+        profitMarginPercent ===
+        null
           ? "neutral"
-          : cashRunwayMonths >= 6
+          : profitMarginPercent >=
+              10
             ? "good"
-            : cashRunwayMonths >= 3
+            : profitMarginPercent >=
+                0
               ? "warning"
               : "danger",
+    },
+    {
+      label:
+        "Expense ratio",
+      value:
+        formatLedgerPercent(
+          expenseRatioPercent,
+        ),
+      hint:
+        "Approved debits compared with approved credits",
+      tone:
+        expenseRatioPercent ===
+        null
+          ? "neutral"
+          : expenseRatioPercent <=
+              80
+            ? "good"
+            : expenseRatioPercent <=
+                100
+              ? "warning"
+              : "danger",
+    },
+    {
+      label:
+        "Cash runway",
+      value:
+        "Not available",
+      hint:
+        "Verified opening or closing cash balance is required",
+      tone: "neutral",
     },
   ];
 
   const scenarios: CfoScenario[] = [
     {
-      title: "Break even by reducing expenses",
+      title:
+        "Break even by reducing expenses",
       value:
-        expenseReductionNeededPercent === null
+        expenseReductionNeededPercent ===
+        null
           ? "Not available"
-          : `${expenseReductionNeededPercent.toFixed(2)}% cut`,
+          : `${expenseReductionNeededPercent.toFixed(
+              2,
+            )}% cut`,
       description:
-        breakEvenGap && breakEvenGap > 0
-          ? `Reduce annual expenses by ${formatMoney(
+        breakEvenGap &&
+        breakEvenGap > 0
+          ? `Reduce approved-period debits by ${formatLedgerMoney(
               breakEvenGap,
-              currency,
-            )} to reach break-even if revenue stays the same.`
-          : "No expense reduction is required for break-even based on current profit signal.",
-      tone: breakEvenGap && breakEvenGap > 0 ? "warning" : "good",
+              context.currency,
+            )} if credits stay unchanged.`
+          : "No debit reduction is required for break-even from the current approved totals.",
+      tone:
+        breakEvenGap &&
+        breakEvenGap > 0
+          ? "warning"
+          : "good",
     },
     {
-      title: "Break even by increasing revenue",
+      title:
+        "Break even by increasing revenue",
       value:
-        revenueIncreaseNeededPercent === null
+        revenueIncreaseNeededPercent ===
+        null
           ? "Not available"
-          : `${revenueIncreaseNeededPercent.toFixed(2)}% growth`,
+          : `${revenueIncreaseNeededPercent.toFixed(
+              2,
+            )}% growth`,
       description:
-        breakEvenGap && breakEvenGap > 0
-          ? `Increase revenue by ${formatMoney(
+        breakEvenGap &&
+        breakEvenGap > 0
+          ? `Increase approved-period credits by ${formatLedgerMoney(
               breakEvenGap,
-              currency,
-            )} to reach break-even if expenses stay the same.`
-          : "Current numbers already show break-even or profit.",
-      tone: breakEvenGap && breakEvenGap > 0 ? "warning" : "good",
+              context.currency,
+            )} if debits stay unchanged.`
+          : "Current approved totals already show break-even or profit.",
+      tone:
+        breakEvenGap &&
+        breakEvenGap > 0
+          ? "warning"
+          : "good",
     },
     {
-      title: "Balanced CFO plan",
+      title:
+        "Balanced CFO plan",
       value:
-        breakEvenGap && breakEvenGap > 0
-          ? `${formatMoney(breakEvenGap / 2, currency)} + ${formatMoney(
+        breakEvenGap &&
+        breakEvenGap > 0
+          ? `${formatLedgerMoney(
               breakEvenGap / 2,
-              currency,
+              context.currency,
+            )} + ${formatLedgerMoney(
+              breakEvenGap / 2,
+              context.currency,
             )}`
           : "Protect margin",
       description:
-        breakEvenGap && breakEvenGap > 0
-          ? "A balanced plan means half the gap is solved by cost control and half by revenue growth."
-          : "Since break-even is achieved, focus on improving margin and protecting cash.",
-      tone: breakEvenGap && breakEvenGap > 0 ? "warning" : "good",
+        breakEvenGap &&
+        breakEvenGap > 0
+          ? "Close half the gap through cost control and half through improved credits."
+          : "Protect margin and verify cash before scaling.",
+      tone:
+        breakEvenGap &&
+        breakEvenGap > 0
+          ? "warning"
+          : "good",
     },
     {
-      title: "Target 10% profit margin",
-      value: formatMoney(targetProfitGap, currency),
+      title:
+        "Target 10% profit margin",
+      value:
+        formatLedgerMoney(
+          targetProfitGap,
+          context.currency,
+        ),
       description:
         targetProfitGap !== null
-          ? "Extra improvement required to reach an estimated 10% profit margin."
-          : "Revenue and profit data are required to calculate target profit margin.",
+          ? "Additional approved-period improvement required to reach an estimated 10% margin."
+          : "Approved revenue and profit are required.",
       tone:
         targetProfitGap === null
           ? "neutral"
@@ -516,81 +386,110 @@ export async function getCfoDecisionPlan(
 
   const actions: CfoAction[] = [];
 
-  if (status === "INSUFFICIENT_DATA") {
+  if (!hasData) {
     actions.push({
       priority: "HIGH",
-      title: "Approve core finance documents",
+      title:
+        "Build the trusted ledger",
       detail:
-        "Upload and approve revenue, expense, bank, and financial statement documents so CFO engine can calculate break-even properly.",
+        "Sync approved documents and approve verified credit and debit entries.",
     });
   }
 
-  if (breakEvenGap && breakEvenGap > 0) {
+  if (
+    breakEvenGap &&
+    breakEvenGap > 0
+  ) {
     actions.push({
       priority: "HIGH",
-      title: "Close the break-even gap first",
-      detail: `Your estimated gap is ${formatMoney(
-        breakEvenGap,
-        currency,
-      )}. Avoid expansion decisions until this gap has a clear plan.`,
+      title:
+        "Close the break-even gap",
+      detail:
+        `Approved ledger loss is ${formatLedgerMoney(
+          breakEvenGap,
+          context.currency,
+        )}. Avoid expansion until a quantified plan closes it.`,
     });
   }
 
   if (
     expenseRatioPercent !== null &&
-    Number.isFinite(expenseRatioPercent) &&
     expenseRatioPercent > 100
   ) {
     actions.push({
       priority: "HIGH",
-      title: "Expenses are higher than revenue",
+      title:
+        "Bring debits below credits",
       detail:
-        "Start with fixed and recurring costs because they keep the business in loss even when sales improve.",
+        "Start with fixed and recurring debit categories because they keep the business below break-even.",
     });
   }
 
   if (
-    cashRunwayMonths !== null &&
-    Number.isFinite(cashRunwayMonths) &&
-    cashRunwayMonths < 3
+    context.counts
+      .pendingEntries > 0
   ) {
     actions.push({
       priority: "HIGH",
-      title: "Protect cash runway",
+      title:
+        "Complete pending ledger review",
       detail:
-        "Cash runway appears below 3 months. Delay hiring, reduce discretionary spend, and improve collections.",
+        `${context.counts.pendingEntries} entr${
+          context.counts
+            .pendingEntries === 1
+            ? "y is"
+            : "ies are"
+        } excluded from CFO calculations.`,
     });
   }
 
-  if (topExpenses.length > 0) {
+  if (
+    topExpenseSignals.length > 0
+  ) {
     actions.push({
       priority: "MEDIUM",
-      title: "Review largest expense signals",
-      detail: `Start review with: ${topExpenses
-        .slice(0, 3)
-        .map((item) => item.label)
-        .join(", ")}.`,
+      title:
+        "Review largest debit signals",
+      detail:
+        `Start with ${topExpenseSignals
+          .slice(0, 3)
+          .map(
+            (item) =>
+              item.label,
+          )
+          .join(", ")}.`,
     });
   }
 
   actions.push({
     priority: "MEDIUM",
-    title: "Use monthly tracking",
+    title:
+      "Verify cash before fixed commitments",
     detail:
-      "Review break-even monthly so one-time gains do not hide recurring losses.",
+      "Current ledger measures movement, not verified bank cash. Confirm the current balance before hiring, borrowing, or expansion.",
   });
 
+  const summary =
+    !hasData
+      ? "CFO decisions require approved credit and debit ledger entries."
+      : (profit ?? 0) >= 0
+        ? `Approved ledger shows profit of ${formatLedgerMoney(
+            profit,
+            context.currency,
+          )}. Focus on margin quality, recurring revenue, and cash verification before growth.`
+        : `Approved ledger is below break-even by ${formatLedgerMoney(
+            breakEvenGap,
+            context.currency,
+          )}. Reduce debits, improve credits, and avoid new fixed commitments.`;
+
   return {
-    generatedAt: new Date().toISOString(),
-    currency,
-    summary: makeSummary({
-      revenue,
-      expenses,
-      profit,
-      breakEvenGap,
-      currency,
-    }),
+    generatedAt:
+      new Date().toISOString(),
+    currency:
+      context.currency,
+    summary,
     status,
+
     metrics: {
       revenue,
       expenses,
@@ -602,19 +501,17 @@ export async function getCfoDecisionPlan(
       profitMarginPercent,
       expenseRatioPercent,
     },
+
     cards,
     scenarios,
     actions,
-    topExpenseSignals: topExpenses,
+    topExpenseSignals,
+
     hiringDecision: {
       canHire,
+      message:
+        hiringMessage,
       safeMonthlyHiringBudget,
-      message: canHire
-        ? `Hiring may be possible, but keep new monthly fixed cost below about ${formatMoney(
-            safeMonthlyHiringBudget,
-            currency,
-          )} unless revenue is stable.`
-        : "Hiring is not recommended yet. First improve profit, cash runway, and break-even coverage.",
     },
   };
 }

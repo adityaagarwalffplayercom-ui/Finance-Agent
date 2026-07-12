@@ -773,7 +773,7 @@ export default async function CashFlowPage() {
                 lineHeight: 1.65,
               }}
             >
-              No approved documents found.
+              No approved source documents are linked to trusted ledger entries.
             </p>
           )}
         </section>
