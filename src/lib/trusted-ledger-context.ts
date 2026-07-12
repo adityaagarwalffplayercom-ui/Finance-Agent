@@ -170,12 +170,12 @@ function compactNumber(value: number) {
 
 function currencySymbol(currency: string) {
   const symbols: Record<string, string> = {
-    INR: "â‚¹",
+    INR: "₹",
     USD: "$",
-    EUR: "â‚¬",
-    GBP: "Â£",
-    JPY: "Â¥",
-    AED: "Ø¯.Ø¥ ",
+    EUR: "€",
+    GBP: "£",
+    JPY: "¥",
+    AED: "د.إ ",
     CAD: "C$",
     AUD: "A$",
   };

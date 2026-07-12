@@ -7,12 +7,14 @@ const ai = new GoogleGenAI({
 
 const PRIMARY_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite";
 
+const CONFIGURED_FALLBACK_MODELS =
+  process.env.GEMINI_FALLBACK_MODELS?.split(",")
+    .map((model) => model.trim())
+    .filter(Boolean) ?? [];
+
 const FALLBACK_MODELS = [
   PRIMARY_MODEL,
-  "gemini-2.5-flash-lite",
-  "gemini-2.5-flash-lite",
-  
-  
+  ...CONFIGURED_FALLBACK_MODELS,
 ].filter((model, index, models) => model && models.indexOf(model) === index);
 
 const EXTRACTION_SCHEMA = {

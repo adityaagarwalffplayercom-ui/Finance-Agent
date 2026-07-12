@@ -8,7 +8,7 @@ import {
 import { auth } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
-import { syncLedgerForReview } from "@/lib/transaction-ledger";
+import { syncLedgerForReviewInTransaction } from "@/lib/transaction-ledger";
 
 type RouteContext = {
   params: Promise<{
@@ -149,32 +149,49 @@ export async function PATCH(
       );
     }
 
-    const updatedDocument =
-      await prisma.document.update({
-        where: {
-          id: document.id,
-        },
-        data: {
-          reviewStatus,
-          reviewedAt: new Date(),
-          reviewNote:
-            reviewNote || null,
-        },
-        select: {
-          id: true,
-          fileName: true,
-          reviewStatus: true,
-          reviewedAt: true,
-          reviewNote: true,
-        },
-      });
+    const reviewedAt = new Date();
 
-    const ledgerEntryCount =
-      await syncLedgerForReview({
-        documentId: document.id,
-        userId: session.user.id,
-        reviewStatus,
-      });
+    const {
+      updatedDocument,
+      ledgerEntryCount,
+    } = await prisma.$transaction(
+      async (transaction) => {
+        const updatedDocument =
+          await transaction.document.update({
+            where: {
+              id: document.id,
+            },
+            data: {
+              reviewStatus,
+              reviewedAt,
+              reviewNote:
+                reviewNote || null,
+            },
+            select: {
+              id: true,
+              fileName: true,
+              reviewStatus: true,
+              reviewedAt: true,
+              reviewNote: true,
+            },
+          });
+
+        const ledgerEntryCount =
+          await syncLedgerForReviewInTransaction(
+            transaction,
+            {
+              documentId: document.id,
+              userId: session.user.id,
+              reviewStatus,
+            },
+          );
+
+        return {
+          updatedDocument,
+          ledgerEntryCount,
+        };
+      },
+    );
 
     await createAuditEvent({
       userId: session.user.id,

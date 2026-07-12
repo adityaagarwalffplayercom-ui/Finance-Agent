@@ -19,6 +19,11 @@ type LedgerDocument = {
   extractedData: Prisma.JsonValue | null;
 };
 
+type LedgerSyncParams = {
+  documentId: string;
+  userId: string;
+};
+
 function cleanString(value: unknown) {
   return typeof value === "string" && value.trim()
     ? value.trim()
@@ -34,6 +39,18 @@ function cleanNumber(value: unknown) {
     const parsed = Number(value.replace(/,/g, "").trim());
 
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    const parsed = cleanNumber(value);
+
+    if (parsed !== null) {
+      return parsed;
+    }
   }
 
   return null;
@@ -70,10 +87,16 @@ function normalizeCurrency(value: unknown) {
     : "INR";
 }
 
+function isOrderDocument(category: DocumentCategory) {
+  return (
+    category === DocumentCategory.SALES_ORDER ||
+    category === DocumentCategory.PURCHASE_ORDER
+  );
+}
+
 function categoryDirection(category: DocumentCategory) {
   if (
     category === DocumentCategory.SALES_INVOICE ||
-    category === DocumentCategory.SALES_ORDER ||
     category === DocumentCategory.RECEIPT
   ) {
     return LedgerDirection.CREDIT;
@@ -81,7 +104,6 @@ function categoryDirection(category: DocumentCategory) {
 
   if (
     category === DocumentCategory.PURCHASE_INVOICE ||
-    category === DocumentCategory.PURCHASE_ORDER ||
     category === DocumentCategory.PAYROLL ||
     category === DocumentCategory.UTILITY_BILL ||
     category === DocumentCategory.RENT_LEASE ||
@@ -144,154 +166,166 @@ function inferDirection(params: {
   return categoryDirection(params.documentCategory);
 }
 
-function buildEntries(document: LedgerDocument) {
-  if (
-    !document.extractedData ||
-    typeof document.extractedData !== "object" ||
-    Array.isArray(document.extractedData)
-  ) {
+function isLikelyAggregateLine(description: string, category: string | null) {
+  const text = `${category ?? ""} ${description}`.toLowerCase();
+
+  return [
+    "grand total",
+    "subtotal",
+    "sub total",
+    "total revenue",
+    "total income",
+    "total expense",
+    "total expenses",
+    "total assets",
+    "total liabilities",
+    "total equity",
+    "gross total",
+    "net total",
+    "carried forward",
+    "brought forward",
+  ].some((phrase) => text.includes(phrase));
+}
+
+function buildFinancialStatementEntries(params: {
+  document: LedgerDocument;
+  extracted: ExtractedDocumentData;
+  currency: string;
+  counterparty: string | null;
+}) {
+  const { document, extracted, currency, counterparty } = params;
+  const statementDate =
+    parseDate(extracted.periodEnd) ??
+    parseDate(extracted.documentDate);
+  const periodStart = cleanString(extracted.periodStart);
+  const periodEnd = cleanString(extracted.periodEnd);
+
+  const metrics: Array<{
+    key: string;
+    label: string;
+    amount: number | null;
+    direction: LedgerDirection;
+  }> = [
+    {
+      key: "revenue",
+      label: "Statement revenue",
+      amount: firstNumber(
+        extracted.revenue,
+        extracted.totalRevenue,
+        extracted.sales,
+      ),
+      direction: LedgerDirection.CREDIT,
+    },
+    {
+      key: "expenses",
+      label: "Statement expenses",
+      amount: firstNumber(
+        extracted.expenses,
+        extracted.totalExpenses,
+      ),
+      direction: LedgerDirection.DEBIT,
+    },
+    {
+      key: "net-income",
+      label: "Statement net income",
+      amount: firstNumber(
+        extracted.netIncome,
+        extracted.profit,
+        extracted.loss === null || extracted.loss === undefined
+          ? null
+          : -Math.abs(extracted.loss),
+      ),
+      direction: LedgerDirection.NEUTRAL,
+    },
+    {
+      key: "assets",
+      label: "Statement assets",
+      amount: firstNumber(extracted.assets),
+      direction: LedgerDirection.NEUTRAL,
+    },
+    {
+      key: "liabilities",
+      label: "Statement liabilities",
+      amount: firstNumber(extracted.liabilities),
+      direction: LedgerDirection.NEUTRAL,
+    },
+    {
+      key: "equity",
+      label: "Statement equity",
+      amount: firstNumber(extracted.equity),
+      direction: LedgerDirection.NEUTRAL,
+    },
+    {
+      key: "cash",
+      label: "Statement cash",
+      amount: firstNumber(
+        extracted.cash,
+        extracted.closingBalance,
+        extracted.balance,
+      ),
+      direction: LedgerDirection.NEUTRAL,
+    },
+  ];
+
+  return metrics.flatMap<Prisma.LedgerEntryCreateManyInput>((metric) => {
+    if (metric.amount === null || metric.amount === 0) {
+      return [];
+    }
+
+    return [
+      {
+        userId: document.userId,
+        documentId: document.id,
+        transactionDate: statementDate,
+        description: metric.label,
+        counterparty,
+        category: "Financial statement summary",
+        direction: metric.direction,
+        amount: Math.abs(metric.amount),
+        currency,
+        confidence: 0.9,
+        status: LedgerEntryStatus.NEEDS_REVIEW,
+        sourceType: LedgerSourceType.STATEMENT_LINE,
+        sourceLineKey: sourceKey([
+          "statement-summary",
+          metric.key,
+          periodStart,
+          periodEnd,
+          metric.amount,
+        ]),
+        metadata: {
+          aggregate: true,
+          statementMetric: metric.key,
+          originalAmount: metric.amount,
+          periodStart: periodStart ?? "",
+          periodEnd: periodEnd ?? "",
+          note:
+            "Statement summaries require ledger review because they may overlap with invoices, bills, or bank transactions from the same period.",
+        },
+      },
+    ];
+  });
+}
+
+function buildDocumentTotalEntry(params: {
+  document: LedgerDocument;
+  extracted: ExtractedDocumentData;
+  currency: string;
+  counterparty: string | null;
+}) {
+  const { document, extracted, currency, counterparty } = params;
+  const totalAmount = cleanNumber(extracted.totalAmount);
+
+  if (totalAmount === null || totalAmount === 0) {
     return [];
   }
 
-  const extracted =
-    document.extractedData as unknown as ExtractedDocumentData;
+  const description =
+    cleanString(extracted.totalAmountLabel) ??
+    `Total from ${document.fileName}`;
 
-  const currency = normalizeCurrency(extracted.currency);
-  const counterparty = cleanString(extracted.vendorOrCounterparty);
-  const entries: Prisma.LedgerEntryCreateManyInput[] = [];
-
-  const transactions = Array.isArray(extracted.transactions)
-    ? extracted.transactions
-    : [];
-
-  if (transactions.length > 0) {
-    transactions.forEach((transaction, index) => {
-      const amount = cleanNumber(transaction.amount);
-
-      if (amount === null || amount === 0) {
-        return;
-      }
-
-      const description =
-        cleanString(transaction.description) ??
-        `Bank transaction ${index + 1}`;
-
-      const direction =
-        transaction.direction === "credit"
-          ? LedgerDirection.CREDIT
-          : LedgerDirection.DEBIT;
-
-      entries.push({
-        userId: document.userId,
-        documentId: document.id,
-        transactionDate:
-          parseDate(transaction.date) ??
-          parseDate(extracted.documentDate),
-        description,
-        counterparty,
-        category: "Bank transaction",
-        direction,
-        amount: Math.abs(amount),
-        currency,
-        confidence: 0.96,
-        status: LedgerEntryStatus.APPROVED,
-        sourceType: LedgerSourceType.BANK_TRANSACTION,
-        sourceLineKey: sourceKey([
-          "transaction",
-          index,
-          transaction.date,
-          description,
-          amount,
-          direction,
-        ]),
-        metadata: {
-          sourceIndex: index,
-          originalDirection: transaction.direction,
-          originalAmount: amount,
-        },
-      });
-    });
-
-    return entries;
-  }
-
-  const lineItems = Array.isArray(extracted.lineItems)
-    ? extracted.lineItems
-    : [];
-
-  if (lineItems.length > 0) {
-    lineItems.forEach((item, index) => {
-      const amount = cleanNumber(item.amount);
-
-      if (amount === null || amount === 0) {
-        return;
-      }
-
-      const description =
-        cleanString(item.description) ??
-        `Extracted line ${index + 1}`;
-
-      const itemCategory = cleanString(item.category);
-
-      const direction = inferDirection({
-        description,
-        itemCategory,
-        amount,
-        documentCategory: document.category,
-      });
-
-      entries.push({
-        userId: document.userId,
-        documentId: document.id,
-        transactionDate:
-          parseDate(item.date) ??
-          parseDate(extracted.documentDate),
-        description,
-        counterparty,
-        category: itemCategory,
-        direction,
-        amount: Math.abs(amount),
-        currency,
-        confidence:
-          document.category === DocumentCategory.FINANCIAL_STATEMENT
-            ? 0.82
-            : 0.88,
-        status:
-          document.category === DocumentCategory.FINANCIAL_STATEMENT
-            ? LedgerEntryStatus.NEEDS_REVIEW
-            : LedgerEntryStatus.APPROVED,
-        sourceType:
-          document.category === DocumentCategory.FINANCIAL_STATEMENT
-            ? LedgerSourceType.STATEMENT_LINE
-            : LedgerSourceType.DOCUMENT_LINE,
-        sourceLineKey: sourceKey([
-          "line",
-          index,
-          item.date,
-          description,
-          itemCategory,
-          amount,
-          direction,
-        ]),
-        metadata: {
-          sourceIndex: index,
-          originalAmount: amount,
-          originalCategory: itemCategory ?? "",
-        },
-      });
-    });
-
-    return entries;
-  }
-
-  const totalAmount = cleanNumber(extracted.totalAmount);
-
-  if (totalAmount !== null && totalAmount !== 0) {
-    const description =
-      cleanString(extracted.totalAmountLabel) ??
-      `Total from ${document.fileName}`;
-
-    entries.push({
+  return [
+    {
       userId: document.userId,
       documentId: document.id,
       transactionDate: parseDate(extracted.documentDate),
@@ -306,8 +340,8 @@ function buildEntries(document: LedgerDocument) {
       }),
       amount: Math.abs(totalAmount),
       currency,
-      confidence: 0.75,
-      status: LedgerEntryStatus.NEEDS_REVIEW,
+      confidence: 0.94,
+      status: LedgerEntryStatus.APPROVED,
       sourceType: LedgerSourceType.DOCUMENT_TOTAL,
       sourceLineKey: sourceKey([
         "document-total",
@@ -316,30 +350,191 @@ function buildEntries(document: LedgerDocument) {
       ]),
       metadata: {
         originalAmount: totalAmount,
+        accountingTreatment:
+          "Single document total used to avoid counting invoice or bill components together with their subtotal/total rows.",
       },
-    });
-  }
-
-  return entries;
+    } satisfies Prisma.LedgerEntryCreateManyInput,
+  ];
 }
 
-export async function removeLedgerEntriesForDocument(params: {
-  documentId: string;
-  userId: string;
+function buildFallbackLineEntries(params: {
+  document: LedgerDocument;
+  extracted: ExtractedDocumentData;
+  currency: string;
+  counterparty: string | null;
 }) {
-  return prisma.ledgerEntry.deleteMany({
-    where: {
-      documentId: params.documentId,
-      userId: params.userId,
-    },
+  const { document, extracted, currency, counterparty } = params;
+  const lineItems = Array.isArray(extracted.lineItems)
+    ? extracted.lineItems
+    : [];
+
+  return lineItems.flatMap<Prisma.LedgerEntryCreateManyInput>((item, index) => {
+    const amount = cleanNumber(item.amount);
+
+    if (amount === null || amount === 0) {
+      return [];
+    }
+
+    const description =
+      cleanString(item.description) ??
+      `Extracted line ${index + 1}`;
+    const itemCategory = cleanString(item.category);
+
+    if (isLikelyAggregateLine(description, itemCategory)) {
+      return [];
+    }
+
+    const direction = inferDirection({
+      description,
+      itemCategory,
+      amount,
+      documentCategory: document.category,
+    });
+
+    return [
+      {
+        userId: document.userId,
+        documentId: document.id,
+        transactionDate:
+          parseDate(item.date) ??
+          parseDate(extracted.documentDate),
+        description,
+        counterparty,
+        category: itemCategory,
+        direction,
+        amount: Math.abs(amount),
+        currency,
+        confidence: 0.78,
+        status: LedgerEntryStatus.NEEDS_REVIEW,
+        sourceType: LedgerSourceType.DOCUMENT_LINE,
+        sourceLineKey: sourceKey([
+          "line-fallback",
+          index,
+          item.date,
+          description,
+          itemCategory,
+          amount,
+          direction,
+        ]),
+        metadata: {
+          sourceIndex: index,
+          originalAmount: amount,
+          originalCategory: itemCategory ?? "",
+          note:
+            "No document total was available. This extracted line requires review before it affects trusted financial totals.",
+        },
+      },
+    ];
   });
 }
 
-export async function syncLedgerEntriesFromDocument(params: {
-  documentId: string;
-  userId: string;
-}) {
-  const document = await prisma.document.findFirst({
+function buildEntries(document: LedgerDocument) {
+  if (
+    !document.extractedData ||
+    typeof document.extractedData !== "object" ||
+    Array.isArray(document.extractedData)
+  ) {
+    return [];
+  }
+
+  if (isOrderDocument(document.category)) {
+    return [];
+  }
+
+  const extracted =
+    document.extractedData as unknown as ExtractedDocumentData;
+  const currency = normalizeCurrency(extracted.currency);
+  const counterparty = cleanString(extracted.vendorOrCounterparty);
+
+  if (document.category === DocumentCategory.FINANCIAL_STATEMENT) {
+    return buildFinancialStatementEntries({
+      document,
+      extracted,
+      currency,
+      counterparty,
+    });
+  }
+
+  const transactions = Array.isArray(extracted.transactions)
+    ? extracted.transactions
+    : [];
+
+  if (transactions.length > 0) {
+    return transactions.flatMap<Prisma.LedgerEntryCreateManyInput>(
+      (transaction, index) => {
+        const amount = cleanNumber(transaction.amount);
+
+        if (amount === null || amount === 0) {
+          return [];
+        }
+
+        const description =
+          cleanString(transaction.description) ??
+          `Bank transaction ${index + 1}`;
+        const direction =
+          transaction.direction === "credit"
+            ? LedgerDirection.CREDIT
+            : LedgerDirection.DEBIT;
+
+        return [
+          {
+            userId: document.userId,
+            documentId: document.id,
+            transactionDate:
+              parseDate(transaction.date) ??
+              parseDate(extracted.documentDate),
+            description,
+            counterparty,
+            category: "Bank transaction",
+            direction,
+            amount: Math.abs(amount),
+            currency,
+            confidence: 0.96,
+            status: LedgerEntryStatus.APPROVED,
+            sourceType: LedgerSourceType.BANK_TRANSACTION,
+            sourceLineKey: sourceKey([
+              "transaction",
+              index,
+              transaction.date,
+              description,
+              amount,
+              direction,
+            ]),
+            metadata: {
+              sourceIndex: index,
+              originalDirection: transaction.direction,
+              originalAmount: amount,
+            },
+          },
+        ];
+      },
+    );
+  }
+
+  const totalEntries = buildDocumentTotalEntry({
+    document,
+    extracted,
+    currency,
+    counterparty,
+  });
+
+  if (totalEntries.length > 0) {
+    return totalEntries;
+  }
+
+  return buildFallbackLineEntries({
+    document,
+    extracted,
+    currency,
+    counterparty,
+  });
+}
+
+async function syncLedgerEntriesFromDocumentInTransaction(
+  transaction: Prisma.TransactionClient,
+  params: LedgerSyncParams,
+) {
+  const document = await transaction.document.findFirst({
     where: {
       id: params.documentId,
       userId: params.userId,
@@ -363,49 +558,79 @@ export async function syncLedgerEntriesFromDocument(params: {
     document.status !== DocumentStatus.PROCESSED ||
     document.reviewStatus !== DocumentReviewStatus.APPROVED
   ) {
-    await removeLedgerEntriesForDocument(params);
+    await transaction.ledgerEntry.deleteMany({
+      where: {
+        documentId: params.documentId,
+        userId: params.userId,
+      },
+    });
+
     return 0;
   }
 
   const entries = buildEntries(document);
 
-  await prisma.$transaction(async (transaction) => {
-    await transaction.ledgerEntry.deleteMany({
-      where: {
-        documentId: document.id,
-        userId: document.userId,
-      },
-    });
-
-    if (entries.length > 0) {
-      await transaction.ledgerEntry.createMany({
-        data: entries,
-        skipDuplicates: true,
-      });
-    }
+  await transaction.ledgerEntry.deleteMany({
+    where: {
+      documentId: document.id,
+      userId: document.userId,
+    },
   });
+
+  if (entries.length > 0) {
+    await transaction.ledgerEntry.createMany({
+      data: entries,
+      skipDuplicates: true,
+    });
+  }
 
   return entries.length;
 }
 
-export async function syncLedgerForReview(params: {
-  documentId: string;
-  userId: string;
-  reviewStatus: DocumentReviewStatus;
-}) {
+export async function removeLedgerEntriesForDocument(params: LedgerSyncParams) {
+  return prisma.ledgerEntry.deleteMany({
+    where: {
+      documentId: params.documentId,
+      userId: params.userId,
+    },
+  });
+}
+
+export async function syncLedgerEntriesFromDocument(params: LedgerSyncParams) {
+  return prisma.$transaction((transaction) =>
+    syncLedgerEntriesFromDocumentInTransaction(transaction, params),
+  );
+}
+
+export async function syncLedgerForReviewInTransaction(
+  transaction: Prisma.TransactionClient,
+  params: LedgerSyncParams & {
+    reviewStatus: DocumentReviewStatus;
+  },
+) {
   if (params.reviewStatus === DocumentReviewStatus.APPROVED) {
-    return syncLedgerEntriesFromDocument({
+    return syncLedgerEntriesFromDocumentInTransaction(transaction, {
       documentId: params.documentId,
       userId: params.userId,
     });
   }
 
-  await removeLedgerEntriesForDocument({
-    documentId: params.documentId,
-    userId: params.userId,
+  await transaction.ledgerEntry.deleteMany({
+    where: {
+      documentId: params.documentId,
+      userId: params.userId,
+    },
   });
 
   return 0;
+}
+
+export async function syncLedgerForReview(params: LedgerSyncParams & {
+  reviewStatus: DocumentReviewStatus;
+}) {
+  return prisma.$transaction((transaction) =>
+    syncLedgerForReviewInTransaction(transaction, params),
+  );
 }
 
 export async function syncAllApprovedDocuments(userId: string) {
