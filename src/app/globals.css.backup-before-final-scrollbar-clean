@@ -3688,90 +3688,416 @@ main th {
 
 /* ===== Aureli sidebar premium fix ===== */
 
-/* Aureli Main App Scrollbar — Bluish Graphite */
-html,
-body {
+/* Fix sidebar scrollbar and remove ugly inner scroll box layer */
+aside [class*="overflow-y-auto"],
+aside [class*="overflow-auto"],
+aside nav {
   scrollbar-width: thin;
-  scrollbar-color: rgba(52, 70, 96, 0.72) transparent;
-  overflow-x: hidden;
+  scrollbar-color: rgba(244, 213, 141, 0.48) transparent;
 }
 
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Chrome / Edge scrollbar */
+aside [class*="overflow-y-auto"]::-webkit-scrollbar,
+aside [class*="overflow-auto"]::-webkit-scrollbar,
+aside nav::-webkit-scrollbar {
+  width: 7px;
 }
 
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
+aside [class*="overflow-y-auto"]::-webkit-scrollbar-track,
+aside [class*="overflow-auto"]::-webkit-scrollbar-track,
+aside nav::-webkit-scrollbar-track {
   background: transparent !important;
+  border-radius: 999px;
 }
 
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  border-radius: 999px !important;
-  background: rgba(52, 70, 96, 0.72) !important;
-  background-image: none !important;
-  border: 1px solid rgba(5, 10, 18, 0.62) !important;
-  background-clip: padding-box !important;
+aside [class*="overflow-y-auto"]::-webkit-scrollbar-thumb,
+aside [class*="overflow-auto"]::-webkit-scrollbar-thumb,
+aside nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(244, 213, 141, 0.95),
+    rgba(201, 151, 53, 0.75)
+  ) !important;
+  box-shadow: 0 0 18px rgba(244, 213, 141, 0.22);
+}
+
+aside [class*="overflow-y-auto"]::-webkit-scrollbar-thumb:hover,
+aside [class*="overflow-auto"]::-webkit-scrollbar-thumb:hover,
+aside nav::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 225, 150, 1),
+    rgba(201, 151, 53, 0.95)
+  ) !important;
+}
+
+/* Remove the visible nested box/layer inside sidebar menu */
+aside [class*="overflow-y-auto"],
+aside [class*="overflow-auto"] {
+  background: transparent !important;
+  border-color: transparent !important;
+  outline: none !important;
   box-shadow: none !important;
 }
 
-html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(78, 104, 138, 0.9) !important;
+/* Make sidebar scrolling feel like app UI */
+aside {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 213, 141, 0.48) transparent;
 }
 
-html::-webkit-scrollbar-button,
-body::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+aside::-webkit-scrollbar {
+  width: 7px;
 }
 
-/* AURELI EXACT MAIN SCROLLBAR FIX */
-html,
-body {
-  scrollbar-width: thin !important;
-  scrollbar-color: rgba(52, 70, 96, 0.72) transparent !important;
-  overflow-x: hidden !important;
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 8px !important;
-  height: 8px !important;
-}
-
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
+aside::-webkit-scrollbar-track {
   background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
+}
+
+aside::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(244, 213, 141, 0.95),
+    rgba(201, 151, 53, 0.75)
+  ) !important;
+}
+
+/* Sidebar item polish */
+aside a,
+aside button {
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+aside a:hover,
+aside button:hover {
+  transform: translateX(2px);
+}
+
+
+/* ===== Aureli exact sidebar fix ===== */
+
+.aureli-sidebar-scroll {
+  background: transparent !important;
   border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 213, 141, 0.5) transparent;
 }
 
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  border-radius: 999px !important;
-  background: rgba(52, 70, 96, 0.72) !important;
-  background-color: rgba(52, 70, 96, 0.72) !important;
-  background-image: none !important;
-  border: 1px solid rgba(5, 10, 18, 0.62) !important;
-  background-clip: padding-box !important;
+.aureli-sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent !important;
+  border-radius: 999px;
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(244, 213, 141, 0.95),
+    rgba(201, 151, 53, 0.78)
+  ) !important;
+  box-shadow: 0 0 16px rgba(244, 213, 141, 0.22);
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 225, 150, 1),
+    rgba(201, 151, 53, 0.95)
+  ) !important;
+}
+
+/* Remove inner card/layer look only inside sidebar scroll */
+.aureli-sidebar-scroll > div,
+.aureli-sidebar-scroll > nav {
+  background: transparent !important;
+  border-color: transparent !important;
   box-shadow: none !important;
 }
 
-html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(78, 104, 138, 0.9) !important;
-  background-color: rgba(78, 104, 138, 0.9) !important;
+/* Sidebar items premium hover */
+.aureli-sidebar-scroll a,
+.aureli-sidebar-scroll button {
+  border-radius: 20px;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    color 0.2s ease;
 }
 
-html::-webkit-scrollbar-button,
-body::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+.aureli-sidebar-scroll a:hover,
+.aureli-sidebar-scroll button:hover {
+  background: rgba(255, 255, 255, 0.075);
+  transform: translateX(2px);
+}
+
+
+/* ===== Aureli unified premium scrollbar ===== */
+/* This makes app scrollbar + sidebar scrollbar match Aureli glass/gold UI */
+
+:root {
+  --aureli-scrollbar-size: 8px;
+  --aureli-scrollbar-track: rgba(255, 255, 255, 0.035);
+  --aureli-scrollbar-track-hover: rgba(255, 255, 255, 0.06);
+  --aureli-scrollbar-thumb-top: rgba(244, 213, 141, 0.95);
+  --aureli-scrollbar-thumb-bottom: rgba(201, 151, 53, 0.78);
+  --aureli-scrollbar-thumb-hover-top: rgba(255, 230, 160, 1);
+  --aureli-scrollbar-thumb-hover-bottom: rgba(201, 151, 53, 0.98);
+}
+
+/* Firefox global scrollbar */
+html,
+body,
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 213, 141, 0.52) transparent;
+}
+
+/* Chrome / Edge / Safari global scrollbar */
+::-webkit-scrollbar {
+  width: var(--aureli-scrollbar-size);
+  height: var(--aureli-scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--aureli-scrollbar-track) !important;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track:hover {
+  background: var(--aureli-scrollbar-track-hover) !important;
+}
+
+::-webkit-scrollbar-thumb {
+  min-height: 46px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(
+      180deg,
+      var(--aureli-scrollbar-thumb-top),
+      var(--aureli-scrollbar-thumb-bottom)
+    )
+    border-box !important;
+  box-shadow:
+    0 0 16px rgba(244, 213, 141, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(
+      180deg,
+      var(--aureli-scrollbar-thumb-hover-top),
+      var(--aureli-scrollbar-thumb-hover-bottom)
+    )
+    border-box !important;
+  box-shadow:
+    0 0 22px rgba(244, 213, 141, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* Sidebar scrollbar should look same but slightly slimmer */
+.aureli-sidebar-scroll,
+aside,
+aside * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 213, 141, 0.52) transparent;
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar,
+aside::-webkit-scrollbar,
+aside *::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar-track,
+aside::-webkit-scrollbar-track,
+aside *::-webkit-scrollbar-track {
+  background: transparent !important;
+  border-radius: 999px;
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar-thumb,
+aside::-webkit-scrollbar-thumb,
+aside *::-webkit-scrollbar-thumb {
+  min-height: 44px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(
+      180deg,
+      var(--aureli-scrollbar-thumb-top),
+      var(--aureli-scrollbar-thumb-bottom)
+    )
+    border-box !important;
+  box-shadow:
+    0 0 16px rgba(244, 213, 141, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar-thumb:hover,
+aside::-webkit-scrollbar-thumb:hover,
+aside *::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(
+      180deg,
+      var(--aureli-scrollbar-thumb-hover-top),
+      var(--aureli-scrollbar-thumb-hover-bottom)
+    )
+    border-box !important;
+}
+
+/* Remove ugly white/grey scroll background inside sidebar */
+.aureli-sidebar-scroll {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+
+/* ===== Aureli unified premium scrollbar FINAL ===== */
+
+:root {
+  --aureli-scrollbar-size: 8px;
+  --aureli-scrollbar-track: rgba(255, 255, 255, 0.035);
+  --aureli-scrollbar-track-hover: rgba(255, 255, 255, 0.06);
+  --aureli-scrollbar-thumb-top: rgba(244, 213, 141, 0.95);
+  --aureli-scrollbar-thumb-bottom: rgba(201, 151, 53, 0.78);
+  --aureli-scrollbar-thumb-hover-top: rgba(255, 230, 160, 1);
+  --aureli-scrollbar-thumb-hover-bottom: rgba(201, 151, 53, 0.98);
+}
+
+/* Firefox */
+html,
+body,
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 213, 141, 0.52) transparent;
+}
+
+/* Chrome / Edge / Safari */
+::-webkit-scrollbar {
+  width: var(--aureli-scrollbar-size);
+  height: var(--aureli-scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--aureli-scrollbar-track) !important;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track:hover {
+  background: var(--aureli-scrollbar-track-hover) !important;
+}
+
+::-webkit-scrollbar-thumb {
+  min-height: 46px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(
+      180deg,
+      var(--aureli-scrollbar-thumb-top),
+      var(--aureli-scrollbar-thumb-bottom)
+    )
+    border-box !important;
+  box-shadow:
+    0 0 16px rgba(244, 213, 141, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(
+      180deg,
+      var(--aureli-scrollbar-thumb-hover-top),
+      var(--aureli-scrollbar-thumb-hover-bottom)
+    )
+    border-box !important;
+  box-shadow:
+    0 0 22px rgba(244, 213, 141, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* Sidebar same design, slightly slimmer */
+.aureli-sidebar-scroll,
+aside,
+aside * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 213, 141, 0.52) transparent;
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar,
+aside::-webkit-scrollbar,
+aside *::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar-track,
+aside::-webkit-scrollbar-track,
+aside *::-webkit-scrollbar-track {
+  background: transparent !important;
+  border-radius: 999px;
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar-thumb,
+aside::-webkit-scrollbar-thumb,
+aside *::-webkit-scrollbar-thumb {
+  min-height: 44px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(
+      180deg,
+      var(--aureli-scrollbar-thumb-top),
+      var(--aureli-scrollbar-thumb-bottom)
+    )
+    border-box !important;
+  box-shadow:
+    0 0 16px rgba(244, 213, 141, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.aureli-sidebar-scroll::-webkit-scrollbar-thumb:hover,
+aside::-webkit-scrollbar-thumb:hover,
+aside *::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(
+      180deg,
+      var(--aureli-scrollbar-thumb-hover-top),
+      var(--aureli-scrollbar-thumb-hover-bottom)
+    )
+    border-box !important;
+}
+
+/* Remove ugly grey/white sidebar scroll background */
+.aureli-sidebar-scroll {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }

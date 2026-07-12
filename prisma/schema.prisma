@@ -232,8 +232,8 @@ model TaxRuleSourceLink {
   taxRuleId        String
   sourceDocumentId String
   createdAt        DateTime          @default(now())
-  taxRule          TaxRule           @relation(fields: [taxRuleId], references: [id], onDelete: Cascade)
   sourceDocument   TaxSourceDocument @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+  taxRule          TaxRule           @relation(fields: [taxRuleId], references: [id], onDelete: Cascade)
 
   @@unique([taxRuleId, sourceDocumentId])
   @@index([sourceDocumentId])

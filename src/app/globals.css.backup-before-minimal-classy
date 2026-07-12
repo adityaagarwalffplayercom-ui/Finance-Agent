@@ -2806,55 +2806,179 @@ tbody td:last-child {
   color: #f4d58d;
 }
 
+/* AUTH FORM CLEAN START */
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* AURELI SAFE GRAPHITE UI START */
-
-:root {
-  --graphite-page: #121212;
-  --graphite-sidebar: #181818;
-  --graphite-card: #222222;
-  --graphite-card-hover: #272727;
-  --graphite-input: #1c1c1c;
-  --graphite-border: rgba(255, 255, 255, 0.12);
-  --graphite-border-strong: rgba(255, 255, 255, 0.18);
-  --graphite-text: #f4f1eb;
-  --graphite-muted: #aaa39a;
-  --graphite-soft: #d2ccc2;
-  --graphite-gold: #d9b96f;
-  --graphite-gold-soft: rgba(217, 185, 111, 0.16);
-}
-
-html,
-body {
-  background: linear-gradient(180deg, #171717 0%, #101010 100%) !important;
-  color: var(--graphite-text) !important;
-}
-
-main {
+/* Removes ugly extra rectangle around sign in / sign up forms */
+form:has(input[type="email"]):has(input[type="password"]) {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
   background: transparent !important;
 }
 
-/* All main boxes */
+form:has(input[type="email"]):has(input[type="password"]) fieldset,
+form:has(input[type="email"]):has(input[type="password"]) > div {
+  border-color: transparent !important;
+}
+
+form:has(input[type="email"]):has(input[type="password"]) label {
+  display: block;
+  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+form:has(input[type="email"]):has(input[type="password"]) input {
+  width: 100%;
+  height: 72px;
+  margin-bottom: 22px;
+  padding: 0 28px;
+  border-radius: 28px !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.22),
+      rgba(255, 255, 255, 0.08)
+    ) !important;
+  color: white !important;
+  font-size: 1.05rem;
+  font-weight: 650;
+  outline: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 18px 40px rgba(0, 0, 0, 0.22) !important;
+}
+
+form:has(input[type="email"]):has(input[type="password"]) input::placeholder {
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+
+form:has(input[type="email"]):has(input[type="password"]) input:focus {
+  border-color: rgba(245, 196, 96, 0.78) !important;
+  box-shadow:
+    0 0 0 4px rgba(245, 196, 96, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 22px 48px rgba(0, 0, 0, 0.3) !important;
+}
+
+form:has(input[type="email"]):has(input[type="password"]) button {
+  width: 100%;
+  min-height: 66px;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background:
+    linear-gradient(135deg, #f4d58d 0%, #c99735 48%, #7a531d 100%) !important;
+  color: #15110a !important;
+  font-size: 1rem;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  box-shadow:
+    0 22px 55px rgba(201, 151, 53, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+}
+
+form:has(input[type="email"]):has(input[type="password"]) button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+}
+
+/* AUTH FORM CLEAN END */
+
+
+/* AUTH BUTTON CENTER START */
+
+/* Center Sign in / Create workspace button text */
+form:has(input[type="email"]):has(input[type="password"]) button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+
+form:has(input[type="email"]):has(input[type="password"]) button * {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  text-align: center !important;
+}
+
+/* AUTH BUTTON CENTER END */
+
+
+/* AURELI MINIMAL LIQUID UI START */
+
+/* Global minimal liquid design tokens */
+:root {
+  --aureli-bg-0: #07080b;
+  --aureli-bg-1: #0b0d12;
+  --aureli-bg-2: #11141b;
+
+  --aureli-glass-1: rgba(255, 255, 255, 0.055);
+  --aureli-glass-2: rgba(255, 255, 255, 0.085);
+  --aureli-glass-3: rgba(255, 255, 255, 0.12);
+
+  --aureli-border: rgba(255, 255, 255, 0.105);
+  --aureli-border-soft: rgba(255, 255, 255, 0.07);
+
+  --aureli-text: rgba(255, 255, 255, 0.94);
+  --aureli-muted: rgba(255, 255, 255, 0.62);
+  --aureli-faint: rgba(255, 255, 255, 0.42);
+
+  --aureli-gold: #f0cf82;
+  --aureli-gold-soft: rgba(240, 207, 130, 0.18);
+  --aureli-green: #76e4b1;
+  --aureli-red: #ff8f8f;
+
+  --aureli-radius-sm: 16px;
+  --aureli-radius: 24px;
+  --aureli-radius-lg: 34px;
+  --aureli-radius-xl: 44px;
+
+  --aureli-shadow-soft:
+    0 20px 60px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.075);
+
+  --aureli-shadow-card:
+    0 24px 80px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+/* Page background */
+html,
+body {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(240, 207, 130, 0.09), transparent 28%),
+    radial-gradient(circle at 90% 10%, rgba(130, 170, 255, 0.08), transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(118, 228, 177, 0.045), transparent 30%),
+    linear-gradient(180deg, var(--aureli-bg-1), var(--aureli-bg-0)) !important;
+  color: var(--aureli-text) !important;
+}
+
+/* Smooth font rendering */
+* {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+/* Main app shell */
+main,
+[data-main],
+.app-shell,
+.dashboard-shell {
+  background: transparent !important;
+}
+
+/* Generic liquid cards / boxes */
 section,
 article,
-aside,
-header,
-footer,
-form,
 .card,
 .panel,
 .dashboard-card,
@@ -2867,26 +2991,17 @@ form,
 [class*="card"],
 [class*="Card"],
 [class*="panel"],
-[class*="Panel"],
-[class*="box"],
-[class*="Box"],
-[class*="tile"],
-[class*="Tile"],
-[class*="widget"],
-[class*="Widget"],
-div[class*="rounded"],
-div[class*="border"],
-div[class*="shadow"],
-div[class*="bg-"] {
-  background: var(--graphite-card) !important;
-  border-color: var(--graphite-border) !important;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22) !important;
-  border-radius: 28px !important;
-  min-width: 0 !important;
-  overflow-wrap: break-word !important;
+[class*="Panel"] {
+  border-color: var(--aureli-border-soft) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.078), rgba(255, 255, 255, 0.036)) !important;
+  box-shadow: var(--aureli-shadow-soft) !important;
+  backdrop-filter: blur(26px) saturate(1.25) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.25) !important;
 }
 
-/* Bigger breathing space */
+/* Rounded premium surfaces */
+[class*="rounded"],
 section,
 article,
 .card,
@@ -2894,26 +3009,47 @@ article,
 .dashboard-card,
 .metric-card,
 .agent-card,
-.document-card,
-.upload-card,
-.review-card,
-.tax-card {
-  padding: 28px !important;
+.document-card {
+  border-radius: var(--aureli-radius) !important;
 }
 
-section:hover,
-article:hover,
-.card:hover,
-.panel:hover,
-[class*="card"]:hover,
-[class*="Card"]:hover,
-[class*="panel"]:hover,
-[class*="Panel"]:hover {
-  background: var(--graphite-card-hover) !important;
-  border-color: var(--graphite-border-strong) !important;
+/* Bigger hero/workspace containers */
+[class*="rounded-3xl"],
+[class*="rounded-[32px]"],
+[class*="rounded-[36px]"],
+[class*="rounded-[40px]"] {
+  border-radius: var(--aureli-radius-xl) !important;
 }
 
-/* Sidebar */
+/* Text hierarchy */
+h1,
+h2,
+h3,
+h4 {
+  color: rgba(255, 255, 255, 0.96) !important;
+  letter-spacing: -0.055em !important;
+}
+
+p,
+span,
+li {
+  color: inherit;
+}
+
+.text-white\/60,
+.text-white\/50,
+.text-white\/40,
+[class*="text-white/60"],
+[class*="text-white/50"],
+[class*="text-white/40"],
+.text-slate-400,
+.text-slate-500,
+.text-zinc-400,
+.text-neutral-400 {
+  color: var(--aureli-muted) !important;
+}
+
+/* Sidebar liquid glass */
 aside,
 nav[aria-label="Sidebar"],
 .sidebar,
@@ -2921,11 +3057,17 @@ nav[aria-label="Sidebar"],
 [data-sidebar],
 [class*="sidebar"],
 [class*="Sidebar"] {
-  background: var(--graphite-sidebar) !important;
-  border-right: 1px solid var(--graphite-border) !important;
-  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.22) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.032)) !important;
+  border: 1px solid var(--aureli-border-soft) !important;
+  box-shadow:
+    22px 0 70px rgba(0, 0, 0, 0.22),
+    inset 1px 0 0 rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(30px) saturate(1.25) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.25) !important;
 }
 
+/* Sidebar links/items */
 aside a,
 aside button,
 nav a,
@@ -2938,12 +3080,16 @@ nav button,
 [class*="sidebar"] button,
 [class*="Sidebar"] a,
 [class*="Sidebar"] button {
-  background: transparent !important;
-  color: var(--graphite-muted) !important;
-  border-radius: 16px !important;
-  box-shadow: none !important;
+  border-radius: 18px !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease,
+    border-color 0.2s ease !important;
 }
 
+/* Sidebar hover */
 aside a:hover,
 aside button:hover,
 nav a:hover,
@@ -2956,822 +3102,256 @@ nav button:hover,
 [class*="sidebar"] button:hover,
 [class*="Sidebar"] a:hover,
 [class*="Sidebar"] button:hover {
-  background: #262626 !important;
-  color: var(--graphite-text) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  transform: translateX(2px);
 }
 
-/* Active item */
+/* Active sidebar-like items */
 aside [aria-current="page"],
 nav [aria-current="page"],
 .sidebar [aria-current="page"],
-[data-sidebar] [aria-current="page"] {
-  background: var(--graphite-gold-soft) !important;
-  color: var(--graphite-gold) !important;
-}
-
-/* Text */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: var(--graphite-text) !important;
-  letter-spacing: -0.04em !important;
-}
-
-[class*="text-slate"],
-[class*="text-zinc"],
-[class*="text-neutral"],
-[class*="text-gray"],
-[class*="text-white/40"],
-[class*="text-white/50"],
-[class*="text-white/60"],
-[class*="text-white/70"] {
-  color: var(--graphite-muted) !important;
-}
-
-[class*="text-blue"],
-[class*="text-sky"],
-[class*="text-indigo"],
-[class*="text-cyan"] {
-  color: #b7b7b7 !important;
-}
-
-[class*="text-amber"],
-[class*="text-yellow"],
-[class*="text-orange"] {
-  color: var(--graphite-gold) !important;
-}
-
-/* Inputs */
-input,
-select,
-textarea {
-  min-height: 58px !important;
-  background: var(--graphite-input) !important;
-  color: var(--graphite-text) !important;
-  border: 1px solid var(--graphite-border) !important;
-  border-radius: 18px !important;
-  box-shadow: none !important;
-  outline: none !important;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  background: #222222 !important;
-  border-color: rgba(217, 185, 111, 0.55) !important;
-  box-shadow: 0 0 0 4px rgba(217, 185, 111, 0.08) !important;
+[data-sidebar] [aria-current="page"],
+[class*="active"],
+[class*="Active"] {
+  background:
+    linear-gradient(135deg, rgba(240, 207, 130, 0.22), rgba(255, 255, 255, 0.075)) !important;
+  color: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(240, 207, 130, 0.22) !important;
 }
 
 /* Buttons */
 button,
 a[role="button"],
-.btn {
-  border-radius: 18px !important;
-  border: 1px solid var(--graphite-border) !important;
-  background: #262626 !important;
-  color: var(--graphite-text) !important;
-  box-shadow: none !important;
+.btn,
+[class*="button"],
+[class*="Button"] {
+  border-radius: 999px !important;
+  border-color: rgba(255, 255, 255, 0.11) !important;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease,
+    background 0.2s ease !important;
 }
 
 button:hover,
 a[role="button"]:hover,
-.btn:hover {
-  background: #2d2d2d !important;
+.btn:hover,
+[class*="button"]:hover,
+[class*="Button"]:hover {
+  transform: translateY(-1px);
 }
 
+/* Primary-looking buttons */
 button[type="submit"],
 .bg-amber-400,
 .bg-yellow-400,
-.bg-orange-400 {
-  background: var(--graphite-gold) !important;
-  color: #121212 !important;
-  border-color: var(--graphite-gold) !important;
-}
-
-/* Auth form */
-form:has(input[type="email"]):has(input[type="password"]) {
-  width: 100% !important;
-  max-width: 680px !important;
-  margin: 0 auto !important;
-  background: transparent !important;
+.bg-orange-400,
+[class*="bg-amber"],
+[class*="bg-yellow"],
+[class*="bg-orange"] {
+  background:
+    linear-gradient(135deg, #fff1b8 0%, #e6c060 46%, #9b6a22 100%) !important;
+  color: #17130b !important;
   border: 0 !important;
-  box-shadow: none !important;
+  box-shadow:
+    0 18px 45px rgba(214, 164, 67, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55) !important;
 }
 
-form:has(input[type="email"]):has(input[type="password"]) input {
-  height: 68px !important;
-  padding: 0 24px !important;
-  margin-bottom: 22px !important;
+/* Inputs, selects, textareas */
+input,
+select,
+textarea {
+  border-radius: 20px !important;
+  border: 1px solid rgba(255, 255, 255, 0.105) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.045)) !important;
+  color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 14px 35px rgba(0, 0, 0, 0.16) !important;
+  outline: none !important;
 }
 
-form:has(input[type="email"]):has(input[type="password"]) button {
-  width: 100% !important;
-  min-height: 66px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  text-align: center !important;
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(240, 207, 130, 0.58) !important;
+  box-shadow:
+    0 0 0 4px rgba(240, 207, 130, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 18px 45px rgba(0, 0, 0, 0.22) !important;
 }
 
 /* Tables */
 table {
-  background: transparent !important;
   border-collapse: separate !important;
-  border-spacing: 0 8px !important;
+  border-spacing: 0 10px !important;
 }
 
 thead,
 thead tr,
 th {
   background: transparent !important;
-  color: var(--graphite-muted) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
   border: 0 !important;
 }
 
 tbody tr {
-  background: var(--graphite-card) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)) !important;
+  border-radius: 18px !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.055) !important;
 }
 
 td {
-  color: var(--graphite-soft) !important;
-  border-color: transparent !important;
+  border: 0 !important;
+  color: rgba(255, 255, 255, 0.78) !important;
 }
 
 /* Badges */
 .badge,
 [class*="badge"],
-[class*="Badge"],
-[class*="pill"],
-[class*="Pill"] {
-  background: #2a2a2a !important;
-  color: var(--graphite-soft) !important;
-  border: 1px solid var(--graphite-border) !important;
+[class*="Badge"] {
   border-radius: 999px !important;
-  box-shadow: none !important;
+  background: rgba(255, 255, 255, 0.075) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.78) !important;
 }
 
-/* AURELI SAFE GRAPHITE UI END */
-
-
-
-
-
-
-
-
-
-
-
-/* AURELI MID BLUE GRAPHITE OVERRIDE START */
-
-:root {
-  --mid-page: #0d1015;
-  --mid-sidebar: #131820;
-  --mid-card: #1a1f28;
-  --mid-card-hover: #202632;
-  --mid-input: #151a22;
-
-  --mid-border: rgba(210, 220, 240, 0.105);
-  --mid-border-strong: rgba(210, 220, 240, 0.17);
-
-  --mid-text: #f3f4f6;
-  --mid-soft: #cbd0d8;
-  --mid-muted: #929aa6;
-
-  --mid-blue: #879abd;
-  --mid-blue-soft: rgba(135, 154, 189, 0.115);
-
-  --mid-gold: #cbb174;
-  --mid-green: #8abd9f;
-  --mid-red: #ca8989;
-}
-
-/* Balanced dark background */
-html,
-body {
-  background:
-    radial-gradient(circle at top left, rgba(135, 154, 189, 0.045), transparent 34%),
-    linear-gradient(180deg, #11151c 0%, #0a0c10 100%) !important;
-  color: var(--mid-text) !important;
-}
-
-/* Balanced boxes/cards */
-section,
-article,
-form,
-.card,
-.panel,
-.dashboard-card,
-.metric-card,
-.agent-card,
-.document-card,
-.upload-card,
-.review-card,
-.tax-card,
-[class*="card"],
-[class*="Card"],
-[class*="panel"],
-[class*="Panel"],
-[class*="box"],
-[class*="Box"],
-[class*="tile"],
-[class*="Tile"],
-[class*="widget"],
-[class*="Widget"],
-div[class*="rounded"],
-div[class*="border"],
-div[class*="shadow"],
-div[class*="bg-"] {
-  background: var(--mid-card) !important;
-  border-color: var(--mid-border) !important;
-  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.27) !important;
-}
-
-section:hover,
-article:hover,
-.card:hover,
-.panel:hover,
-[class*="card"]:hover,
-[class*="Card"]:hover,
-[class*="panel"]:hover,
-[class*="Panel"]:hover {
-  background: var(--mid-card-hover) !important;
-  border-color: var(--mid-border-strong) !important;
-}
-
-/* Sidebar balanced */
-aside,
-nav[aria-label="Sidebar"],
-.sidebar,
-.app-sidebar,
-[data-sidebar],
-[class*="sidebar"],
-[class*="Sidebar"] {
-  background: var(--mid-sidebar) !important;
-  border-right: 1px solid var(--mid-border) !important;
-  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.26) !important;
-}
-
-aside a,
-aside button,
-nav a,
-nav button,
-.sidebar a,
-.sidebar button,
-[data-sidebar] a,
-[data-sidebar] button,
-[class*="sidebar"] a,
-[class*="sidebar"] button,
-[class*="Sidebar"] a,
-[class*="Sidebar"] button {
-  color: var(--mid-muted) !important;
-}
-
-aside a:hover,
-aside button:hover,
-nav a:hover,
-nav button:hover,
-.sidebar a:hover,
-.sidebar button:hover,
-[data-sidebar] a:hover,
-[data-sidebar] button:hover,
-[class*="sidebar"] a:hover,
-[class*="sidebar"] button:hover,
-[class*="Sidebar"] a:hover,
-[class*="Sidebar"] button:hover {
-  background: #222936 !important;
-  color: var(--mid-text) !important;
-}
-
-/* Active nav subtle blue */
-aside [aria-current="page"],
-nav [aria-current="page"],
-.sidebar [aria-current="page"],
-[data-sidebar] [aria-current="page"] {
-  background: var(--mid-blue-soft) !important;
-  color: #a8b7d4 !important;
-  border-color: rgba(135, 154, 189, 0.24) !important;
-}
-
-/* Text colors */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: var(--mid-text) !important;
-}
-
-[class*="text-slate"],
-[class*="text-zinc"],
-[class*="text-neutral"],
-[class*="text-gray"],
-[class*="text-white/40"],
-[class*="text-white/50"],
-[class*="text-white/60"],
-[class*="text-white/70"] {
-  color: var(--mid-muted) !important;
-}
-
-[class*="text-blue"],
-[class*="text-sky"],
-[class*="text-indigo"],
-[class*="text-cyan"] {
-  color: var(--mid-blue) !important;
-}
-
-[class*="text-amber"],
-[class*="text-yellow"],
-[class*="text-orange"] {
-  color: var(--mid-gold) !important;
-}
-
+/* Status colors minimal */
+.text-green-400,
+.text-emerald-400,
 [class*="text-green"],
 [class*="text-emerald"] {
-  color: var(--mid-green) !important;
+  color: var(--aureli-green) !important;
 }
 
+.text-red-400,
+.text-rose-400,
 [class*="text-red"],
 [class*="text-rose"] {
-  color: var(--mid-red) !important;
+  color: var(--aureli-red) !important;
 }
 
-/* Inputs */
-input,
-select,
-textarea {
-  background: var(--mid-input) !important;
-  color: var(--mid-text) !important;
-  border-color: var(--mid-border) !important;
+.text-amber-400,
+.text-yellow-400,
+[class*="text-amber"],
+[class*="text-yellow"] {
+  color: var(--aureli-gold) !important;
 }
 
-input:focus,
-select:focus,
-textarea:focus {
-  background: #1a1f28 !important;
-  border-color: rgba(135, 154, 189, 0.48) !important;
-  box-shadow: 0 0 0 4px rgba(135, 154, 189, 0.075) !important;
+/* Remove harsh borders/backgrounds from Tailwind utility surfaces */
+.border-white\/10,
+.border-white\/15,
+.border-white\/20,
+.border-slate-800,
+.border-zinc-800,
+.border-neutral-800,
+[class*="border-white/"],
+[class*="border-slate"],
+[class*="border-zinc"],
+[class*="border-neutral"] {
+  border-color: var(--aureli-border-soft) !important;
 }
 
-/* Buttons */
-button,
-a[role="button"],
-.btn {
-  background: #212735 !important;
-  color: var(--mid-text) !important;
-  border-color: var(--mid-border) !important;
+.bg-white\/5,
+.bg-white\/10,
+.bg-slate-900,
+.bg-slate-950,
+.bg-zinc-900,
+.bg-neutral-900,
+[class*="bg-white/5"],
+[class*="bg-white/10"],
+[class*="bg-slate-9"],
+[class*="bg-zinc-9"],
+[class*="bg-neutral-9"] {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.068), rgba(255, 255, 255, 0.032)) !important;
 }
 
-button:hover,
-a[role="button"]:hover,
-.btn:hover {
-  background: #283040 !important;
-  border-color: var(--mid-border-strong) !important;
-}
-
-/* Primary buttons muted blue */
-button[type="submit"],
-.bg-amber-400,
-.bg-yellow-400,
-.bg-orange-400 {
-  background: #95a7c8 !important;
-  color: #0b0d11 !important;
-  border-color: #95a7c8 !important;
-  box-shadow: 0 12px 26px rgba(135, 154, 189, 0.145) !important;
-}
-
-button[type="submit"]:hover,
-.bg-amber-400:hover,
-.bg-yellow-400:hover,
-.bg-orange-400:hover {
-  background: #a3b4d2 !important;
-}
-
-/* Tables */
-tbody tr {
-  background: var(--mid-card) !important;
-}
-
-td {
-  color: var(--mid-soft) !important;
-}
-
-/* Badges */
-.badge,
-[class*="badge"],
-[class*="Badge"],
-[class*="pill"],
-[class*="Pill"] {
-  background: #232a36 !important;
-  color: var(--mid-soft) !important;
-  border-color: var(--mid-border) !important;
-}
-
-/* AURELI MID BLUE GRAPHITE OVERRIDE END */
-
-
-/* AURELI CLEAN SIDEBAR OVERRIDE START */
-
-/* Clean sidebar container */
-aside,
-nav[aria-label="Sidebar"],
-.sidebar,
-.app-sidebar,
-[data-sidebar],
-[class*="sidebar"],
-[class*="Sidebar"] {
-  background: #11161f !important;
-  border-right: 1px solid rgba(210, 220, 240, 0.1) !important;
-  box-shadow: 8px 0 26px rgba(0, 0, 0, 0.22) !important;
-}
-
-/* Remove ugly nested boxes inside sidebar */
-aside div,
-aside section,
-aside article,
-aside form,
-nav[aria-label="Sidebar"] div,
-nav[aria-label="Sidebar"] section,
-nav[aria-label="Sidebar"] article,
-.sidebar div,
-.sidebar section,
-.sidebar article,
-.app-sidebar div,
-.app-sidebar section,
-.app-sidebar article,
-[data-sidebar] div,
-[data-sidebar] section,
-[data-sidebar] article,
-[class*="sidebar"] div,
-[class*="sidebar"] section,
-[class*="sidebar"] article,
-[class*="Sidebar"] div,
-[class*="Sidebar"] section,
-[class*="Sidebar"] article {
-  background: transparent !important;
-  box-shadow: none !important;
-  border-color: transparent !important;
-}
-
-/* Sidebar brand/logo area should stay clean */
-aside h1,
-aside h2,
-aside h3,
-aside p,
-aside span,
-nav[aria-label="Sidebar"] h1,
-nav[aria-label="Sidebar"] h2,
-nav[aria-label="Sidebar"] h3,
-nav[aria-label="Sidebar"] p,
-nav[aria-label="Sidebar"] span,
-.sidebar h1,
-.sidebar h2,
-.sidebar h3,
-.sidebar p,
-.sidebar span,
-[data-sidebar] h1,
-[data-sidebar] h2,
-[data-sidebar] h3,
-[data-sidebar] p,
-[data-sidebar] span {
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-/* Sidebar buttons/links: no ugly full boxes by default */
-aside a,
-aside button,
-nav[aria-label="Sidebar"] a,
-nav[aria-label="Sidebar"] button,
-.sidebar a,
-.sidebar button,
-.app-sidebar a,
-.app-sidebar button,
-[data-sidebar] a,
-[data-sidebar] button,
-[class*="sidebar"] a,
-[class*="sidebar"] button,
-[class*="Sidebar"] a,
-[class*="Sidebar"] button {
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 14px !important;
-  border-radius: 14px !important;
-  background: transparent !important;
-  border: 1px solid transparent !important;
-  box-shadow: none !important;
-  color: #929aa6 !important;
-}
-
-/* Sidebar hover: only soft highlight */
-aside a:hover,
-aside button:hover,
-nav[aria-label="Sidebar"] a:hover,
-nav[aria-label="Sidebar"] button:hover,
-.sidebar a:hover,
-.sidebar button:hover,
-.app-sidebar a:hover,
-.app-sidebar button:hover,
-[data-sidebar] a:hover,
-[data-sidebar] button:hover,
-[class*="sidebar"] a:hover,
-[class*="sidebar"] button:hover,
-[class*="Sidebar"] a:hover,
-[class*="Sidebar"] button:hover {
-  background: rgba(135, 154, 189, 0.08) !important;
-  border-color: rgba(135, 154, 189, 0.12) !important;
-  color: #f3f4f6 !important;
-}
-
-/* Active sidebar item: clean pill only */
-aside a[aria-current="page"],
-aside button[aria-current="page"],
-nav[aria-label="Sidebar"] a[aria-current="page"],
-nav[aria-label="Sidebar"] button[aria-current="page"],
-.sidebar a[aria-current="page"],
-.sidebar button[aria-current="page"],
-.app-sidebar a[aria-current="page"],
-.app-sidebar button[aria-current="page"],
-[data-sidebar] a[aria-current="page"],
-[data-sidebar] button[aria-current="page"] {
-  background: rgba(135, 154, 189, 0.13) !important;
-  border-color: rgba(135, 154, 189, 0.2) !important;
-  color: #a8b7d4 !important;
-}
-
-/* Icons inside sidebar */
-aside svg,
-nav[aria-label="Sidebar"] svg,
-.sidebar svg,
-.app-sidebar svg,
-[data-sidebar] svg,
-[class*="sidebar"] svg,
-[class*="Sidebar"] svg {
-  color: inherit !important;
-  opacity: 0.85;
-}
-
-/* AURELI CLEAN SIDEBAR OVERRIDE END */
-
-
-/* AURELI CLEAN BOXES OVERRIDE START */
-
-/* Clean main content boxes */
-main section,
-main article,
-main .card,
-main .panel,
-main .dashboard-card,
-main .metric-card,
-main .agent-card,
-main .document-card,
-main .upload-card,
-main .review-card,
-main .tax-card,
-main [class*="card"],
-main [class*="Card"],
-main [class*="panel"],
-main [class*="Panel"] {
-  background: #1a1f28 !important;
-  border: 1px solid rgba(210, 220, 240, 0.105) !important;
-  border-radius: 28px !important;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24) !important;
-  padding: 28px !important;
-  overflow: hidden !important;
-}
-
-/* Remove ugly inner boxes inside cards */
-main section section,
-main section article,
-main article section,
-main article article,
-main [class*="card"] [class*="card"],
-main [class*="Card"] [class*="Card"],
-main [class*="panel"] [class*="panel"],
-main [class*="Panel"] [class*="Panel"] {
-  background: #202632 !important;
-  border: 1px solid rgba(210, 220, 240, 0.085) !important;
-  box-shadow: none !important;
-  border-radius: 22px !important;
-  padding: 22px !important;
-}
-
-/* Fix generic rounded/bordered boxes in dashboard */
-main div[class*="rounded"][class*="border"],
-main div[class*="rounded"][class*="bg-"],
-main div[class*="shadow"] {
-  background: #1a1f28 !important;
-  border-color: rgba(210, 220, 240, 0.105) !important;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18) !important;
+/* Modals/dropdowns */
+[role="dialog"],
+[role="menu"],
+.dropdown,
+.popover,
+.modal,
+[class*="dropdown"],
+[class*="Dropdown"],
+[class*="popover"],
+[class*="Popover"],
+[class*="modal"],
+[class*="Modal"] {
+  background:
+    linear-gradient(145deg, rgba(24, 27, 35, 0.92), rgba(12, 14, 19, 0.9)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.105) !important;
   border-radius: 26px !important;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42) !important;
+  backdrop-filter: blur(30px) saturate(1.25) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.25) !important;
 }
 
-/* Inner small stat boxes */
-main div[class*="rounded"][class*="border"] div[class*="rounded"],
-main div[class*="rounded"][class*="bg-"] div[class*="rounded"] {
-  background: #202632 !important;
-  border-color: rgba(210, 220, 240, 0.08) !important;
-  box-shadow: none !important;
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
 
-/* Make cards fit content better */
-main .grid,
-main [class*="grid"] {
-  align-items: stretch !important;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-main .grid > *,
-main [class*="grid"] > * {
-  min-width: 0 !important;
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 
-/* Prevent text overflow */
-main h1,
-main h2,
-main h3,
-main h4,
-main p,
-main span,
-main li,
-main td,
-main th {
-  overflow-wrap: anywhere !important;
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 
-/* Cleaner hover */
-main section:hover,
-main article:hover,
-main .card:hover,
-main .panel:hover,
-main [class*="card"]:hover,
-main [class*="Card"]:hover,
-main [class*="panel"]:hover,
-main [class*="Panel"]:hover,
-main div[class*="rounded"][class*="border"]:hover {
-  background: #202632 !important;
-  border-color: rgba(210, 220, 240, 0.16) !important;
-}
-
-/* Clean metric/stat cards specifically */
-main [class*="metric"],
-main [class*="Metric"],
-main [class*="stat"],
-main [class*="Stat"] {
-  background: #1c222d !important;
-  border-color: rgba(210, 220, 240, 0.1) !important;
-  border-radius: 24px !important;
-  box-shadow: none !important;
-}
-
-/* Fix upload/document boxes */
-main [class*="upload"],
-main [class*="Upload"],
-main [class*="document"],
-main [class*="Document"] {
-  border-radius: 26px !important;
-}
-
-/* Inputs inside boxes should not look like separate ugly cards */
-main input,
-main select,
-main textarea {
-  background: #151a22 !important;
-  border: 1px solid rgba(210, 220, 240, 0.12) !important;
-  border-radius: 18px !important;
-  box-shadow: none !important;
-}
-
-/* Buttons inside boxes */
-main button,
-main a[role="button"] {
-  box-shadow: none !important;
-  border-radius: 18px !important;
-}
-
-/* Tables should fit boxes */
-main table {
-  width: 100% !important;
+/* Auth page stays clean with liquid style */
+form:has(input[type="email"]):has(input[type="password"]) {
   background: transparent !important;
+  box-shadow: none !important;
 }
 
-main tbody tr {
-  background: #202632 !important;
+form:has(input[type="email"]):has(input[type="password"]) button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
 }
 
-main td,
-main th {
-  padding: 14px 16px !important;
-}
-
-/* Mobile box spacing */
+/* Small-screen polish */
 @media (max-width: 768px) {
-  main section,
-  main article,
-  main .card,
-  main .panel,
-  main [class*="card"],
-  main [class*="Card"],
-  main [class*="panel"],
-  main [class*="Panel"],
-  main div[class*="rounded"][class*="border"],
-  main div[class*="rounded"][class*="bg-"] {
-    padding: 22px !important;
+  section,
+  article,
+  .card,
+  .panel,
+  [class*="card"],
+  [class*="Card"],
+  [class*="panel"],
+  [class*="Panel"] {
     border-radius: 22px !important;
+  }
+
+  input,
+  select,
+  textarea {
+    border-radius: 18px !important;
   }
 }
 
-/* AURELI CLEAN BOXES OVERRIDE END */
-
-/* ===== Aureli sidebar premium fix ===== */
-
-/* Aureli Main App Scrollbar — Bluish Graphite */
-html,
-body {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(52, 70, 96, 0.72) transparent;
-  overflow-x: hidden;
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  border-radius: 999px !important;
-  background: rgba(52, 70, 96, 0.72) !important;
-  background-image: none !important;
-  border: 1px solid rgba(5, 10, 18, 0.62) !important;
-  background-clip: padding-box !important;
-  box-shadow: none !important;
-}
-
-html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(78, 104, 138, 0.9) !important;
-}
-
-html::-webkit-scrollbar-button,
-body::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-
-/* AURELI EXACT MAIN SCROLLBAR FIX */
-html,
-body {
-  scrollbar-width: thin !important;
-  scrollbar-color: rgba(52, 70, 96, 0.72) transparent !important;
-  overflow-x: hidden !important;
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 8px !important;
-  height: 8px !important;
-}
-
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: 0 !important;
-}
-
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  border-radius: 999px !important;
-  background: rgba(52, 70, 96, 0.72) !important;
-  background-color: rgba(52, 70, 96, 0.72) !important;
-  background-image: none !important;
-  border: 1px solid rgba(5, 10, 18, 0.62) !important;
-  background-clip: padding-box !important;
-  box-shadow: none !important;
-}
-
-html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(78, 104, 138, 0.9) !important;
-  background-color: rgba(78, 104, 138, 0.9) !important;
-}
-
-html::-webkit-scrollbar-button,
-body::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
+/* AURELI MINIMAL LIQUID UI END */

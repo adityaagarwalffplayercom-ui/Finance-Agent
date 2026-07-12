@@ -3688,90 +3688,94 @@ main th {
 
 /* ===== Aureli sidebar premium fix ===== */
 
-/* Aureli Main App Scrollbar — Bluish Graphite */
-html,
-body {
+/* Fix sidebar scrollbar and remove ugly inner scroll box layer */
+aside [class*="overflow-y-auto"],
+aside [class*="overflow-auto"],
+aside nav {
   scrollbar-width: thin;
-  scrollbar-color: rgba(52, 70, 96, 0.72) transparent;
-  overflow-x: hidden;
+  scrollbar-color: rgba(244, 213, 141, 0.48) transparent;
 }
 
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Chrome / Edge scrollbar */
+aside [class*="overflow-y-auto"]::-webkit-scrollbar,
+aside [class*="overflow-auto"]::-webkit-scrollbar,
+aside nav::-webkit-scrollbar {
+  width: 7px;
 }
 
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
+aside [class*="overflow-y-auto"]::-webkit-scrollbar-track,
+aside [class*="overflow-auto"]::-webkit-scrollbar-track,
+aside nav::-webkit-scrollbar-track {
+  background: transparent !important;
+  border-radius: 999px;
+}
+
+aside [class*="overflow-y-auto"]::-webkit-scrollbar-thumb,
+aside [class*="overflow-auto"]::-webkit-scrollbar-thumb,
+aside nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(244, 213, 141, 0.95),
+    rgba(201, 151, 53, 0.75)
+  ) !important;
+  box-shadow: 0 0 18px rgba(244, 213, 141, 0.22);
+}
+
+aside [class*="overflow-y-auto"]::-webkit-scrollbar-thumb:hover,
+aside [class*="overflow-auto"]::-webkit-scrollbar-thumb:hover,
+aside nav::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 225, 150, 1),
+    rgba(201, 151, 53, 0.95)
+  ) !important;
+}
+
+/* Remove the visible nested box/layer inside sidebar menu */
+aside [class*="overflow-y-auto"],
+aside [class*="overflow-auto"] {
+  background: transparent !important;
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Make sidebar scrolling feel like app UI */
+aside {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 213, 141, 0.48) transparent;
+}
+
+aside::-webkit-scrollbar {
+  width: 7px;
+}
+
+aside::-webkit-scrollbar-track {
   background: transparent !important;
 }
 
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  border-radius: 999px !important;
-  background: rgba(52, 70, 96, 0.72) !important;
-  background-image: none !important;
-  border: 1px solid rgba(5, 10, 18, 0.62) !important;
-  background-clip: padding-box !important;
-  box-shadow: none !important;
+aside::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(244, 213, 141, 0.95),
+    rgba(201, 151, 53, 0.75)
+  ) !important;
 }
 
-html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(78, 104, 138, 0.9) !important;
+/* Sidebar item polish */
+aside a,
+aside button {
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
-html::-webkit-scrollbar-button,
-body::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+aside a:hover,
+aside button:hover {
+  transform: translateX(2px);
 }
 
-/* AURELI EXACT MAIN SCROLLBAR FIX */
-html,
-body {
-  scrollbar-width: thin !important;
-  scrollbar-color: rgba(52, 70, 96, 0.72) transparent !important;
-  overflow-x: hidden !important;
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 8px !important;
-  height: 8px !important;
-}
-
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: 0 !important;
-}
-
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  border-radius: 999px !important;
-  background: rgba(52, 70, 96, 0.72) !important;
-  background-color: rgba(52, 70, 96, 0.72) !important;
-  background-image: none !important;
-  border: 1px solid rgba(5, 10, 18, 0.62) !important;
-  background-clip: padding-box !important;
-  box-shadow: none !important;
-}
-
-html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(78, 104, 138, 0.9) !important;
-  background-color: rgba(78, 104, 138, 0.9) !important;
-}
-
-html::-webkit-scrollbar-button,
-body::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}

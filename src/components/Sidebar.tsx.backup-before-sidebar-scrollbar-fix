@@ -210,7 +210,10 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           width: 4px;
         }
 
-        .sidebar-nav::-webkit-scrollbar-thumb{background:rgba(52,70,96,.78)!important;background-image:none!important;border-radius:999px!important;border:1px solid rgba(5,10,18,.62)!important;box-shadow:none!important}
+        .sidebar-nav::-webkit-scrollbar-thumb {
+          background: rgba(245, 158, 11, 0.3);
+          border-radius: 999px;
+        }
 
         .sidebar-footer {
           margin-top: auto !important;
@@ -243,11 +246,23 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
             width: 7px !important;
           }
 
-          .sidebar-nav::-webkit-scrollbar-track{background:transparent!important;border-radius:999px!important;box-shadow:none!important}
+          .sidebar-nav::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.06) !important;
+            border-radius: 999px !important;
+          }
 
-          .sidebar-nav::-webkit-scrollbar-thumb{background:rgba(52,70,96,.78)!important;background-image:none!important;border-radius:999px!important;border:1px solid rgba(5,10,18,.62)!important;box-shadow:none!important}
+          .sidebar-nav::-webkit-scrollbar-thumb {
+            background: linear-gradient(
+              180deg,
+              rgba(245, 158, 11, 0.9),
+              rgba(251, 191, 36, 0.58)
+            ) !important;
+            border-radius: 999px !important;
+          }
 
-          .sidebar-nav::-webkit-scrollbar-thumb:hover{background:rgba(78,104,138,.92)!important;background-image:none!important;box-shadow:none!important}
+          .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: rgba(245, 158, 11, 0.95) !important;
+          }
 
           .sidebar-link {
             min-height: 38px !important;

@@ -2815,46 +2815,56 @@ tbody td:last-child {
 
 
 
-
-
-
-
-
-
-/* AURELI SAFE GRAPHITE UI START */
+/* AURELI MINIMAL CLASSY UI START */
 
 :root {
-  --graphite-page: #121212;
-  --graphite-sidebar: #181818;
-  --graphite-card: #222222;
-  --graphite-card-hover: #272727;
-  --graphite-input: #1c1c1c;
-  --graphite-border: rgba(255, 255, 255, 0.12);
-  --graphite-border-strong: rgba(255, 255, 255, 0.18);
-  --graphite-text: #f4f1eb;
-  --graphite-muted: #aaa39a;
-  --graphite-soft: #d2ccc2;
-  --graphite-gold: #d9b96f;
-  --graphite-gold-soft: rgba(217, 185, 111, 0.16);
+  --aureli-bg-main: #0b0d10;
+  --aureli-bg-soft: #11141a;
+  --aureli-bg-card: #151922;
+  --aureli-bg-card-hover: #181d27;
+
+  --aureli-border: rgba(255, 255, 255, 0.09);
+  --aureli-border-strong: rgba(255, 255, 255, 0.14);
+
+  --aureli-text: #f4f1ea;
+  --aureli-text-soft: #c8c2b5;
+  --aureli-text-muted: #8f8a80;
+
+  --aureli-accent: #d6b46c;
+  --aureli-accent-soft: rgba(214, 180, 108, 0.16);
+  --aureli-blue: #8ea7d8;
+  --aureli-green: #83c7a2;
+  --aureli-red: #d98b8b;
+
+  --aureli-radius: 26px;
+  --aureli-radius-big: 34px;
+
+  --aureli-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.24);
 }
 
+/* Base */
 html,
 body {
-  background: linear-gradient(180deg, #171717 0%, #101010 100%) !important;
-  color: var(--graphite-text) !important;
+  background:
+    radial-gradient(circle at top left, rgba(214, 180, 108, 0.055), transparent 34%),
+    linear-gradient(180deg, #0d1016 0%, #090b0f 100%) !important;
+  color: var(--aureli-text) !important;
 }
 
+* {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+/* Main spacing */
 main {
   background: transparent !important;
 }
 
-/* All main boxes */
+/* Bigger cleaner boxes/cards */
 section,
 article,
-aside,
-header,
-footer,
-form,
 .card,
 .panel,
 .dashboard-card,
@@ -2867,26 +2877,17 @@ form,
 [class*="card"],
 [class*="Card"],
 [class*="panel"],
-[class*="Panel"],
-[class*="box"],
-[class*="Box"],
-[class*="tile"],
-[class*="Tile"],
-[class*="widget"],
-[class*="Widget"],
-div[class*="rounded"],
-div[class*="border"],
-div[class*="shadow"],
-div[class*="bg-"] {
-  background: var(--graphite-card) !important;
-  border-color: var(--graphite-border) !important;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22) !important;
-  border-radius: 28px !important;
-  min-width: 0 !important;
-  overflow-wrap: break-word !important;
+[class*="Panel"] {
+  min-height: auto;
+  border: 1px solid var(--aureli-border) !important;
+  border-radius: var(--aureli-radius-big) !important;
+  background: var(--aureli-bg-card) !important;
+  box-shadow: var(--aureli-shadow) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
-/* Bigger breathing space */
+/* Give internal breathing room to boxes */
 section,
 article,
 .card,
@@ -2901,6 +2902,7 @@ article,
   padding: 28px !important;
 }
 
+/* Hover should be very subtle */
 section:hover,
 article:hover,
 .card:hover,
@@ -2909,11 +2911,53 @@ article:hover,
 [class*="Card"]:hover,
 [class*="panel"]:hover,
 [class*="Panel"]:hover {
-  background: var(--graphite-card-hover) !important;
-  border-color: var(--graphite-border-strong) !important;
+  background: var(--aureli-bg-card-hover) !important;
+  border-color: var(--aureli-border-strong) !important;
 }
 
-/* Sidebar */
+/* Headings and text */
+h1,
+h2,
+h3,
+h4 {
+  color: var(--aureli-text) !important;
+  letter-spacing: -0.045em !important;
+}
+
+h1 {
+  font-weight: 850 !important;
+}
+
+h2,
+h3 {
+  font-weight: 780 !important;
+}
+
+p,
+li,
+span {
+  color: inherit;
+}
+
+.text-white\/60,
+.text-white\/50,
+.text-white\/40,
+[class*="text-white/60"],
+[class*="text-white/50"],
+[class*="text-white/40"],
+.text-slate-400,
+.text-slate-500,
+.text-zinc-400,
+.text-neutral-400 {
+  color: var(--aureli-text-muted) !important;
+}
+
+.text-white,
+[class*="text-white"] {
+  color: var(--aureli-text) !important;
+}
+
+/* Sidebar clean minimal */
 aside,
 nav[aria-label="Sidebar"],
 .sidebar,
@@ -2921,11 +2965,14 @@ nav[aria-label="Sidebar"],
 [data-sidebar],
 [class*="sidebar"],
 [class*="Sidebar"] {
-  background: var(--graphite-sidebar) !important;
-  border-right: 1px solid var(--graphite-border) !important;
-  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.22) !important;
+  background: #0f1218 !important;
+  border-right: 1px solid var(--aureli-border) !important;
+  box-shadow: 12px 0 34px rgba(0, 0, 0, 0.18) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
+/* Sidebar items */
 aside a,
 aside button,
 nav a,
@@ -2938,10 +2985,15 @@ nav button,
 [class*="sidebar"] button,
 [class*="Sidebar"] a,
 [class*="Sidebar"] button {
-  background: transparent !important;
-  color: var(--graphite-muted) !important;
   border-radius: 16px !important;
-  box-shadow: none !important;
+  color: var(--aureli-text-muted) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease !important;
 }
 
 aside a:hover,
@@ -2956,129 +3008,146 @@ nav button:hover,
 [class*="sidebar"] button:hover,
 [class*="Sidebar"] a:hover,
 [class*="Sidebar"] button:hover {
-  background: #262626 !important;
-  color: var(--graphite-text) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  color: var(--aureli-text) !important;
+  border-color: var(--aureli-border) !important;
+  transform: none !important;
 }
 
-/* Active item */
+/* Active sidebar item */
 aside [aria-current="page"],
 nav [aria-current="page"],
 .sidebar [aria-current="page"],
-[data-sidebar] [aria-current="page"] {
-  background: var(--graphite-gold-soft) !important;
-  color: var(--graphite-gold) !important;
+[data-sidebar] [aria-current="page"],
+[class*="active"],
+[class*="Active"] {
+  background: var(--aureli-accent-soft) !important;
+  color: var(--aureli-accent) !important;
+  border-color: rgba(214, 180, 108, 0.22) !important;
 }
 
-/* Text */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: var(--graphite-text) !important;
-  letter-spacing: -0.04em !important;
+/* Buttons */
+button,
+a[role="button"],
+.btn,
+[class*="button"],
+[class*="Button"] {
+  border-radius: 18px !important;
+  border: 1px solid var(--aureli-border) !important;
+  box-shadow: none !important;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease !important;
 }
 
-[class*="text-slate"],
-[class*="text-zinc"],
-[class*="text-neutral"],
-[class*="text-gray"],
-[class*="text-white/40"],
-[class*="text-white/50"],
-[class*="text-white/60"],
-[class*="text-white/70"] {
-  color: var(--graphite-muted) !important;
+button:hover,
+a[role="button"]:hover,
+.btn:hover,
+[class*="button"]:hover,
+[class*="Button"]:hover {
+  transform: translateY(-1px);
 }
 
-[class*="text-blue"],
-[class*="text-sky"],
-[class*="text-indigo"],
-[class*="text-cyan"] {
-  color: #b7b7b7 !important;
+/* Primary buttons */
+button[type="submit"],
+.bg-amber-400,
+.bg-yellow-400,
+.bg-orange-400,
+[class*="bg-amber"],
+[class*="bg-yellow"],
+[class*="bg-orange"] {
+  background: #d6b46c !important;
+  color: #15120b !important;
+  border-color: #d6b46c !important;
+  box-shadow: 0 12px 28px rgba(214, 180, 108, 0.18) !important;
 }
 
-[class*="text-amber"],
-[class*="text-yellow"],
-[class*="text-orange"] {
-  color: var(--graphite-gold) !important;
+button[type="submit"]:hover,
+.bg-amber-400:hover,
+.bg-yellow-400:hover,
+.bg-orange-400:hover,
+[class*="bg-amber"]:hover,
+[class*="bg-yellow"]:hover,
+[class*="bg-orange"]:hover {
+  background: #e2c47d !important;
 }
 
 /* Inputs */
 input,
 select,
 textarea {
-  min-height: 58px !important;
-  background: var(--graphite-input) !important;
-  color: var(--graphite-text) !important;
-  border: 1px solid var(--graphite-border) !important;
+  min-height: 58px;
   border-radius: 18px !important;
+  border: 1px solid var(--aureli-border) !important;
+  background: #10141b !important;
+  color: var(--aureli-text) !important;
   box-shadow: none !important;
   outline: none !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(200, 194, 181, 0.48) !important;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  background: #222222 !important;
-  border-color: rgba(217, 185, 111, 0.55) !important;
-  box-shadow: 0 0 0 4px rgba(217, 185, 111, 0.08) !important;
+  border-color: rgba(214, 180, 108, 0.55) !important;
+  box-shadow: 0 0 0 4px rgba(214, 180, 108, 0.08) !important;
 }
 
-/* Buttons */
-button,
-a[role="button"],
-.btn {
-  border-radius: 18px !important;
-  border: 1px solid var(--graphite-border) !important;
-  background: #262626 !important;
-  color: var(--graphite-text) !important;
-  box-shadow: none !important;
-}
-
-button:hover,
-a[role="button"]:hover,
-.btn:hover {
-  background: #2d2d2d !important;
-}
-
-button[type="submit"],
-.bg-amber-400,
-.bg-yellow-400,
-.bg-orange-400 {
-  background: var(--graphite-gold) !important;
-  color: #121212 !important;
-  border-color: var(--graphite-gold) !important;
-}
-
-/* Auth form */
+/* Auth forms bigger and cleaner */
 form:has(input[type="email"]):has(input[type="password"]) {
-  width: 100% !important;
-  max-width: 680px !important;
+  width: 100%;
+  max-width: 660px !important;
   margin: 0 auto !important;
-  background: transparent !important;
   border: 0 !important;
+  outline: none !important;
   box-shadow: none !important;
+  background: transparent !important;
+}
+
+form:has(input[type="email"]):has(input[type="password"]) label {
+  display: block !important;
+  margin-bottom: 10px !important;
+  color: var(--aureli-text-soft) !important;
+  font-size: 0.95rem !important;
+  font-weight: 750 !important;
 }
 
 form:has(input[type="email"]):has(input[type="password"]) input {
-  height: 68px !important;
-  padding: 0 24px !important;
+  width: 100% !important;
+  height: 66px !important;
   margin-bottom: 22px !important;
+  padding: 0 24px !important;
+  border-radius: 20px !important;
+  background: #121721 !important;
 }
 
 form:has(input[type="email"]):has(input[type="password"]) button {
   width: 100% !important;
-  min-height: 66px !important;
+  min-height: 64px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   text-align: center !important;
+  border-radius: 20px !important;
+  font-weight: 850 !important;
+}
+
+/* Make auth card/container wider if parent allows */
+main:has(form input[type="email"]),
+section:has(form input[type="email"]),
+article:has(form input[type="email"]),
+div:has(> form input[type="email"]) {
+  max-width: 760px !important;
 }
 
 /* Tables */
 table {
-  background: transparent !important;
   border-collapse: separate !important;
   border-spacing: 0 8px !important;
 }
@@ -3087,81 +3156,164 @@ thead,
 thead tr,
 th {
   background: transparent !important;
-  color: var(--graphite-muted) !important;
+  color: var(--aureli-text-muted) !important;
   border: 0 !important;
 }
 
 tbody tr {
-  background: var(--graphite-card) !important;
+  background: #131821 !important;
+  box-shadow: none !important;
 }
 
 td {
-  color: var(--graphite-soft) !important;
   border-color: transparent !important;
+  color: var(--aureli-text-soft) !important;
 }
 
 /* Badges */
 .badge,
 [class*="badge"],
-[class*="Badge"],
-[class*="pill"],
-[class*="Pill"] {
-  background: #2a2a2a !important;
-  color: var(--graphite-soft) !important;
-  border: 1px solid var(--graphite-border) !important;
+[class*="Badge"] {
   border-radius: 999px !important;
-  box-shadow: none !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+  border: 1px solid var(--aureli-border) !important;
+  color: var(--aureli-text-soft) !important;
 }
 
-/* AURELI SAFE GRAPHITE UI END */
+/* Minimal semantic colors */
+.text-green-400,
+.text-emerald-400,
+[class*="text-green"],
+[class*="text-emerald"] {
+  color: var(--aureli-green) !important;
+}
+
+.text-red-400,
+.text-rose-400,
+[class*="text-red"],
+[class*="text-rose"] {
+  color: var(--aureli-red) !important;
+}
+
+.text-amber-400,
+.text-yellow-400,
+[class*="text-amber"],
+[class*="text-yellow"] {
+  color: var(--aureli-accent) !important;
+}
+
+.text-blue-400,
+.text-sky-400,
+[class*="text-blue"],
+[class*="text-sky"] {
+  color: var(--aureli-blue) !important;
+}
+
+/* Override harsh Tailwind surfaces */
+.border-white\/10,
+.border-white\/15,
+.border-white\/20,
+.border-slate-800,
+.border-zinc-800,
+.border-neutral-800,
+[class*="border-white/"],
+[class*="border-slate"],
+[class*="border-zinc"],
+[class*="border-neutral"] {
+  border-color: var(--aureli-border) !important;
+}
+
+.bg-white\/5,
+.bg-white\/10,
+.bg-slate-900,
+.bg-slate-950,
+.bg-zinc-900,
+.bg-neutral-900,
+[class*="bg-white/5"],
+[class*="bg-white/10"],
+[class*="bg-slate-9"],
+[class*="bg-zinc-9"],
+[class*="bg-neutral-9"] {
+  background: var(--aureli-bg-card) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  section,
+  article,
+  .card,
+  .panel,
+  [class*="card"],
+  [class*="Card"],
+  [class*="panel"],
+  [class*="Panel"] {
+    border-radius: 24px !important;
+    padding: 22px !important;
+  }
+
+  form:has(input[type="email"]):has(input[type="password"]) {
+    max-width: 100% !important;
+  }
+}
+
+/* AURELI MINIMAL CLASSY UI END */
 
 
+/* AURELI GRAPHITE DARK OVERRIDE START */
 
-
-
-
-
-
-
-
-
-/* AURELI MID BLUE GRAPHITE OVERRIDE START */
-
+/* Blackish / greyish premium dark palette */
 :root {
-  --mid-page: #0d1015;
-  --mid-sidebar: #131820;
-  --mid-card: #1a1f28;
-  --mid-card-hover: #202632;
-  --mid-input: #151a22;
+  --aureli-bg-main: #090909;
+  --aureli-bg-soft: #0f0f10;
+  --aureli-bg-card: #151515;
+  --aureli-bg-card-hover: #1a1a1a;
 
-  --mid-border: rgba(210, 220, 240, 0.105);
-  --mid-border-strong: rgba(210, 220, 240, 0.17);
+  --aureli-border: rgba(255, 255, 255, 0.085);
+  --aureli-border-strong: rgba(255, 255, 255, 0.15);
 
-  --mid-text: #f3f4f6;
-  --mid-soft: #cbd0d8;
-  --mid-muted: #929aa6;
+  --aureli-text: #f2f0eb;
+  --aureli-text-soft: #c7c3ba;
+  --aureli-text-muted: #8d8982;
 
-  --mid-blue: #879abd;
-  --mid-blue-soft: rgba(135, 154, 189, 0.115);
-
-  --mid-gold: #cbb174;
-  --mid-green: #8abd9f;
-  --mid-red: #ca8989;
+  --aureli-accent: #d7b76f;
+  --aureli-accent-soft: rgba(215, 183, 111, 0.14);
+  --aureli-blue: #a6a6a6;
+  --aureli-green: #91c7a8;
+  --aureli-red: #d58d8d;
 }
 
-/* Balanced dark background */
+/* Remove blue tone from page background */
 html,
 body {
   background:
-    radial-gradient(circle at top left, rgba(135, 154, 189, 0.045), transparent 34%),
-    linear-gradient(180deg, #11151c 0%, #0a0c10 100%) !important;
-  color: var(--mid-text) !important;
+    radial-gradient(circle at top left, rgba(215, 183, 111, 0.045), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.025), transparent 30%),
+    linear-gradient(180deg, #0b0b0c 0%, #070707 100%) !important;
+  color: var(--aureli-text) !important;
 }
 
-/* Balanced boxes/cards */
+/* Cards / boxes black-grey */
 section,
 article,
-form,
 .card,
 .panel,
 .dashboard-card,
@@ -3174,20 +3326,10 @@ form,
 [class*="card"],
 [class*="Card"],
 [class*="panel"],
-[class*="Panel"],
-[class*="box"],
-[class*="Box"],
-[class*="tile"],
-[class*="Tile"],
-[class*="widget"],
-[class*="Widget"],
-div[class*="rounded"],
-div[class*="border"],
-div[class*="shadow"],
-div[class*="bg-"] {
-  background: var(--mid-card) !important;
-  border-color: var(--mid-border) !important;
-  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.27) !important;
+[class*="Panel"] {
+  background: #151515 !important;
+  border-color: rgba(255, 255, 255, 0.085) !important;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.34) !important;
 }
 
 section:hover,
@@ -3198,11 +3340,11 @@ article:hover,
 [class*="Card"]:hover,
 [class*="panel"]:hover,
 [class*="Panel"]:hover {
-  background: var(--mid-card-hover) !important;
-  border-color: var(--mid-border-strong) !important;
+  background: #1a1a1a !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
 }
 
-/* Sidebar balanced */
+/* Sidebar pure graphite */
 aside,
 nav[aria-label="Sidebar"],
 .sidebar,
@@ -3210,26 +3352,12 @@ nav[aria-label="Sidebar"],
 [data-sidebar],
 [class*="sidebar"],
 [class*="Sidebar"] {
-  background: var(--mid-sidebar) !important;
-  border-right: 1px solid var(--mid-border) !important;
-  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.26) !important;
+  background: #101010 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 12px 0 34px rgba(0, 0, 0, 0.28) !important;
 }
 
-aside a,
-aside button,
-nav a,
-nav button,
-.sidebar a,
-.sidebar button,
-[data-sidebar] a,
-[data-sidebar] button,
-[class*="sidebar"] a,
-[class*="sidebar"] button,
-[class*="Sidebar"] a,
-[class*="Sidebar"] button {
-  color: var(--mid-muted) !important;
-}
-
+/* Sidebar hover / active */
 aside a:hover,
 aside button:hover,
 nav a:hover,
@@ -3242,536 +3370,102 @@ nav button:hover,
 [class*="sidebar"] button:hover,
 [class*="Sidebar"] a:hover,
 [class*="Sidebar"] button:hover {
-  background: #222936 !important;
-  color: var(--mid-text) !important;
+  background: #1b1b1b !important;
+  color: #f2f0eb !important;
 }
 
-/* Active nav subtle blue */
 aside [aria-current="page"],
 nav [aria-current="page"],
 .sidebar [aria-current="page"],
-[data-sidebar] [aria-current="page"] {
-  background: var(--mid-blue-soft) !important;
-  color: #a8b7d4 !important;
-  border-color: rgba(135, 154, 189, 0.24) !important;
+[data-sidebar] [aria-current="page"],
+[class*="active"],
+[class*="Active"] {
+  background: rgba(215, 183, 111, 0.13) !important;
+  color: #d7b76f !important;
+  border-color: rgba(215, 183, 111, 0.24) !important;
 }
 
-/* Text colors */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: var(--mid-text) !important;
-}
-
-[class*="text-slate"],
-[class*="text-zinc"],
-[class*="text-neutral"],
-[class*="text-gray"],
-[class*="text-white/40"],
-[class*="text-white/50"],
-[class*="text-white/60"],
-[class*="text-white/70"] {
-  color: var(--mid-muted) !important;
-}
-
-[class*="text-blue"],
-[class*="text-sky"],
-[class*="text-indigo"],
-[class*="text-cyan"] {
-  color: var(--mid-blue) !important;
-}
-
-[class*="text-amber"],
-[class*="text-yellow"],
-[class*="text-orange"] {
-  color: var(--mid-gold) !important;
-}
-
-[class*="text-green"],
-[class*="text-emerald"] {
-  color: var(--mid-green) !important;
-}
-
-[class*="text-red"],
-[class*="text-rose"] {
-  color: var(--mid-red) !important;
-}
-
-/* Inputs */
+/* Inputs black-grey */
 input,
 select,
 textarea {
-  background: var(--mid-input) !important;
-  color: var(--mid-text) !important;
-  border-color: var(--mid-border) !important;
+  background: #101010 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #f2f0eb !important;
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  background: #1a1f28 !important;
-  border-color: rgba(135, 154, 189, 0.48) !important;
-  box-shadow: 0 0 0 4px rgba(135, 154, 189, 0.075) !important;
+  background: #121212 !important;
+  border-color: rgba(215, 183, 111, 0.52) !important;
+  box-shadow: 0 0 0 4px rgba(215, 183, 111, 0.08) !important;
 }
 
-/* Buttons */
-button,
-a[role="button"],
-.btn {
-  background: #212735 !important;
-  color: var(--mid-text) !important;
-  border-color: var(--mid-border) !important;
+/* Auth inputs graphite */
+form:has(input[type="email"]):has(input[type="password"]) input {
+  background: #111111 !important;
 }
 
-button:hover,
-a[role="button"]:hover,
-.btn:hover {
-  background: #283040 !important;
-  border-color: var(--mid-border-strong) !important;
-}
-
-/* Primary buttons muted blue */
-button[type="submit"],
-.bg-amber-400,
-.bg-yellow-400,
-.bg-orange-400 {
-  background: #95a7c8 !important;
-  color: #0b0d11 !important;
-  border-color: #95a7c8 !important;
-  box-shadow: 0 12px 26px rgba(135, 154, 189, 0.145) !important;
-}
-
-button[type="submit"]:hover,
-.bg-amber-400:hover,
-.bg-yellow-400:hover,
-.bg-orange-400:hover {
-  background: #a3b4d2 !important;
-}
-
-/* Tables */
+/* Tables graphite */
 tbody tr {
-  background: var(--mid-card) !important;
+  background: #151515 !important;
 }
 
 td {
-  color: var(--mid-soft) !important;
+  color: #c7c3ba !important;
 }
 
-/* Badges */
-.badge,
-[class*="badge"],
-[class*="Badge"],
-[class*="pill"],
-[class*="Pill"] {
-  background: #232a36 !important;
-  color: var(--mid-soft) !important;
-  border-color: var(--mid-border) !important;
+/* Override Tailwind blue-ish surfaces */
+.bg-slate-900,
+.bg-slate-950,
+.bg-zinc-900,
+.bg-neutral-900,
+[class*="bg-slate-9"],
+[class*="bg-zinc-9"],
+[class*="bg-neutral-9"],
+[class*="bg-white/5"],
+[class*="bg-white/10"] {
+  background: #151515 !important;
 }
 
-/* AURELI MID BLUE GRAPHITE OVERRIDE END */
-
-
-/* AURELI CLEAN SIDEBAR OVERRIDE START */
-
-/* Clean sidebar container */
-aside,
-nav[aria-label="Sidebar"],
-.sidebar,
-.app-sidebar,
-[data-sidebar],
-[class*="sidebar"],
-[class*="Sidebar"] {
-  background: #11161f !important;
-  border-right: 1px solid rgba(210, 220, 240, 0.1) !important;
-  box-shadow: 8px 0 26px rgba(0, 0, 0, 0.22) !important;
+/* Text colors less blue, more warm grey */
+.text-slate-400,
+.text-slate-500,
+.text-zinc-400,
+.text-neutral-400,
+[class*="text-slate"],
+[class*="text-zinc"],
+[class*="text-neutral"] {
+  color: #8d8982 !important;
 }
 
-/* Remove ugly nested boxes inside sidebar */
-aside div,
-aside section,
-aside article,
-aside form,
-nav[aria-label="Sidebar"] div,
-nav[aria-label="Sidebar"] section,
-nav[aria-label="Sidebar"] article,
-.sidebar div,
-.sidebar section,
-.sidebar article,
-.app-sidebar div,
-.app-sidebar section,
-.app-sidebar article,
-[data-sidebar] div,
-[data-sidebar] section,
-[data-sidebar] article,
-[class*="sidebar"] div,
-[class*="sidebar"] section,
-[class*="sidebar"] article,
-[class*="Sidebar"] div,
-[class*="Sidebar"] section,
-[class*="Sidebar"] article {
-  background: transparent !important;
-  box-shadow: none !important;
-  border-color: transparent !important;
+.text-blue-400,
+.text-sky-400,
+[class*="text-blue"],
+[class*="text-sky"] {
+  color: #aaaaaa !important;
 }
 
-/* Sidebar brand/logo area should stay clean */
-aside h1,
-aside h2,
-aside h3,
-aside p,
-aside span,
-nav[aria-label="Sidebar"] h1,
-nav[aria-label="Sidebar"] h2,
-nav[aria-label="Sidebar"] h3,
-nav[aria-label="Sidebar"] p,
-nav[aria-label="Sidebar"] span,
-.sidebar h1,
-.sidebar h2,
-.sidebar h3,
-.sidebar p,
-.sidebar span,
-[data-sidebar] h1,
-[data-sidebar] h2,
-[data-sidebar] h3,
-[data-sidebar] p,
-[data-sidebar] span {
-  background: transparent !important;
-  box-shadow: none !important;
+/* Buttons graphite secondary */
+button:not([type="submit"]),
+a[role="button"],
+.btn {
+  background-color: #171717 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Sidebar buttons/links: no ugly full boxes by default */
-aside a,
-aside button,
-nav[aria-label="Sidebar"] a,
-nav[aria-label="Sidebar"] button,
-.sidebar a,
-.sidebar button,
-.app-sidebar a,
-.app-sidebar button,
-[data-sidebar] a,
-[data-sidebar] button,
-[class*="sidebar"] a,
-[class*="sidebar"] button,
-[class*="Sidebar"] a,
-[class*="Sidebar"] button {
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 14px !important;
-  border-radius: 14px !important;
-  background: transparent !important;
-  border: 1px solid transparent !important;
-  box-shadow: none !important;
-  color: #929aa6 !important;
+/* Keep primary button classy gold */
+button[type="submit"],
+.bg-amber-400,
+.bg-yellow-400,
+.bg-orange-400,
+[class*="bg-amber"],
+[class*="bg-yellow"],
+[class*="bg-orange"] {
+  background: #d7b76f !important;
+  color: #111111 !important;
+  border-color: #d7b76f !important;
 }
 
-/* Sidebar hover: only soft highlight */
-aside a:hover,
-aside button:hover,
-nav[aria-label="Sidebar"] a:hover,
-nav[aria-label="Sidebar"] button:hover,
-.sidebar a:hover,
-.sidebar button:hover,
-.app-sidebar a:hover,
-.app-sidebar button:hover,
-[data-sidebar] a:hover,
-[data-sidebar] button:hover,
-[class*="sidebar"] a:hover,
-[class*="sidebar"] button:hover,
-[class*="Sidebar"] a:hover,
-[class*="Sidebar"] button:hover {
-  background: rgba(135, 154, 189, 0.08) !important;
-  border-color: rgba(135, 154, 189, 0.12) !important;
-  color: #f3f4f6 !important;
-}
-
-/* Active sidebar item: clean pill only */
-aside a[aria-current="page"],
-aside button[aria-current="page"],
-nav[aria-label="Sidebar"] a[aria-current="page"],
-nav[aria-label="Sidebar"] button[aria-current="page"],
-.sidebar a[aria-current="page"],
-.sidebar button[aria-current="page"],
-.app-sidebar a[aria-current="page"],
-.app-sidebar button[aria-current="page"],
-[data-sidebar] a[aria-current="page"],
-[data-sidebar] button[aria-current="page"] {
-  background: rgba(135, 154, 189, 0.13) !important;
-  border-color: rgba(135, 154, 189, 0.2) !important;
-  color: #a8b7d4 !important;
-}
-
-/* Icons inside sidebar */
-aside svg,
-nav[aria-label="Sidebar"] svg,
-.sidebar svg,
-.app-sidebar svg,
-[data-sidebar] svg,
-[class*="sidebar"] svg,
-[class*="Sidebar"] svg {
-  color: inherit !important;
-  opacity: 0.85;
-}
-
-/* AURELI CLEAN SIDEBAR OVERRIDE END */
-
-
-/* AURELI CLEAN BOXES OVERRIDE START */
-
-/* Clean main content boxes */
-main section,
-main article,
-main .card,
-main .panel,
-main .dashboard-card,
-main .metric-card,
-main .agent-card,
-main .document-card,
-main .upload-card,
-main .review-card,
-main .tax-card,
-main [class*="card"],
-main [class*="Card"],
-main [class*="panel"],
-main [class*="Panel"] {
-  background: #1a1f28 !important;
-  border: 1px solid rgba(210, 220, 240, 0.105) !important;
-  border-radius: 28px !important;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24) !important;
-  padding: 28px !important;
-  overflow: hidden !important;
-}
-
-/* Remove ugly inner boxes inside cards */
-main section section,
-main section article,
-main article section,
-main article article,
-main [class*="card"] [class*="card"],
-main [class*="Card"] [class*="Card"],
-main [class*="panel"] [class*="panel"],
-main [class*="Panel"] [class*="Panel"] {
-  background: #202632 !important;
-  border: 1px solid rgba(210, 220, 240, 0.085) !important;
-  box-shadow: none !important;
-  border-radius: 22px !important;
-  padding: 22px !important;
-}
-
-/* Fix generic rounded/bordered boxes in dashboard */
-main div[class*="rounded"][class*="border"],
-main div[class*="rounded"][class*="bg-"],
-main div[class*="shadow"] {
-  background: #1a1f28 !important;
-  border-color: rgba(210, 220, 240, 0.105) !important;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18) !important;
-  border-radius: 26px !important;
-}
-
-/* Inner small stat boxes */
-main div[class*="rounded"][class*="border"] div[class*="rounded"],
-main div[class*="rounded"][class*="bg-"] div[class*="rounded"] {
-  background: #202632 !important;
-  border-color: rgba(210, 220, 240, 0.08) !important;
-  box-shadow: none !important;
-}
-
-/* Make cards fit content better */
-main .grid,
-main [class*="grid"] {
-  align-items: stretch !important;
-}
-
-main .grid > *,
-main [class*="grid"] > * {
-  min-width: 0 !important;
-}
-
-/* Prevent text overflow */
-main h1,
-main h2,
-main h3,
-main h4,
-main p,
-main span,
-main li,
-main td,
-main th {
-  overflow-wrap: anywhere !important;
-}
-
-/* Cleaner hover */
-main section:hover,
-main article:hover,
-main .card:hover,
-main .panel:hover,
-main [class*="card"]:hover,
-main [class*="Card"]:hover,
-main [class*="panel"]:hover,
-main [class*="Panel"]:hover,
-main div[class*="rounded"][class*="border"]:hover {
-  background: #202632 !important;
-  border-color: rgba(210, 220, 240, 0.16) !important;
-}
-
-/* Clean metric/stat cards specifically */
-main [class*="metric"],
-main [class*="Metric"],
-main [class*="stat"],
-main [class*="Stat"] {
-  background: #1c222d !important;
-  border-color: rgba(210, 220, 240, 0.1) !important;
-  border-radius: 24px !important;
-  box-shadow: none !important;
-}
-
-/* Fix upload/document boxes */
-main [class*="upload"],
-main [class*="Upload"],
-main [class*="document"],
-main [class*="Document"] {
-  border-radius: 26px !important;
-}
-
-/* Inputs inside boxes should not look like separate ugly cards */
-main input,
-main select,
-main textarea {
-  background: #151a22 !important;
-  border: 1px solid rgba(210, 220, 240, 0.12) !important;
-  border-radius: 18px !important;
-  box-shadow: none !important;
-}
-
-/* Buttons inside boxes */
-main button,
-main a[role="button"] {
-  box-shadow: none !important;
-  border-radius: 18px !important;
-}
-
-/* Tables should fit boxes */
-main table {
-  width: 100% !important;
-  background: transparent !important;
-}
-
-main tbody tr {
-  background: #202632 !important;
-}
-
-main td,
-main th {
-  padding: 14px 16px !important;
-}
-
-/* Mobile box spacing */
-@media (max-width: 768px) {
-  main section,
-  main article,
-  main .card,
-  main .panel,
-  main [class*="card"],
-  main [class*="Card"],
-  main [class*="panel"],
-  main [class*="Panel"],
-  main div[class*="rounded"][class*="border"],
-  main div[class*="rounded"][class*="bg-"] {
-    padding: 22px !important;
-    border-radius: 22px !important;
-  }
-}
-
-/* AURELI CLEAN BOXES OVERRIDE END */
-
-/* ===== Aureli sidebar premium fix ===== */
-
-/* Aureli Main App Scrollbar — Bluish Graphite */
-html,
-body {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(52, 70, 96, 0.72) transparent;
-  overflow-x: hidden;
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  border-radius: 999px !important;
-  background: rgba(52, 70, 96, 0.72) !important;
-  background-image: none !important;
-  border: 1px solid rgba(5, 10, 18, 0.62) !important;
-  background-clip: padding-box !important;
-  box-shadow: none !important;
-}
-
-html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(78, 104, 138, 0.9) !important;
-}
-
-html::-webkit-scrollbar-button,
-body::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-
-/* AURELI EXACT MAIN SCROLLBAR FIX */
-html,
-body {
-  scrollbar-width: thin !important;
-  scrollbar-color: rgba(52, 70, 96, 0.72) transparent !important;
-  overflow-x: hidden !important;
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 8px !important;
-  height: 8px !important;
-}
-
-html::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: 0 !important;
-}
-
-html::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  border-radius: 999px !important;
-  background: rgba(52, 70, 96, 0.72) !important;
-  background-color: rgba(52, 70, 96, 0.72) !important;
-  background-image: none !important;
-  border: 1px solid rgba(5, 10, 18, 0.62) !important;
-  background-clip: padding-box !important;
-  box-shadow: none !important;
-}
-
-html::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(78, 104, 138, 0.9) !important;
-  background-color: rgba(78, 104, 138, 0.9) !important;
-}
-
-html::-webkit-scrollbar-button,
-body::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
+/* AURELI GRAPHITE DARK OVERRIDE END */

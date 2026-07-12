@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { PWARegister } from "@/components/PWARegister";
 import "./globals.css";
+import './aureli-scrollbar.css';
 
 export const metadata: Metadata = {
   title: "Aureli — AI Finance Workspace",
