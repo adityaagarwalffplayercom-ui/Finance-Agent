@@ -423,21 +423,29 @@ export async function POST(
         });
 
         if (document.category === DocumentCategory.FINANCIAL_STATEMENT) {
-          const chunkedExtraction =
-            await extractDocumentLineItemsFromTextChunks({
-              fileName: document.fileName,
-              category: document.category,
-              text: pdfText,
-              reportedUnit: extracted.reportedUnit,
-              scaleMultiplier: extracted.scaleMultiplier,
-              documentDate:
-                extracted.documentDate ?? extracted.periodEnd ?? null,
-            });
+          try {
+            const chunkedExtraction =
+              await extractDocumentLineItemsFromTextChunks({
+                fileName: document.fileName,
+                category: document.category,
+                text: pdfText,
+                reportedUnit: extracted.reportedUnit,
+                scaleMultiplier: extracted.scaleMultiplier,
+                documentDate:
+                  extracted.documentDate ?? extracted.periodEnd ?? null,
+              });
 
-          chunkLineItems = chunkedExtraction.lineItems;
-          candidateChunks = chunkedExtraction.candidateChunks;
-          completedChunks = chunkedExtraction.completedChunks;
-          failedChunks = chunkedExtraction.failedChunks;
+            chunkLineItems = chunkedExtraction.lineItems;
+            candidateChunks = chunkedExtraction.candidateChunks;
+            completedChunks = chunkedExtraction.completedChunks;
+            failedChunks = chunkedExtraction.failedChunks;
+          } catch (chunkError) {
+            failedChunks = Math.max(failedChunks, 1);
+            console.warn(
+              "Optional chunked financial-row extraction failed; continuing with whole-document and deterministic rows.",
+              getErrorMessage(chunkError),
+            );
+          }
         }
       } else {
         extracted = await extractDocumentData({
