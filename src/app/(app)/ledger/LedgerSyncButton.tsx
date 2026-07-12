@@ -92,16 +92,14 @@ export function LedgerSyncButton({
         <span className={styles.syncButtonText}>
           <strong>
             {loading
-              ? "Building ledger"
-              : "Sync approved documents"}
+              ? "Refreshing ledger"
+              : "Refresh from documents"}
           </strong>
 
           <small>
             {approvedDocuments === 0
               ? "Approve a processed document first"
-              : `${approvedDocuments} approved document${
-                  approvedDocuments === 1 ? "" : "s"
-                } available`}
+              : "Only needed to rebuild older ledger data"}
           </small>
         </span>
       </button>

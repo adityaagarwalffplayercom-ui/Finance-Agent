@@ -284,7 +284,7 @@ function buildFinancialStatementEntries(params: {
         amount: Math.abs(metric.amount),
         currency,
         confidence: 0.9,
-        status: LedgerEntryStatus.NEEDS_REVIEW,
+        status: LedgerEntryStatus.APPROVED,
         sourceType: LedgerSourceType.STATEMENT_LINE,
         sourceLineKey: sourceKey([
           "statement-summary",
@@ -299,8 +299,9 @@ function buildFinancialStatementEntries(params: {
           originalAmount: metric.amount,
           periodStart: periodStart ?? "",
           periodEnd: periodEnd ?? "",
+          approvedThroughDocumentReview: true,
           note:
-            "Statement summaries require ledger review because they may overlap with invoices, bills, or bank transactions from the same period.",
+            "Approved through the source-document review. The ledger remains available for later audit, correction, or rejection.",
         },
       },
     ];
@@ -405,7 +406,7 @@ function buildFallbackLineEntries(params: {
         amount: Math.abs(amount),
         currency,
         confidence: 0.78,
-        status: LedgerEntryStatus.NEEDS_REVIEW,
+        status: LedgerEntryStatus.APPROVED,
         sourceType: LedgerSourceType.DOCUMENT_LINE,
         sourceLineKey: sourceKey([
           "line-fallback",
@@ -420,8 +421,9 @@ function buildFallbackLineEntries(params: {
           sourceIndex: index,
           originalAmount: amount,
           originalCategory: itemCategory ?? "",
+          approvedThroughDocumentReview: true,
           note:
-            "No document total was available. This extracted line requires review before it affects trusted financial totals.",
+            "No document total was available. This line was approved together with the reviewed source document and can still be corrected from the ledger.",
         },
       },
     ];

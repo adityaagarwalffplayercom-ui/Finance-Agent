@@ -521,10 +521,10 @@ export default async function LedgerPage({
               </h1>
 
               <p className={styles.subtitle}>
-                Review extracted transactions,
-                verify low-confidence entries,
-                and keep only trusted financial
-                data in your analysis.
+                Documents are approved only once.
+                Their ledger entries become trusted
+                automatically, while this page remains
+                available for audit and corrections.
               </p>
             </div>
 
@@ -616,8 +616,8 @@ export default async function LedgerPage({
                 styles.surfaceDescription
               }
             >
-              Approve trusted entries and reject
-              incorrect or duplicated rows.
+              Audit trusted entries, correct mistakes,
+              or reject duplicated rows when needed.
             </p>
           </div>
 

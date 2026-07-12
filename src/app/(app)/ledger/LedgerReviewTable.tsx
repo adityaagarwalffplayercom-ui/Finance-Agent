@@ -381,7 +381,7 @@ export function LedgerReviewTable({
                     approvedDocuments === 1
                       ? " is"
                       : "s are"
-                  } ready to sync`
+                  } already trusted`
                 : "Approve your first document"}
           </h3>
 
@@ -389,7 +389,7 @@ export function LedgerReviewTable({
             {filtersActive
               ? "Clear the current filters or open another review tab."
               : approvedDocuments > 0
-                ? "Use Sync approved documents to generate ledger entries."
+                ? "Approved documents normally sync automatically. Use Refresh from documents only to rebuild older data."
                 : "Process and approve a financial document to start building the ledger."}
           </p>
 
