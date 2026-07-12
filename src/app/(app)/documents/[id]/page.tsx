@@ -120,6 +120,16 @@ function getNumberValue(
   return null;
 }
 
+function getMetricValidation(data: ExtractedDocumentData | null) {
+  const validation = data?.metricValidation;
+
+  if (!validation || typeof validation !== "object") {
+    return null;
+  }
+
+  return validation;
+}
+
 function getStringValue(
   data: ExtractedDocumentData | null,
   keys: string[],
@@ -431,6 +441,27 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
   ]);
 
   const equity = getNumberValue(extracted, ["equity", "totalEquity"]);
+  const metricValidation = getMetricValidation(extracted);
+  const invalidatedMetrics = new Set(metricValidation?.invalidatedFields ?? []);
+  const validationNeedsReview = metricValidation?.status === "needs_review";
+
+  function metricValue(
+    metric: "revenue" | "expenses" | "netIncome" | "cash" | "assets" | "liabilities" | "equity",
+    value: number | null,
+  ) {
+    return invalidatedMetrics.has(metric)
+      ? "Needs verification"
+      : formatAmount(value, currency);
+  }
+
+  function metricHint(
+    metric: "revenue" | "expenses" | "netIncome" | "cash" | "assets" | "liabilities" | "equity",
+    normalHint: string,
+  ) {
+    return invalidatedMetrics.has(metric)
+      ? "Hidden after accounting consistency check"
+      : normalHint;
+  }
 
   return (
     <>
@@ -574,53 +605,101 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
         >
           <MetricCard
             label="Revenue"
-            value={formatAmount(revenue, currency)}
-            hint="Detected income / sales"
-            tone="green"
+            value={metricValue("revenue", revenue)}
+            hint={metricHint("revenue", "Detected income / sales")}
+            tone={invalidatedMetrics.has("revenue") ? "yellow" : "green"}
           />
 
           <MetricCard
             label="Expenses"
-            value={formatAmount(expenses, currency)}
-            hint="Detected costs"
-            tone="red"
+            value={metricValue("expenses", expenses)}
+            hint={metricHint("expenses", "Detected costs")}
+            tone={invalidatedMetrics.has("expenses") ? "yellow" : "red"}
           />
 
           <MetricCard
             label="Profit"
-            value={formatAmount(profit, currency)}
-            hint="Net result"
-            tone={profit !== null && profit < 0 ? "red" : "green"}
+            value={metricValue("netIncome", profit)}
+            hint={metricHint("netIncome", "Net result")}
+            tone={
+              invalidatedMetrics.has("netIncome")
+                ? "yellow"
+                : profit !== null && profit < 0
+                  ? "red"
+                  : "green"
+            }
           />
 
           <MetricCard
             label="Cash"
-            value={formatAmount(cash, currency)}
-            hint="Detected balance"
-            tone="blue"
+            value={metricValue("cash", cash)}
+            hint={metricHint("cash", "Detected balance")}
+            tone={invalidatedMetrics.has("cash") ? "yellow" : "blue"}
           />
 
           <MetricCard
             label="Assets"
-            value={formatAmount(assets, currency)}
-            hint="Balance sheet total"
-            tone="blue"
+            value={metricValue("assets", assets)}
+            hint={metricHint("assets", "Balance sheet total")}
+            tone={invalidatedMetrics.has("assets") ? "yellow" : "blue"}
           />
 
           <MetricCard
             label="Liabilities"
-            value={formatAmount(liabilities, currency)}
-            hint="Obligations"
+            value={metricValue("liabilities", liabilities)}
+            hint={metricHint("liabilities", "Obligations")}
             tone="yellow"
           />
 
           <MetricCard
             label="Equity"
-            value={formatAmount(equity, currency)}
-            hint="Owner value"
-            tone="green"
+            value={metricValue("equity", equity)}
+            hint={metricHint("equity", "Owner value")}
+            tone={invalidatedMetrics.has("equity") ? "yellow" : "green"}
           />
         </div>
+
+        {validationNeedsReview && (
+          <div
+            style={{
+              border: "1px solid rgba(255, 138, 149, 0.30)",
+              background: "rgba(255, 138, 149, 0.08)",
+              borderRadius: 18,
+              padding: 16,
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <strong style={{ color: "#ff8a95", fontSize: 14 }}>
+              Some numbers failed validation
+            </strong>
+            <p
+              style={{
+                margin: 0,
+                color: "var(--color-text-secondary)",
+                fontSize: 13,
+                lineHeight: 1.6,
+              }}
+            >
+              Aureli hid inconsistent values instead of sending incorrect figures
+              to the ledger and dashboard. Verify the original statement or retry
+              extraction.
+            </p>
+            {metricValidation?.warnings?.slice(0, 3).map((warning) => (
+              <p
+                key={warning}
+                style={{
+                  margin: 0,
+                  color: "var(--color-text-secondary)",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                }}
+              >
+                • {warning}
+              </p>
+            ))}
+          </div>
+        )}
 
         {summary && (
           <div
