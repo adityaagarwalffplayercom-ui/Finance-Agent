@@ -268,6 +268,148 @@ export function splitFinancialTextIntoChunks(
     .map(({ chunk }) => chunk);
 }
 
+const SUMMARY_SECTION_GROUPS = [
+  [
+    "statement of profit",
+    "profit and loss",
+    "income statement",
+    "total revenue",
+    "total income",
+    "total expenses",
+    "profit after tax",
+    "loss after tax",
+  ],
+  [
+    "balance sheet",
+    "statement of financial position",
+    "total assets",
+    "total liabilities",
+    "total equity",
+    "shareholders' equity",
+  ],
+  [
+    "cash flow",
+    "cash and cash equivalents",
+    "operating activities",
+    "investing activities",
+    "financing activities",
+  ],
+];
+
+function summarySectionScore(chunk: string, phrases: string[]) {
+  const lower = chunk.toLowerCase();
+  let score = scoreChunk(chunk);
+
+  for (const phrase of phrases) {
+    if (lower.includes(phrase)) {
+      score += 80;
+    }
+  }
+
+  return score;
+}
+
+function buildSummaryContext(text: string) {
+  const lines = text.split(/\r?\n/g).map(cleanLine);
+  const context = new Set<number>();
+
+  for (let index = 0; index < Math.min(lines.length, 80); index += 1) {
+    if (lines[index]) {
+      context.add(index);
+    }
+  }
+
+  const contextPatterns = [
+    /amounts? (?:are )?in (?:inr |rs\.? )?(?:thousands?|lakhs?|crores?|millions?|billions?)/i,
+    /figures? (?:are )?in (?:inr |rs\.? )?(?:thousands?|lakhs?|crores?|millions?|billions?)/i,
+    /for the (?:year|period) ended/i,
+    /as at \d/i,
+    /consolidated financial statements?/i,
+    /standalone financial statements?/i,
+  ];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (contextPatterns.some((pattern) => pattern.test(lines[index]))) {
+      context.add(index);
+    }
+  }
+
+  return [...context]
+    .sort((left, right) => left - right)
+    .map((index) => lines[index])
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * Builds a compact but balanced summary input from a long annual report. It
+ * deliberately includes the best profit/loss, balance-sheet and cash-flow
+ * sections instead of sending only the first N characters of the PDF.
+ */
+export function buildFinancialSummaryText(
+  text: string,
+  options: { maxChars?: number } = {},
+) {
+  const maxChars = Math.max(30_000, options.maxChars ?? 250_000);
+  const context = buildSummaryContext(text);
+  const candidateText = buildFinancialCandidateText(text);
+  const chunks = chunkByLines(candidateText, 36_000);
+
+  if (chunks.length === 0) {
+    return text.slice(0, maxChars);
+  }
+
+  const selected = new Set<number>();
+
+  for (const phrases of SUMMARY_SECTION_GROUPS) {
+    let bestIndex = -1;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (let index = 0; index < chunks.length; index += 1) {
+      const score = summarySectionScore(chunks[index], phrases);
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    }
+
+    if (bestIndex >= 0) {
+      selected.add(bestIndex);
+    }
+  }
+
+  const ranked = chunks
+    .map((chunk, index) => ({ chunk, index, score: scoreChunk(chunk) }))
+    .sort((left, right) => right.score - left.score);
+
+  let selectedLength = context.length + 2;
+
+  for (const index of selected) {
+    selectedLength += chunks[index].length + 2;
+  }
+
+  for (const { index, chunk } of ranked) {
+    if (selected.has(index)) {
+      continue;
+    }
+
+    if (selectedLength + chunk.length + 2 > maxChars) {
+      continue;
+    }
+
+    selected.add(index);
+    selectedLength += chunk.length + 2;
+  }
+
+  const sections = [...selected]
+    .sort((left, right) => left - right)
+    .map((index) => chunks[index]);
+  const combined = [context, ...sections].filter(Boolean).join("\n\n");
+
+  return combined.slice(0, maxChars);
+}
+
 function normalizeDescription(value: unknown) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
 }

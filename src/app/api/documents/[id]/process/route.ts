@@ -16,6 +16,8 @@ import {
   type ExtractedDocumentData,
 } from "@/lib/gemini";
 import { syncLedgerEntriesFromDocument } from "@/lib/transaction-ledger";
+import { buildFinancialSummaryText } from "@/lib/financial-text-chunks";
+import { backfillFinancialStatementSummary } from "@/lib/financial-summary-backfill";
 import { USAGE_LIMITS, formatUsageSize } from "@/lib/usage-limits";
 import {
   checkAndRecordAiProcessUsage,
@@ -104,6 +106,16 @@ function getSafeTextForAi(text: string) {
   return text.slice(0, USAGE_LIMITS.MAX_TEXT_CHARS_FOR_AI);
 }
 
+function getTextForAi(text: string, summaryOnly: boolean) {
+  if (!summaryOnly) {
+    return getSafeTextForAi(text);
+  }
+
+  return buildFinancialSummaryText(text, {
+    maxChars: USAGE_LIMITS.MAX_TEXT_CHARS_FOR_AI,
+  });
+}
+
 function buildDeterministicOnlyExtraction(params: {
   previous: ExtractedDocumentData | null;
   rawLineItems: RawFinancialLineItem[];
@@ -130,6 +142,7 @@ async function saveProcessedDocument(params: {
   candidateChunks?: number;
   completedChunks?: number;
   failedChunks?: number;
+  summaryFieldsBackfilled?: string[];
 }) {
   await prisma.document.update({
     where: {
@@ -162,6 +175,7 @@ async function saveProcessedDocument(params: {
       candidateChunks: params.candidateChunks ?? 0,
       completedChunks: params.completedChunks ?? 0,
       failedChunks: params.failedChunks ?? 0,
+      summaryFieldsBackfilled: params.summaryFieldsBackfilled ?? [],
     },
   });
 
@@ -376,7 +390,7 @@ export async function POST(
         category: document.category,
         content: {
           kind: "text",
-          text: getSafeTextForAi(text),
+          text: getTextForAi(text, summaryOnly),
         },
         summaryOnly,
       });
@@ -406,7 +420,7 @@ export async function POST(
         category: document.category,
         content: {
           kind: "text",
-          text: getSafeTextForAi(csv),
+          text: getTextForAi(csv, summaryOnly),
         },
         summaryOnly,
       });
@@ -425,7 +439,7 @@ export async function POST(
           category: document.category,
           content: {
             kind: "text",
-            text: getSafeTextForAi(pdfText),
+            text: getTextForAi(pdfText, summaryOnly),
           },
           summaryOnly,
         });
@@ -480,10 +494,15 @@ export async function POST(
       });
     }
 
-    const mergedExtraction = mergeExtractedLineItems(extracted, [
+    const mergedWithLineItems = mergeExtractedLineItems(extracted, [
       ...rawLineItems,
       ...chunkLineItems,
     ]);
+    const summaryBackfill =
+      document.category === DocumentCategory.FINANCIAL_STATEMENT
+        ? backfillFinancialStatementSummary(mergedWithLineItems)
+        : { data: mergedWithLineItems, backfilledFields: [] };
+    const mergedExtraction = summaryBackfill.data;
 
     await saveProcessedDocument({
       id: document.id,
@@ -496,6 +515,7 @@ export async function POST(
       candidateChunks,
       completedChunks,
       failedChunks,
+      summaryFieldsBackfilled: summaryBackfill.backfilledFields,
     });
 
     const ledgerEntriesSynced =
@@ -518,6 +538,7 @@ export async function POST(
       candidateChunks,
       completedChunks,
       failedChunks,
+      summaryFieldsBackfilled: summaryBackfill.backfilledFields,
       ledgerEntriesSynced,
       finalLineItemsStored: mergedExtraction.lineItems?.length ?? 0,
     });
@@ -528,11 +549,16 @@ export async function POST(
     const previousExtracted = getPreviousExtractedData(document.extractedData);
 
     if (rawLineItems.length > 0) {
-      const deterministicOnlyExtraction = buildDeterministicOnlyExtraction({
+      const deterministicBase = buildDeterministicOnlyExtraction({
         previous: previousExtracted,
         rawLineItems,
         fileName: document.fileName,
       });
+      const deterministicSummary =
+        document.category === DocumentCategory.FINANCIAL_STATEMENT
+          ? backfillFinancialStatementSummary(deterministicBase)
+          : { data: deterministicBase, backfilledFields: [] };
+      const deterministicOnlyExtraction = deterministicSummary.data;
 
       await saveProcessedDocument({
         id: document.id,
@@ -541,6 +567,7 @@ export async function POST(
         category: document.category,
         extracted: deterministicOnlyExtraction,
         rawLineItemCount: rawLineItems.length,
+        summaryFieldsBackfilled: deterministicSummary.backfilledFields,
       });
 
       return NextResponse.json({
@@ -550,6 +577,7 @@ export async function POST(
         geminiError: cleanProcessingError(message),
         extractedData: deterministicOnlyExtraction,
         rawLineItemsDetected: rawLineItems.length,
+        summaryFieldsBackfilled: deterministicSummary.backfilledFields,
         finalLineItemsStored:
           deterministicOnlyExtraction.lineItems?.length ?? 0,
       });
