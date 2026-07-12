@@ -58,7 +58,7 @@ function compactNumber(value: number) {
 function currencySymbol(currency: string) {
   const clean = currency.trim().toUpperCase();
 
-  if (clean === "INR") return "Rs. ";
+  if (clean === "INR") return "₹";
   if (clean === "USD" || currency.trim() === "$") return "$";
   if (clean === "GBP") return "GBP ";
   if (clean === "EUR") return "EUR ";
@@ -388,7 +388,7 @@ export default async function CashFlowPage() {
                 maxWidth: 920,
               }}
             >
-              Runway and burn intelligence.
+              Trusted cash movement intelligence.
             </h1>
 
             <p
@@ -773,7 +773,7 @@ export default async function CashFlowPage() {
                 lineHeight: 1.65,
               }}
             >
-              No approved documents found.
+              No approved source documents are linked to trusted ledger entries.
             </p>
           )}
         </section>

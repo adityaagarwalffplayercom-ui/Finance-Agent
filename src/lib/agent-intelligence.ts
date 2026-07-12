@@ -662,12 +662,15 @@ Strict tax boundaries:
 export function buildUniversalEvidenceRules() {
   return `
 Universal evidence rules:
-- Approved processed documents are trusted evidence.
-- Pending review documents are not trusted facts.
-- Rejected documents must not be used as evidence.
+- Approved CREDIT and DEBIT ledger entries are the financial source of truth for revenue, expenses, profit, margins, monthly movement, break-even, risk, forecast, and anomaly analysis.
+- Pending, rejected, neutral, and different-currency ledger entries must not be included in financial totals.
+- Approved manual ledger entries are valid evidence.
+- Approved processed documents are supporting source evidence and tax context, but extracted totals must not override approved ledger totals.
 - Verified TaxRule database entries are trusted tax rule evidence.
 - Verified uploaded Tax Knowledge chunks are trusted tax knowledge evidence.
 - Draft, stale, or needs-review tax knowledge is not final evidence.
+- Net cash movement is not the same as verified bank cash.
+- Never calculate cash runway without a verified opening or closing cash balance.
 - If evidence is missing, say it clearly.
 - Never pretend missing data exists.
 - Never invent numbers.

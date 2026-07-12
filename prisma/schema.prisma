@@ -21,6 +21,7 @@ model User {
   business      Business?
   chatMessages  BusinessChatMessage[]
   documents     Document[]
+  ledgerEntries LedgerEntry[]
   sessions      Session[]
   usageEvents   UsageEvent[]
 
@@ -103,6 +104,7 @@ model Document {
   reviewNote      String?
   reviewStatus    DocumentReviewStatus @default(NEEDS_REVIEW)
   reviewedAt      DateTime?
+  ledgerEntries   LedgerEntry[]
   user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, uploadedAt])
@@ -238,6 +240,54 @@ model TaxRuleSourceLink {
   @@unique([taxRuleId, sourceDocumentId])
   @@index([sourceDocumentId])
   @@map("tax_rule_source_link")
+}
+
+model LedgerEntry {
+  id              String            @id @default(cuid())
+  transactionDate DateTime?
+  description     String
+  counterparty    String?
+  category        String?
+  direction       LedgerDirection
+  amount          Decimal           @db.Decimal(20, 2)
+  currency        String            @default("INR")
+  confidence      Float?
+  status          LedgerEntryStatus @default(NEEDS_REVIEW)
+  sourceType      LedgerSourceType
+  sourceLineKey   String
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  userId          String
+  documentId      String?
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document        Document?         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, sourceLineKey])
+  @@index([userId, transactionDate])
+  @@index([userId, direction, status])
+  @@index([documentId])
+  @@map("ledger_entry")
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+  NEUTRAL
+}
+
+enum LedgerEntryStatus {
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum LedgerSourceType {
+  BANK_TRANSACTION
+  DOCUMENT_LINE
+  STATEMENT_LINE
+  DOCUMENT_TOTAL
+  MANUAL
 }
 
 enum DocumentCategory {

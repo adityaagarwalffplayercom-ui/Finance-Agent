@@ -1,9 +1,10 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getFinancialProfile } from "@/lib/financial-profile";
+import { getLedgerDataConfidence } from "@/lib/ledger-data-confidence";
+import { getFinancialProfile } from "@/lib/ledger-financial-profile";
 
 type Tone = "good" | "warning" | "danger" | "neutral" | "gold";
 
@@ -503,8 +504,9 @@ export default async function DashboardPage() {
 
   const userId = session.user.id;
 
-  const [profile, business, documents] = await Promise.all([
+  const [profile, dataConfidence, business, documents] = await Promise.all([
     getFinancialProfile(userId),
+    getLedgerDataConfidence(userId),
     prisma.business.findUnique({
       where: {
         userId,
@@ -593,7 +595,14 @@ export default async function DashboardPage() {
         ? "warning"
         : "danger";
 
-  const documentTone = getDocumentTrustTone(approvedDocuments, processedDocuments);
+  
+  const confidenceTone: Tone =
+    dataConfidence.level === "HIGH"
+      ? "good"
+      : dataConfidence.level === "MEDIUM"
+        ? "warning"
+        : "danger";
+const documentTone = getDocumentTrustTone(approvedDocuments, processedDocuments);
 
   const ownerFocus =
     profit !== null && profit < 0
@@ -705,6 +714,10 @@ export default async function DashboardPage() {
           />
           <StatusPill label={profile.healthLabel} tone={healthTone} />
           <StatusPill
+            label={`Data confidence ${dataConfidence.score}/100`}
+            tone={confidenceTone}
+          />
+          <StatusPill
             label={`${approvedDocuments} approved docs`}
             tone={documentTone}
           />
@@ -804,6 +817,13 @@ export default async function DashboardPage() {
                 hint={profile.healthLabel}
                 tone={healthTone}
               />
+              <MetricCard
+                label="Data confidence"
+                value={`${dataConfidence.score}/100`}
+                hint={`${dataConfidence.label} · ${dataConfidence.historyMonths} month(s) · ${dataConfidence.pendingEntries} pending`}
+                tone={confidenceTone}
+              />
+
 
               <MetricCard
                 label="Document trust"

@@ -40,3 +40,8 @@ us-irs-employer-tax-guide.pdf
 us-irs-estimated-tax-withholding.pdf
 us-irs-small-business-tax-guide.pdf
 us-irs-starting-business-recordkeeping.pdf
+# Aureli local generated files
+*.log
+**/*.backup*
+**/*.backup-*
+prisma/schema.prisma.backup*

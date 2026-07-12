@@ -8,7 +8,7 @@ import {
   type ForecastPeriod,
   type ForecastScenario,
   type ForecastStatus,
-} from "@/lib/forecast-engine";
+} from "@/lib/ledger-forecast-engine";
 
 type Tone = "good" | "warning" | "danger" | "neutral";
 
@@ -192,7 +192,7 @@ function PeriodCard({
           value={formatForecastMoney(period.projectedProfit, currency)}
         />
         <SmallValue
-          label="Cash"
+          label="Verified cash"
           value={formatForecastMoney(period.projectedCash, currency)}
         />
       </div>
@@ -368,6 +368,13 @@ export default async function ForecastPage() {
   const report = await getForecastReport(session.user.id);
   const statusTone = toneFromStatus(report.status);
 
+  const confidenceTone: Tone =
+    report.assumptions.confidence === "HIGH"
+      ? "good"
+      : report.assumptions.confidence === "MEDIUM"
+        ? "warning"
+        : "danger";
+
   return (
     <main>
       <header
@@ -430,6 +437,69 @@ export default async function ForecastPage() {
           </Link>
         </div>
       </header>
+      {/* FORECAST_LEDGER_CONFIDENCE */}
+      <section
+        aria-label="Forecast data confidence"
+        style={{
+          marginBottom: 18,
+          border: `1px solid ${toneStyle(confidenceTone).border}`,
+          background: toneStyle(confidenceTone).background,
+          borderRadius: 20,
+          padding: 16,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gap: 5,
+          }}
+        >
+          <span
+            style={{
+              color: toneStyle(confidenceTone).color,
+              fontSize: 11,
+              fontWeight: 950,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            {report.assumptions.confidence} forecast confidence
+          </span>
+
+          <strong
+            style={{
+              color: "var(--color-text-primary)",
+              fontSize: 17,
+              lineHeight: 1.3,
+            }}
+          >
+            Data confidence {report.assumptions.confidenceScore}/100
+          </strong>
+
+          <p
+            style={{
+              margin: 0,
+              color: "var(--color-text-secondary)",
+              fontSize: 13,
+              lineHeight: 1.6,
+            }}
+          >
+            {report.assumptions.confidenceReason}
+          </p>
+        </div>
+
+        <Link
+          href="/ledger?status=NEEDS_REVIEW"
+          className="btn-ghost"
+        >
+          Review Ledger →
+        </Link>
+      </section>
 
       <section
         style={{
@@ -457,7 +527,7 @@ export default async function ForecastPage() {
               report.baseMetrics.monthlyProfit,
               report.currency,
             )}
-            hint="Estimated from approved documents"
+            hint="Average from approved ledger months"
             tone={
               report.baseMetrics.monthlyProfit === null
                 ? "neutral"
@@ -485,7 +555,7 @@ export default async function ForecastPage() {
           <MetricCard
             label="Forecast confidence"
             value={report.assumptions.confidence}
-            hint={`${report.dataCoverage.approvedDocuments} approved document(s)`}
+            hint={`${report.dataCoverage.approvedEntries} approved entries · ${report.dataCoverage.observedMonths} month(s)`}
             tone={
               report.assumptions.confidence === "HIGH"
                 ? "good"
@@ -635,8 +705,8 @@ export default async function ForecastPage() {
             />
 
             <SmallValue
-              label="Documents"
-              value={`${report.dataCoverage.approvedDocuments} approved`}
+              label="Ledger coverage"
+              value={`${report.dataCoverage.approvedEntries} approved · ${report.dataCoverage.pendingEntries} pending`}
             />
           </div>
 

@@ -415,7 +415,7 @@ export default async function AnomalyInsightsPage() {
                 maxWidth: 920,
               }}
             >
-              Line item and anomaly insights.
+              Trusted ledger anomaly insights.
             </h1>
 
             <p
@@ -457,9 +457,9 @@ export default async function AnomalyInsightsPage() {
           />
 
           <MetricCard
-            label="Line items"
+            label="Ledger entries"
             value={report.metrics.totalLineItems}
-            hint={`${report.metrics.documentsWithLineItems}/${report.metrics.approvedDocuments} documents with items`}
+            hint={`${report.metrics.totalLineItems} approved entries analysed`}
             tone={metricTone(report.metrics.totalLineItems, 20, 5)}
           />
 
@@ -604,7 +604,7 @@ export default async function AnomalyInsightsPage() {
                 lineHeight: 1.15,
               }}
             >
-              Biggest extracted line items
+              Biggest approved ledger entries
             </h2>
           </div>
 
@@ -633,7 +633,7 @@ export default async function AnomalyInsightsPage() {
                 lineHeight: 1.65,
               }}
             >
-              No extracted line items found yet.
+              No approved ledger entries found yet.
             </p>
           )}
         </section>
@@ -659,7 +659,7 @@ export default async function AnomalyInsightsPage() {
                 lineHeight: 1.15,
               }}
             >
-              Line items by document
+              Approved ledger entries by source document
             </h2>
           </div>
 

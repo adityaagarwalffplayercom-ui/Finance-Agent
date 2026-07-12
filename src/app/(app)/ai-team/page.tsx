@@ -17,7 +17,7 @@ const AGENTS = [
     name: "CFO Agent",
     title: "Strategic finance decisions",
     description:
-      "Profitability, financial health, runway, hiring, investment decisions, and executive priorities.",
+      "Profitability, financial health, break-even, hiring safety, cash verification, and executive priorities.",
     icon: "📈",
     color: "#ffd166",
   },
@@ -44,7 +44,7 @@ const AGENTS = [
     name: "Financial Analyst Agent",
     title: "Performance and trend analysis",
     description:
-      "Revenue, expenses, margins, extracted line items, unusual cost patterns, and monthly trends.",
+      "Approved credits, debits, margins, ledger entries, unusual cost patterns, and monthly trends.",
     icon: "📊",
     color: "#93c5fd",
   },
