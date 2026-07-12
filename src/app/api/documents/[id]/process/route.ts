@@ -19,6 +19,7 @@ import { syncLedgerEntriesFromDocument } from "@/lib/transaction-ledger";
 import { buildFinancialSummaryText } from "@/lib/financial-text-chunks";
 import { backfillFinancialStatementSummary } from "@/lib/financial-summary-backfill";
 import { validateFinancialStatementSummary } from "@/lib/financial-summary-validation";
+import { sanitizeFinancialStatementExtraction } from "@/lib/financial-statement-sanitizer";
 import { USAGE_LIMITS, formatUsageSize } from "@/lib/usage-limits";
 import {
   checkAndRecordAiProcessUsage,
@@ -374,7 +375,11 @@ export async function POST(
     const summaryOnly =
       document.category === DocumentCategory.FINANCIAL_STATEMENT;
 
-    let extracted: ExtractedDocumentData;
+    let extracted: ExtractedDocumentData = previousExtracted ?? {
+      summary: "Financial document processing in progress.",
+      lineItems: [],
+      transactions: [],
+    };
     let chunkLineItems: RawFinancialLineItem[] = [];
     let candidateChunks = 0;
     let completedChunks = 0;
@@ -433,25 +438,52 @@ export async function POST(
     } else if (PDF_MIME_TYPES.includes(document.mimeType)) {
       const pdfText = await extractPdfText(buffer);
       sourceTextForSummary = pdfText;
+      const isFinancialStatement =
+        document.category === DocumentCategory.FINANCIAL_STATEMENT;
 
-      rawLineItems = extractLineItemsFromText(pdfText, {
-        documentDate: previousExtracted?.documentDate ?? null,
-        scaleMultiplier: previousExtracted?.scaleMultiplier ?? null,
-        defaultCategory: document.category,
-      });
-
-      if (pdfText.trim().length > 2000) {
+      if (isFinancialStatement) {
+        // Read headline metrics from the original PDF, not flattened pdf-parse
+        // text. Native PDF input preserves table columns and prevents phone,
+        // date, note and stock-code values from becoming financial totals.
         extracted = await extractDocumentData({
           fileName: document.fileName,
           category: document.category,
           content: {
-            kind: "text",
-            text: getTextForAi(pdfText, summaryOnly),
+            kind: "inline",
+            mimeType: document.mimeType,
+            base64Data: buffer.toString("base64"),
           },
-          summaryOnly,
+          summaryOnly: true,
         });
 
-        if (document.category === DocumentCategory.FINANCIAL_STATEMENT) {
+        rawLineItems = extractLineItemsFromText(pdfText, {
+          documentDate:
+            extracted.documentDate ?? extracted.periodEnd ?? previousExtracted?.documentDate ?? null,
+          scaleMultiplier: extracted.scaleMultiplier ?? null,
+          defaultCategory: document.category,
+        });
+      } else {
+        rawLineItems = extractLineItemsFromText(pdfText, {
+          documentDate: previousExtracted?.documentDate ?? null,
+          scaleMultiplier: previousExtracted?.scaleMultiplier ?? null,
+          defaultCategory: document.category,
+        });
+      }
+
+      if (pdfText.trim().length > 2000) {
+        if (!isFinancialStatement) {
+          extracted = await extractDocumentData({
+            fileName: document.fileName,
+            category: document.category,
+            content: {
+              kind: "text",
+              text: getTextForAi(pdfText, summaryOnly),
+            },
+            summaryOnly,
+          });
+        }
+
+        if (isFinancialStatement) {
           try {
             const chunkedExtraction =
               await extractDocumentLineItemsFromTextChunks({
@@ -476,7 +508,7 @@ export async function POST(
             );
           }
         }
-      } else {
+      } else if (!isFinancialStatement) {
         extracted = await extractDocumentData({
           fileName: document.fileName,
           category: document.category,
@@ -505,12 +537,16 @@ export async function POST(
       ...rawLineItems,
       ...chunkLineItems,
     ]);
+    const sanitizedExtraction =
+      document.category === DocumentCategory.FINANCIAL_STATEMENT
+        ? sanitizeFinancialStatementExtraction(mergedWithLineItems)
+        : mergedWithLineItems;
     const summaryBackfill =
       document.category === DocumentCategory.FINANCIAL_STATEMENT
-        ? backfillFinancialStatementSummary(mergedWithLineItems, {
+        ? backfillFinancialStatementSummary(sanitizedExtraction, {
             rawText: sourceTextForSummary,
           })
-        : { data: mergedWithLineItems, backfilledFields: [], evidence: {} };
+        : { data: sanitizedExtraction, backfilledFields: [], evidence: {} };
     const summaryValidation =
       document.category === DocumentCategory.FINANCIAL_STATEMENT
         ? validateFinancialStatementSummary(summaryBackfill.data, {
