@@ -504,7 +504,17 @@ export default async function DashboardPage() {
 
   const userId = session.user.id;
 
-  const [profile, dataConfidence, business, documents] = await Promise.all([
+  const [
+    profile,
+    dataConfidence,
+    business,
+    documents,
+    totalDocuments,
+    processedDocuments,
+    approvedDocuments,
+    failedDocuments,
+    demoDocuments,
+  ] = await Promise.all([
     getFinancialProfile(userId),
     getLedgerDataConfidence(userId),
     prisma.business.findUnique({
@@ -536,6 +546,37 @@ export default async function DashboardPage() {
         uploadedAt: "desc",
       },
       take: 8,
+    }),
+    prisma.document.count({
+      where: {
+        userId,
+      },
+    }),
+    prisma.document.count({
+      where: {
+        userId,
+        status: "PROCESSED",
+      },
+    }),
+    prisma.document.count({
+      where: {
+        userId,
+        reviewStatus: "APPROVED",
+      },
+    }),
+    prisma.document.count({
+      where: {
+        userId,
+        status: "FAILED",
+      },
+    }),
+    prisma.document.count({
+      where: {
+        userId,
+        fileName: {
+          startsWith: "[DEMO]",
+        },
+      },
     }),
   ]);
 
@@ -571,22 +612,6 @@ export default async function DashboardPage() {
     cash !== null && monthlyBurn !== null && monthlyBurn > 0
       ? cash / monthlyBurn
       : null;
-
-  const processedDocuments = documents.filter(
-    (document) => String(document.status) === "PROCESSED",
-  ).length;
-
-  const approvedDocuments = documents.filter(
-    (document) => String(document.reviewStatus) === "APPROVED",
-  ).length;
-
-  const failedDocuments = documents.filter(
-    (document) => String(document.status) === "FAILED",
-  ).length;
-
-  const demoDocuments = documents.filter((document) =>
-    document.fileName.startsWith("[DEMO]"),
-  ).length;
 
   const healthTone: Tone =
     profile.healthScore >= 75
@@ -1145,7 +1170,7 @@ const documentTone = getDocumentTrustTone(approvedDocuments, processedDocuments)
                 ["Country", business?.country || "Not set"],
                 ["Currency", currency],
                 ["Financial year", business?.financialYear || "Not set"],
-                ["Documents", `${documents.length} recent file(s)`],
+                ["Documents", `${totalDocuments} total file(s)`],
               ].map(([label, value]) => (
                 <div
                   key={label}

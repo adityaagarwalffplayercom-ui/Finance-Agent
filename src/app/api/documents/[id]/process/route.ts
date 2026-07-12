@@ -68,8 +68,22 @@ function getPreviousExtractedData(value: unknown): ExtractedDocumentData | null 
   return value as unknown as ExtractedDocumentData;
 }
 
-async function extractPdfText(_buffer: Buffer) {
-  return "";
+async function extractPdfText(buffer: Buffer) {
+  try {
+    const pdfParseModule = await import("pdf-parse");
+    const result = await pdfParseModule.default(buffer);
+
+    return result.text
+      .replace(/\u0000/g, " ")
+      .trim();
+  } catch (error) {
+    console.warn(
+      "Deterministic PDF text extraction failed; using inline AI fallback.",
+      getErrorMessage(error),
+    );
+
+    return "";
+  }
 }
 
 function getSafeTextForAi(text: string) {
