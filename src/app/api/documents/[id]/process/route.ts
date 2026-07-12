@@ -83,7 +83,10 @@ function getPreviousExtractedData(
 
 async function extractPdfText(buffer: Buffer) {
   try {
-    const pdfParseModule = await import("pdf-parse");
+    // Import the parser implementation directly. The package root executes a
+    // bundled debug sample in some Next.js runtimes and tries to open
+    // test/data/05-versions-space.pdf from the application working directory.
+    const pdfParseModule = await import("pdf-parse/lib/pdf-parse.js");
     const result = await pdfParseModule.default(buffer);
 
     return result.text.replace(/\u0000/g, " ").trim();
@@ -350,6 +353,8 @@ export async function POST(
 
     const buffer = Buffer.from(document.content);
     const previousExtracted = getPreviousExtractedData(document.extractedData);
+    const summaryOnly =
+      document.category === DocumentCategory.FINANCIAL_STATEMENT;
 
     let extracted: ExtractedDocumentData;
     let chunkLineItems: RawFinancialLineItem[] = [];
@@ -373,6 +378,7 @@ export async function POST(
           kind: "text",
           text: getSafeTextForAi(text),
         },
+        summaryOnly,
       });
     } else if (XLSX_MIME_TYPES.includes(document.mimeType)) {
       const workbook = XLSX.read(buffer, {
@@ -402,6 +408,7 @@ export async function POST(
           kind: "text",
           text: getSafeTextForAi(csv),
         },
+        summaryOnly,
       });
     } else if (PDF_MIME_TYPES.includes(document.mimeType)) {
       const pdfText = await extractPdfText(buffer);
@@ -420,6 +427,7 @@ export async function POST(
             kind: "text",
             text: getSafeTextForAi(pdfText),
           },
+          summaryOnly,
         });
 
         if (document.category === DocumentCategory.FINANCIAL_STATEMENT) {
@@ -456,6 +464,7 @@ export async function POST(
             mimeType: document.mimeType,
             base64Data: buffer.toString("base64"),
           },
+          summaryOnly,
         });
       }
     } else {
@@ -467,6 +476,7 @@ export async function POST(
           mimeType: document.mimeType,
           base64Data: buffer.toString("base64"),
         },
+        summaryOnly,
       });
     }
 

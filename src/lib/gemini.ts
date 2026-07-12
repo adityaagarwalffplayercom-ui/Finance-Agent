@@ -273,6 +273,15 @@ const EXTRACTION_SCHEMA = {
   required: ["summary"],
 };
 
+const SUMMARY_EXTRACTION_SCHEMA = {
+  ...EXTRACTION_SCHEMA,
+  properties: Object.fromEntries(
+    Object.entries(EXTRACTION_SCHEMA.properties).filter(
+      ([key]) => key !== "lineItems" && key !== "transactions",
+    ),
+  ),
+};
+
 const LINE_ITEM_ONLY_SCHEMA = {
   type: "object",
   properties: {
@@ -450,8 +459,30 @@ Extract every readable financial line item that has a label and amount.
 `,
 };
 
-function buildPrompt(category: string, fileName: string) {
+function buildPrompt(
+  category: string,
+  fileName: string,
+  options: { summaryOnly?: boolean } = {},
+) {
   const guidance = CATEGORY_GUIDANCE[category] ?? CATEGORY_GUIDANCE.OTHER;
+  const extractionModeGuidance = options.summaryOnly
+    ? `
+PRIMARY SUMMARY EXTRACTION MODE:
+- Return only document metadata and high-level financial totals.
+- Do not return lineItems or transactions in this response, even if earlier category guidance mentions them.
+- Detailed rows are extracted separately from deterministic PDF text and focused chunks.
+- Keep the JSON compact so it cannot be truncated.
+`
+    : `
+LINE ITEM EXTRACTION RULE:
+- Extract ALL readable financial rows, not only important rows.
+- Do not cap at 80 rows.
+- Do not stop after the first table.
+- Include totals, subtotals, section rows, statement rows, and note rows if they have a label and an amount.
+- If the document has multiple statements, include rows from profit/loss, balance sheet, cash flow, and notes where readable.
+- If a line item date is not available, use documentDate or periodEnd if appropriate.
+- If line item categories are not explicitly available, infer sensible categories like Revenue, Expense, Asset, Liability, Equity, Tax, Finance Cost, Cash Flow, or Other.
+`;
 
   return `
 You are a financial document extraction assistant for a small business finance platform.
@@ -507,14 +538,7 @@ All numeric fields in the JSON must be actual full currency values AFTER convers
 This includes:
 totalAmount, revenue, totalRevenue, sales, expenses, totalExpenses, profit, loss, netIncome, assets, liabilities, equity, cash, balances, lineItems.amount, transactions.amount.
 
-LINE ITEM EXTRACTION RULE:
-- Extract ALL readable financial rows, not only important rows.
-- Do not cap at 80 rows.
-- Do not stop after the first table.
-- Include totals, subtotals, section rows, statement rows, and note rows if they have a label and an amount.
-- If the document has multiple statements, include rows from profit/loss, balance sheet, cash flow, and notes where readable.
-- If a line item date is not available, use documentDate or periodEnd if appropriate.
-- If line item categories are not explicitly available, infer sensible categories like Revenue, Expense, Asset, Liability, Equity, Tax, Finance Cost, Cash Flow, or Other.
+${extractionModeGuidance}
 
 General rules:
 - Only report figures actually present in the document.
@@ -680,18 +704,129 @@ async function generateContentWithRetry(request: GenerateContentRequest) {
   );
 }
 
-function safeJsonParse<T>(text: string): T {
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
+function stripJsonCodeFence(text: string) {
+  return text
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
 
-    if (!match) {
-      throw new Error("Gemini returned invalid JSON.");
+function findBalancedJsonObject(text: string) {
+  const start = text.indexOf("{");
+
+  if (start < 0) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+
+      continue;
     }
 
-    return JSON.parse(match[0]) as T;
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return text.slice(start, index + 1);
+      }
+    }
   }
+
+  return null;
+}
+
+function repairTruncatedJsonObject(text: string) {
+  const start = text.indexOf("{");
+
+  if (start < 0) {
+    return null;
+  }
+
+  let candidate = text.slice(start).trim();
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (const char of candidate) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === "{") {
+      stack.push("}");
+    } else if (char === "[") {
+      stack.push("]");
+    } else if (char === "}" || char === "]") {
+      if (stack[stack.length - 1] === char) {
+        stack.pop();
+      }
+    }
+  }
+
+  if (inString) {
+    candidate += '"';
+  }
+
+  candidate = candidate.replace(/,\s*$/, "");
+  candidate += stack.reverse().join("");
+
+  return candidate;
+}
+
+function safeJsonParse<T>(text: string): T {
+  const cleaned = stripJsonCodeFence(text);
+  const candidates = [
+    cleaned,
+    findBalancedJsonObject(cleaned),
+    repairTruncatedJsonObject(cleaned),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      try {
+        return JSON.parse(candidate.replace(/,\s*([}\]])/g, "$1")) as T;
+      } catch {
+        // Try the next recovery strategy.
+      }
+    }
+  }
+
+  throw new Error("Gemini returned invalid JSON.");
 }
 
 function normalizeExtractedData(
@@ -704,8 +839,9 @@ export async function extractDocumentData(params: {
   fileName: string;
   category: string;
   content: ExtractionContent;
+  summaryOnly?: boolean;
 }): Promise<ExtractedDocumentData> {
-  const { fileName, category, content } = params;
+  const { fileName, category, content, summaryOnly = false } = params;
 
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not configured.");
@@ -728,14 +864,19 @@ export async function extractDocumentData(params: {
     contents: [
       {
         role: "user",
-        parts: [{ text: buildPrompt(category, fileName) }, contentPart],
+        parts: [
+          { text: buildPrompt(category, fileName, { summaryOnly }) },
+          contentPart,
+        ],
       },
     ],
     config: {
       responseMimeType: "application/json",
-      responseSchema: EXTRACTION_SCHEMA,
+      responseSchema: summaryOnly
+        ? SUMMARY_EXTRACTION_SCHEMA
+        : EXTRACTION_SCHEMA,
       temperature: 0.1,
-      maxOutputTokens: 8192,
+      maxOutputTokens: summaryOnly ? 4096 : 8192,
     },
   });
 
