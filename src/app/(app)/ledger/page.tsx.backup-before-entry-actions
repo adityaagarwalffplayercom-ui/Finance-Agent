@@ -1,0 +1,850 @@
+import Link from "next/link";
+import { headers } from "next/headers";
+import {
+  DocumentReviewStatus,
+  DocumentStatus,
+  LedgerDirection,
+  LedgerEntryStatus,
+  LedgerSourceType,
+  Prisma,
+} from "@prisma/client";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { LedgerSyncButton } from "./LedgerSyncButton";
+import styles from "./ledger.module.css";
+
+export const dynamic = "force-dynamic";
+
+type LedgerPageProps = {
+  searchParams: Promise<{
+    q?: string;
+    direction?: string;
+    status?: string;
+    source?: string;
+  }>;
+};
+
+type MetricTone =
+  | "default"
+  | "positive"
+  | "negative"
+  | "accent";
+
+function isDirection(
+  value: string | undefined,
+): value is LedgerDirection {
+  return Object.values(LedgerDirection).includes(
+    value as LedgerDirection,
+  );
+}
+
+function isStatus(
+  value: string | undefined,
+): value is LedgerEntryStatus {
+  return Object.values(LedgerEntryStatus).includes(
+    value as LedgerEntryStatus,
+  );
+}
+
+function isSource(
+  value: string | undefined,
+): value is LedgerSourceType {
+  return Object.values(LedgerSourceType).includes(
+    value as LedgerSourceType,
+  );
+}
+
+function removeTrailingZeros(value: string) {
+  return value
+    .replace(/\.00$/, "")
+    .replace(/(\.\d)0$/, "$1");
+}
+
+function formatCompactNumber(value: number) {
+  const absoluteValue = Math.abs(value);
+
+  if (absoluteValue >= 1_000_000_000) {
+    const decimals =
+      absoluteValue >= 10_000_000_000 ? 1 : 2;
+
+    return `${removeTrailingZeros(
+      (absoluteValue / 1_000_000_000).toFixed(decimals),
+    )}B`;
+  }
+
+  if (absoluteValue >= 1_000_000) {
+    const decimals =
+      absoluteValue >= 10_000_000 ? 1 : 2;
+
+    return `${removeTrailingZeros(
+      (absoluteValue / 1_000_000).toFixed(decimals),
+    )}M`;
+  }
+
+  if (absoluteValue >= 1_000) {
+    const decimals =
+      absoluteValue >= 100_000 ? 0 :
+      absoluteValue >= 10_000 ? 1 : 2;
+
+    return `${removeTrailingZeros(
+      (absoluteValue / 1_000).toFixed(decimals),
+    )}K`;
+  }
+
+  return absoluteValue.toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  });
+}
+
+function getCurrencySymbol(currency: string) {
+  const symbols: Record<string, string> = {
+    INR: "₹",
+    USD: "$",
+    EUR: "€",
+    GBP: "£",
+    JPY: "¥",
+    AED: "د.إ ",
+    CAD: "C$",
+    AUD: "A$",
+  };
+
+  return symbols[currency.toUpperCase()] ??
+    `${currency.toUpperCase()} `;
+}
+
+function formatMoney(
+  value: number,
+  currency: string,
+) {
+  const sign = value < 0 ? "−" : "";
+  const symbol = getCurrencySymbol(currency);
+  const compactValue = formatCompactNumber(value);
+
+  return `${sign}${symbol}${compactValue}`;
+}
+
+function formatDate(value: Date | null) {
+  if (!value) {
+    return "Date unavailable";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(value);
+}
+
+function humanize(value: string | null) {
+  if (!value) {
+    return "Uncategorised";
+  }
+
+  return value
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) =>
+      character.toUpperCase(),
+    );
+}
+
+function getMetricToneClass(tone: MetricTone) {
+  if (tone === "positive") {
+    return styles.metricPositive;
+  }
+
+  if (tone === "negative") {
+    return styles.metricNegative;
+  }
+
+  if (tone === "accent") {
+    return styles.metricAccent;
+  }
+
+  return styles.metricDefault;
+}
+
+function MetricTile({
+  label,
+  value,
+  caption,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  caption: string;
+  tone?: MetricTone;
+}) {
+  return (
+    <div
+      className={`${styles.metricTile} ${getMetricToneClass(
+        tone,
+      )}`}
+    >
+      <div className={styles.metricTop}>
+        <span className={styles.metricLabel}>{label}</span>
+        <span className={styles.metricDot} />
+      </div>
+
+      <strong className={styles.metricValue}>
+        {value}
+      </strong>
+
+      <span className={styles.metricCaption}>
+        {caption}
+      </span>
+    </div>
+  );
+}
+
+function getDirectionClass(
+  direction: LedgerDirection,
+) {
+  if (direction === LedgerDirection.CREDIT) {
+    return styles.creditBadge;
+  }
+
+  if (direction === LedgerDirection.DEBIT) {
+    return styles.debitBadge;
+  }
+
+  return styles.neutralBadge;
+}
+
+function getStatusClass(status: LedgerEntryStatus) {
+  if (status === LedgerEntryStatus.APPROVED) {
+    return styles.approvedBadge;
+  }
+
+  if (status === LedgerEntryStatus.REJECTED) {
+    return styles.rejectedBadge;
+  }
+
+  return styles.reviewBadge;
+}
+
+export default async function LedgerPage({
+  searchParams,
+}: LedgerPageProps) {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session?.user?.id) {
+    return null;
+  }
+
+  const params = await searchParams;
+
+  const query = params.q?.trim() ?? "";
+
+  const direction = isDirection(params.direction)
+    ? params.direction
+    : undefined;
+
+  const status = isStatus(params.status)
+    ? params.status
+    : undefined;
+
+  const source = isSource(params.source)
+    ? params.source
+    : undefined;
+
+  const filtersActive = Boolean(
+    query || direction || status || source,
+  );
+
+  const where: Prisma.LedgerEntryWhereInput = {
+    userId: session.user.id,
+
+    ...(direction ? { direction } : {}),
+    ...(status ? { status } : {}),
+    ...(source ? { sourceType: source } : {}),
+
+    ...(query
+      ? {
+          OR: [
+            {
+              description: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              counterparty: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              category: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              document: {
+                is: {
+                  fileName: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {}),
+  };
+
+  const [
+    entries,
+    totalEntries,
+    approvedDocuments,
+  ] = await Promise.all([
+    prisma.ledgerEntry.findMany({
+      where,
+      include: {
+        document: {
+          select: {
+            id: true,
+            fileName: true,
+            category: true,
+          },
+        },
+      },
+      orderBy: [
+        {
+          transactionDate: "desc",
+        },
+        {
+          createdAt: "desc",
+        },
+      ],
+      take: 500,
+    }),
+
+    prisma.ledgerEntry.count({
+      where: {
+        userId: session.user.id,
+      },
+    }),
+
+    prisma.document.count({
+      where: {
+        userId: session.user.id,
+        status: DocumentStatus.PROCESSED,
+        reviewStatus:
+          DocumentReviewStatus.APPROVED,
+      },
+    }),
+  ]);
+
+  const primaryCurrency =
+    entries.find((entry) => entry.currency)
+      ?.currency ?? "INR";
+
+  const currencyEntries = entries.filter(
+    (entry) =>
+      entry.currency === primaryCurrency,
+  );
+
+  const creditTotal = currencyEntries
+    .filter(
+      (entry) =>
+        entry.direction ===
+        LedgerDirection.CREDIT,
+    )
+    .reduce(
+      (total, entry) =>
+        total + Number(entry.amount),
+      0,
+    );
+
+  const debitTotal = currencyEntries
+    .filter(
+      (entry) =>
+        entry.direction ===
+        LedgerDirection.DEBIT,
+    )
+    .reduce(
+      (total, entry) =>
+        total + Number(entry.amount),
+      0,
+    );
+
+  const netFlow = creditTotal - debitTotal;
+
+  const reviewCount = entries.filter(
+    (entry) =>
+      entry.status ===
+      LedgerEntryStatus.NEEDS_REVIEW,
+  ).length;
+
+  return (
+    <div className={styles.page}>
+      <header className={styles.hero}>
+        <div className={styles.heroGlow} />
+
+        <div className={styles.heroContent}>
+          <div className={styles.heroTop}>
+            <div className={styles.heroCopy}>
+              <div className={styles.titleRow}>
+                <span className={styles.eyebrow}>
+                  Financial data layer
+                </span>
+
+                <span className={styles.livePill}>
+                  <span className={styles.liveDot} />
+                  Live ledger
+                </span>
+              </div>
+
+              <h1 className={styles.title}>
+                Transaction Ledger
+              </h1>
+
+              <p className={styles.subtitle}>
+                Review every financial entry generated
+                from your approved documents, with clear
+                debit-credit classification and direct
+                source evidence.
+              </p>
+            </div>
+
+            <LedgerSyncButton
+              approvedDocuments={approvedDocuments}
+            />
+          </div>
+
+          <div className={styles.metricGrid}>
+            <MetricTile
+              label="Ledger entries"
+              value={totalEntries.toLocaleString("en-IN")}
+              caption={`Across ${approvedDocuments} approved document${
+                approvedDocuments === 1 ? "" : "s"
+              }`}
+              tone="accent"
+            />
+
+            <MetricTile
+              label="Credits"
+              value={formatMoney(
+                creditTotal,
+                primaryCurrency,
+              )}
+              caption="Money flowing into the business"
+              tone="positive"
+            />
+
+            <MetricTile
+              label="Debits"
+              value={formatMoney(
+                debitTotal,
+                primaryCurrency,
+              )}
+              caption="Money flowing out of the business"
+              tone="negative"
+            />
+
+            <MetricTile
+              label="Net movement"
+              value={formatMoney(
+                netFlow,
+                primaryCurrency,
+              )}
+              caption={
+                reviewCount > 0
+                  ? `${reviewCount} entries require review`
+                  : "No pending review in this view"
+              }
+              tone={
+                netFlow >= 0
+                  ? "positive"
+                  : "negative"
+              }
+            />
+          </div>
+        </div>
+      </header>
+
+      <div className={styles.ledgerSurface}>
+        <div className={styles.surfaceHeader}>
+          <div>
+            <span className={styles.surfaceEyebrow}>
+              Entry explorer
+            </span>
+
+            <h2 className={styles.surfaceTitle}>
+              Financial activity
+            </h2>
+
+            <p className={styles.surfaceDescription}>
+              Search descriptions, vendors, categories,
+              and source files.
+            </p>
+          </div>
+
+          <div className={styles.surfaceMeta}>
+            <span>
+              Showing <strong>{entries.length}</strong>{" "}
+              of <strong>{totalEntries}</strong>
+            </span>
+
+            {filtersActive ? (
+              <Link
+                href="/ledger"
+                className={styles.clearButton}
+              >
+                Clear filters
+              </Link>
+            ) : null}
+          </div>
+        </div>
+
+        <form
+          action="/ledger"
+          method="get"
+          className={styles.filters}
+        >
+          <label className={styles.searchField}>
+            <span className={styles.fieldLabel}>
+              Search ledger
+            </span>
+
+            <div className={styles.searchInputWrap}>
+              <span className={styles.searchIcon}>
+                ⌕
+              </span>
+
+              <input
+                name="q"
+                defaultValue={query}
+                placeholder="Search vendor, description, category or file"
+                className={styles.input}
+              />
+            </div>
+          </label>
+
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>
+              Direction
+            </span>
+
+            <select
+              name="direction"
+              defaultValue={direction ?? ""}
+              className={styles.select}
+            >
+              <option value="">All directions</option>
+
+              {Object.values(
+                LedgerDirection,
+              ).map((value) => (
+                <option
+                  key={value}
+                  value={value}
+                >
+                  {humanize(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>
+              Status
+            </span>
+
+            <select
+              name="status"
+              defaultValue={status ?? ""}
+              className={styles.select}
+            >
+              <option value="">All statuses</option>
+
+              {Object.values(
+                LedgerEntryStatus,
+              ).map((value) => (
+                <option
+                  key={value}
+                  value={value}
+                >
+                  {humanize(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>
+              Source
+            </span>
+
+            <select
+              name="source"
+              defaultValue={source ?? ""}
+              className={styles.select}
+            >
+              <option value="">All sources</option>
+
+              {Object.values(
+                LedgerSourceType,
+              ).map((value) => (
+                <option
+                  key={value}
+                  value={value}
+                >
+                  {humanize(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="submit"
+            className={styles.filterButton}
+          >
+            Apply filters
+          </button>
+        </form>
+
+        {entries.length === 0 ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyVisual}>
+              <div className={styles.emptyRing}>
+                <span>₹</span>
+              </div>
+
+              <div className={styles.emptyLineOne} />
+              <div className={styles.emptyLineTwo} />
+              <div className={styles.emptyLineThree} />
+            </div>
+
+            <div className={styles.emptyCopy}>
+              <span className={styles.emptyEyebrow}>
+                {filtersActive
+                  ? "No matching entries"
+                  : "Your ledger is ready to be built"}
+              </span>
+
+              <h3>
+                {filtersActive
+                  ? "Nothing matches these filters"
+                  : approvedDocuments > 0
+                    ? `${approvedDocuments} approved document${
+                        approvedDocuments === 1
+                          ? " is"
+                          : "s are"
+                      } waiting to be synchronized`
+                    : "Approve your first financial document"}
+              </h3>
+
+              <p>
+                {filtersActive
+                  ? "Try clearing the filters or searching with a broader term."
+                  : approvedDocuments > 0
+                    ? "Use the sync button above to convert extracted document data into structured ledger entries."
+                    : "Process and approve a bank statement, invoice, bill, or financial statement to start creating trusted ledger entries."}
+              </p>
+
+              <div className={styles.emptyActions}>
+                {filtersActive ? (
+                  <Link
+                    href="/ledger"
+                    className={styles.primaryLink}
+                  >
+                    Clear all filters
+                  </Link>
+                ) : (
+                  <Link
+                    href="/documents"
+                    className={styles.primaryLink}
+                  >
+                    Open documents
+                  </Link>
+                )}
+
+                <Link
+                  href="/document-completeness"
+                  className={styles.secondaryLink}
+                >
+                  Check document coverage
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Entry</th>
+                  <th>Category</th>
+                  <th>Direction</th>
+                  <th>Amount</th>
+                  <th>Confidence</th>
+                  <th>Status</th>
+                  <th>Source evidence</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {entries.map((entry) => {
+                  const confidence =
+                    entry.confidence === null
+                      ? null
+                      : Math.round(
+                          entry.confidence * 100,
+                        );
+
+                  return (
+                    <tr key={entry.id}>
+                      <td>
+                        <span className={styles.dateText}>
+                          {formatDate(
+                            entry.transactionDate,
+                          )}
+                        </span>
+                      </td>
+
+                      <td>
+                        <div className={styles.entryCell}>
+                          <strong>
+                            {entry.description}
+                          </strong>
+
+                          <span>
+                            {entry.counterparty ??
+                              "No counterparty detected"}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span
+                          className={styles.categoryPill}
+                        >
+                          {humanize(entry.category)}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span
+                          className={`${styles.badge} ${getDirectionClass(
+                            entry.direction,
+                          )}`}
+                        >
+                          <span
+                            className={styles.badgeDot}
+                          />
+
+                          {humanize(entry.direction)}
+                        </span>
+                      </td>
+
+                      <td>
+                        <strong
+                          className={
+                            entry.direction ===
+                            LedgerDirection.CREDIT
+                              ? styles.creditAmount
+                              : entry.direction ===
+                                  LedgerDirection.DEBIT
+                                ? styles.debitAmount
+                                : styles.neutralAmount
+                          }
+                        >
+                          {entry.direction ===
+                          LedgerDirection.CREDIT
+                            ? "+"
+                            : entry.direction ===
+                                LedgerDirection.DEBIT
+                              ? "−"
+                              : ""}
+
+                          {formatMoney(
+                            Number(entry.amount),
+                            entry.currency,
+                          )}
+                        </strong>
+                      </td>
+
+                      <td>
+                        {confidence === null ? (
+                          <span
+                            className={styles.mutedText}
+                          >
+                            Not available
+                          </span>
+                        ) : (
+                          <div
+                            className={
+                              styles.confidenceCell
+                            }
+                          >
+                            <div
+                              className={
+                                styles.confidenceTrack
+                              }
+                            >
+                              <span
+                                style={{
+                                  width: `${confidence}%`,
+                                }}
+                              />
+                            </div>
+
+                            <strong>
+                              {confidence}%
+                            </strong>
+                          </div>
+                        )}
+                      </td>
+
+                      <td>
+                        <span
+                          className={`${styles.badge} ${getStatusClass(
+                            entry.status,
+                          )}`}
+                        >
+                          {humanize(entry.status)}
+                        </span>
+                      </td>
+
+                      <td>
+                        <div
+                          className={styles.sourceCell}
+                        >
+                          <span>
+                            {humanize(
+                              entry.sourceType,
+                            )}
+                          </span>
+
+                          <Link
+                            href={`/documents/${entry.document.id}`}
+                            title={
+                              entry.document.fileName
+                            }
+                          >
+                            {
+                              entry.document
+                                .fileName
+                            }
+                            <small>↗</small>
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

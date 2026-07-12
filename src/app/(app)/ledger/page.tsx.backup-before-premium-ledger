@@ -1,0 +1,1011 @@
+import Link from "next/link";
+import { headers } from "next/headers";
+import {
+  DocumentReviewStatus,
+  DocumentStatus,
+  LedgerDirection,
+  LedgerEntryStatus,
+  LedgerSourceType,
+  Prisma,
+} from "@prisma/client";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { LedgerSyncButton } from "./LedgerSyncButton";
+
+export const dynamic = "force-dynamic";
+
+type LedgerPageProps = {
+  searchParams: Promise<{
+    q?: string;
+    direction?: string;
+    status?: string;
+    source?: string;
+  }>;
+};
+
+function isDirection(
+  value: string | undefined,
+): value is LedgerDirection {
+  return Object.values(LedgerDirection).includes(
+    value as LedgerDirection,
+  );
+}
+
+function isStatus(
+  value: string | undefined,
+): value is LedgerEntryStatus {
+  return Object.values(LedgerEntryStatus).includes(
+    value as LedgerEntryStatus,
+  );
+}
+
+function isSource(
+  value: string | undefined,
+): value is LedgerSourceType {
+  return Object.values(LedgerSourceType).includes(
+    value as LedgerSourceType,
+  );
+}
+
+function formatMoney(
+  value: number,
+  currency: string,
+) {
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency} ${value.toLocaleString("en-IN", {
+      maximumFractionDigits: 2,
+    })}`;
+  }
+}
+
+function formatDate(value: Date | null) {
+  if (!value) {
+    return "No date";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(value);
+}
+
+function humanize(value: string | null) {
+  if (!value) {
+    return "Uncategorised";
+  }
+
+  return value
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase(),
+    );
+}
+
+function directionColor(
+  direction: LedgerDirection,
+) {
+  if (direction === LedgerDirection.CREDIT) {
+    return "var(--color-sage)";
+  }
+
+  if (direction === LedgerDirection.DEBIT) {
+    return "var(--color-danger)";
+  }
+
+  return "rgba(185, 204, 226, 0.94)";
+}
+
+function statusStyles(
+  status: LedgerEntryStatus,
+) {
+  if (status === LedgerEntryStatus.APPROVED) {
+    return {
+      color: "var(--color-sage)",
+      border: "1px solid rgba(81, 190, 135, 0.30)",
+      background: "rgba(81, 190, 135, 0.09)",
+    };
+  }
+
+  if (status === LedgerEntryStatus.REJECTED) {
+    return {
+      color: "var(--color-danger)",
+      border: "1px solid rgba(220, 105, 119, 0.30)",
+      background: "rgba(220, 105, 119, 0.09)",
+    };
+  }
+
+  return {
+    color: "rgba(172, 203, 238, 0.96)",
+    border: "1px solid rgba(112, 145, 184, 0.34)",
+    background: "rgba(70, 91, 120, 0.15)",
+  };
+}
+
+export default async function LedgerPage({
+  searchParams,
+}: LedgerPageProps) {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session?.user?.id) {
+    return null;
+  }
+
+  const params = await searchParams;
+
+  const query = params.q?.trim() ?? "";
+
+  const direction = isDirection(
+    params.direction,
+  )
+    ? params.direction
+    : undefined;
+
+  const status = isStatus(params.status)
+    ? params.status
+    : undefined;
+
+  const source = isSource(params.source)
+    ? params.source
+    : undefined;
+
+  const where: Prisma.LedgerEntryWhereInput = {
+    userId: session.user.id,
+
+    ...(direction
+      ? {
+          direction,
+        }
+      : {}),
+
+    ...(status
+      ? {
+          status,
+        }
+      : {}),
+
+    ...(source
+      ? {
+          sourceType: source,
+        }
+      : {}),
+
+    ...(query
+      ? {
+          OR: [
+            {
+              description: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              counterparty: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              category: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              document: {
+                is: {
+                  fileName: {
+                    contains: query,
+                    mode: "insensitive",
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {}),
+  };
+
+  const [
+    entries,
+    totalLedgerEntries,
+    approvedDocuments,
+  ] = await Promise.all([
+    prisma.ledgerEntry.findMany({
+      where,
+      include: {
+        document: {
+          select: {
+            id: true,
+            fileName: true,
+            category: true,
+          },
+        },
+      },
+      orderBy: [
+        {
+          transactionDate: "desc",
+        },
+        {
+          createdAt: "desc",
+        },
+      ],
+      take: 500,
+    }),
+
+    prisma.ledgerEntry.count({
+      where: {
+        userId: session.user.id,
+      },
+    }),
+
+    prisma.document.count({
+      where: {
+        userId: session.user.id,
+        status: DocumentStatus.PROCESSED,
+        reviewStatus:
+          DocumentReviewStatus.APPROVED,
+      },
+    }),
+  ]);
+
+  const creditTotal = entries
+    .filter(
+      (entry) =>
+        entry.direction ===
+        LedgerDirection.CREDIT,
+    )
+    .reduce(
+      (total, entry) =>
+        total + Number(entry.amount),
+      0,
+    );
+
+  const debitTotal = entries
+    .filter(
+      (entry) =>
+        entry.direction ===
+        LedgerDirection.DEBIT,
+    )
+    .reduce(
+      (total, entry) =>
+        total + Number(entry.amount),
+      0,
+    );
+
+  const neutralCount = entries.filter(
+    (entry) =>
+      entry.direction ===
+      LedgerDirection.NEUTRAL,
+  ).length;
+
+  const primaryCurrency =
+    entries.find((entry) => entry.currency)
+      ?.currency ?? "INR";
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 18,
+        minWidth: 0,
+      }}
+    >
+      <header
+        style={{
+          padding: 24,
+          display: "grid",
+          gap: 20,
+          borderRadius: 30,
+          border:
+            "1px solid rgba(112, 145, 184, 0.20)",
+          background:
+            "radial-gradient(circle at top right, rgba(70, 91, 120, 0.24), transparent 36%), linear-gradient(135deg, rgba(255,255,255,0.058), rgba(255,255,255,0.024))",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 18,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <p
+              className="eyebrow"
+              style={{ margin: 0 }}
+            >
+              Transaction ledger
+            </p>
+
+            <h1
+              style={{
+                margin: 0,
+                color:
+                  "var(--color-text-primary)",
+                fontSize:
+                  "clamp(36px, 5vw, 62px)",
+                lineHeight: 0.98,
+                letterSpacing: "-0.065em",
+              }}
+            >
+              Trusted finance entries
+            </h1>
+
+            <p
+              style={{
+                margin: 0,
+                maxWidth: 760,
+                color:
+                  "var(--color-text-secondary)",
+                lineHeight: 1.7,
+              }}
+            >
+              Approved financial documents are
+              converted into searchable entries.
+              Each entry remains connected to its
+              original source document.
+            </p>
+          </div>
+
+          <LedgerSyncButton />
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 12,
+          }}
+        >
+          <article
+            className="section-card"
+            style={{ padding: 17 }}
+          >
+            <p
+              className="eyebrow"
+              style={{ margin: 0 }}
+            >
+              Ledger entries
+            </p>
+
+            <strong
+              style={{
+                display: "block",
+                marginTop: 8,
+                fontSize: 30,
+                color:
+                  "var(--color-text-primary)",
+              }}
+            >
+              {totalLedgerEntries}
+            </strong>
+
+            <span
+              style={{
+                color:
+                  "var(--color-text-secondary)",
+                fontSize: 12,
+              }}
+            >
+              From {approvedDocuments} approved
+              document(s)
+            </span>
+          </article>
+
+          <article
+            className="section-card"
+            style={{ padding: 17 }}
+          >
+            <p
+              className="eyebrow"
+              style={{ margin: 0 }}
+            >
+              Credits
+            </p>
+
+            <strong
+              style={{
+                display: "block",
+                marginTop: 8,
+                color: "var(--color-sage)",
+                fontSize: 24,
+                overflowWrap: "anywhere",
+              }}
+            >
+              {formatMoney(
+                creditTotal,
+                primaryCurrency,
+              )}
+            </strong>
+
+            <span
+              style={{
+                color:
+                  "var(--color-text-secondary)",
+                fontSize: 12,
+              }}
+            >
+              Money in for selected filters
+            </span>
+          </article>
+
+          <article
+            className="section-card"
+            style={{ padding: 17 }}
+          >
+            <p
+              className="eyebrow"
+              style={{ margin: 0 }}
+            >
+              Debits
+            </p>
+
+            <strong
+              style={{
+                display: "block",
+                marginTop: 8,
+                color: "var(--color-danger)",
+                fontSize: 24,
+                overflowWrap: "anywhere",
+              }}
+            >
+              {formatMoney(
+                debitTotal,
+                primaryCurrency,
+              )}
+            </strong>
+
+            <span
+              style={{
+                color:
+                  "var(--color-text-secondary)",
+                fontSize: 12,
+              }}
+            >
+              Money out for selected filters
+            </span>
+          </article>
+
+          <article
+            className="section-card"
+            style={{ padding: 17 }}
+          >
+            <p
+              className="eyebrow"
+              style={{ margin: 0 }}
+            >
+              Neutral rows
+            </p>
+
+            <strong
+              style={{
+                display: "block",
+                marginTop: 8,
+                color:
+                  "rgba(172, 203, 238, 0.96)",
+                fontSize: 30,
+              }}
+            >
+              {neutralCount}
+            </strong>
+
+            <span
+              style={{
+                color:
+                  "var(--color-text-secondary)",
+                fontSize: 12,
+              }}
+            >
+              Statement reference lines
+            </span>
+          </article>
+        </div>
+      </header>
+
+      <section
+        className="section-card"
+        style={{
+          padding: 18,
+          display: "grid",
+          gap: 15,
+          minWidth: 0,
+        }}
+      >
+        <form
+          action="/ledger"
+          method="get"
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "minmax(230px, 1fr) repeat(3, minmax(145px, 0.42fr)) auto",
+            gap: 10,
+            alignItems: "end",
+          }}
+        >
+          <label
+            style={{
+              display: "grid",
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                color:
+                  "var(--color-text-secondary)",
+                fontSize: 11,
+                fontWeight: 900,
+              }}
+            >
+              Search
+            </span>
+
+            <input
+              name="q"
+              defaultValue={query}
+              placeholder="Vendor, category, description or file"
+              style={{
+                minHeight: 42,
+                padding: "10px 12px",
+              }}
+            />
+          </label>
+
+          <label
+            style={{
+              display: "grid",
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                color:
+                  "var(--color-text-secondary)",
+                fontSize: 11,
+                fontWeight: 900,
+              }}
+            >
+              Direction
+            </span>
+
+            <select
+              name="direction"
+              defaultValue={direction ?? ""}
+              style={{
+                minHeight: 42,
+                padding: "10px 12px",
+              }}
+            >
+              <option value="">All</option>
+
+              {Object.values(
+                LedgerDirection,
+              ).map((value) => (
+                <option
+                  key={value}
+                  value={value}
+                >
+                  {humanize(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label
+            style={{
+              display: "grid",
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                color:
+                  "var(--color-text-secondary)",
+                fontSize: 11,
+                fontWeight: 900,
+              }}
+            >
+              Status
+            </span>
+
+            <select
+              name="status"
+              defaultValue={status ?? ""}
+              style={{
+                minHeight: 42,
+                padding: "10px 12px",
+              }}
+            >
+              <option value="">All</option>
+
+              {Object.values(
+                LedgerEntryStatus,
+              ).map((value) => (
+                <option
+                  key={value}
+                  value={value}
+                >
+                  {humanize(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label
+            style={{
+              display: "grid",
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                color:
+                  "var(--color-text-secondary)",
+                fontSize: 11,
+                fontWeight: 900,
+              }}
+            >
+              Source
+            </span>
+
+            <select
+              name="source"
+              defaultValue={source ?? ""}
+              style={{
+                minHeight: 42,
+                padding: "10px 12px",
+              }}
+            >
+              <option value="">All</option>
+
+              {Object.values(
+                LedgerSourceType,
+              ).map((value) => (
+                <option
+                  key={value}
+                  value={value}
+                >
+                  {humanize(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="submit"
+            className="btn-ghost"
+            style={{
+              minHeight: 42,
+              justifyContent: "center",
+            }}
+          >
+            Apply
+          </button>
+        </form>
+
+        <div
+          style={{
+            color:
+              "var(--color-text-secondary)",
+            fontSize: 12,
+          }}
+        >
+          Showing {entries.length} entry(s).
+          Maximum 500 latest results.
+        </div>
+
+        <div
+          style={{
+            overflowX: "auto",
+            minWidth: 0,
+          }}
+        >
+          <table
+            style={{
+              width: "100%",
+              minWidth: 1050,
+              borderCollapse: "separate",
+              borderSpacing: "0 8px",
+            }}
+          >
+            <thead>
+              <tr>
+                {[
+                  "Date",
+                  "Description",
+                  "Counterparty",
+                  "Category",
+                  "Direction",
+                  "Amount",
+                  "Confidence",
+                  "Status",
+                  "Source",
+                ].map((label) => (
+                  <th
+                    key={label}
+                    style={{
+                      padding: "0 12px 6px",
+                      textAlign: "left",
+                      color:
+                        "var(--color-text-secondary)",
+                      fontSize: 10,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {entries.map((entry) => {
+                const color =
+                  directionColor(
+                    entry.direction,
+                  );
+
+                const prefix =
+                  entry.direction ===
+                  LedgerDirection.CREDIT
+                    ? "+"
+                    : entry.direction ===
+                        LedgerDirection.DEBIT
+                      ? "-"
+                      : "";
+
+                return (
+                  <tr key={entry.id}>
+                    <td
+                      style={{
+                        padding: 12,
+                        borderRadius:
+                          "14px 0 0 14px",
+                        background:
+                          "rgba(255,255,255,0.035)",
+                        color:
+                          "var(--color-text-secondary)",
+                        fontSize: 12,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {formatDate(
+                        entry.transactionDate,
+                      )}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 12,
+                        background:
+                          "rgba(255,255,255,0.035)",
+                        color:
+                          "var(--color-text-primary)",
+                        fontSize: 13,
+                        fontWeight: 850,
+                        maxWidth: 280,
+                      }}
+                    >
+                      {entry.description}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 12,
+                        background:
+                          "rgba(255,255,255,0.035)",
+                        color:
+                          "var(--color-text-secondary)",
+                        fontSize: 12,
+                      }}
+                    >
+                      {entry.counterparty ?? "—"}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 12,
+                        background:
+                          "rgba(255,255,255,0.035)",
+                        color:
+                          "var(--color-text-secondary)",
+                        fontSize: 12,
+                      }}
+                    >
+                      {humanize(
+                        entry.category,
+                      )}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 12,
+                        background:
+                          "rgba(255,255,255,0.035)",
+                        color,
+                        fontSize: 11,
+                        fontWeight: 900,
+                      }}
+                    >
+                      {humanize(
+                        entry.direction,
+                      )}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 12,
+                        background:
+                          "rgba(255,255,255,0.035)",
+                        color,
+                        fontSize: 13,
+                        fontWeight: 950,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {prefix}
+                      {formatMoney(
+                        Number(entry.amount),
+                        entry.currency,
+                      )}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 12,
+                        background:
+                          "rgba(255,255,255,0.035)",
+                        color:
+                          "var(--color-text-secondary)",
+                        fontSize: 12,
+                      }}
+                    >
+                      {entry.confidence === null
+                        ? "—"
+                        : `${Math.round(
+                            entry.confidence *
+                              100,
+                          )}%`}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 12,
+                        background:
+                          "rgba(255,255,255,0.035)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          ...statusStyles(
+                            entry.status,
+                          ),
+                          display:
+                            "inline-flex",
+                          borderRadius: 999,
+                          padding: "6px 9px",
+                          fontSize: 10,
+                          fontWeight: 950,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {humanize(
+                          entry.status,
+                        )}
+                      </span>
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 12,
+                        borderRadius:
+                          "0 14px 14px 0",
+                        background:
+                          "rgba(255,255,255,0.035)",
+                        fontSize: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: 5,
+                        }}
+                      >
+                        <span
+                          style={{
+                            color:
+                              "rgba(172, 203, 238, 0.96)",
+                            fontSize: 10,
+                            fontWeight: 900,
+                          }}
+                        >
+                          {humanize(
+                            entry.sourceType,
+                          )}
+                        </span>
+
+                        <Link
+                          href={`/documents/${entry.document.id}`}
+                          title={
+                            entry.document
+                              .fileName
+                          }
+                          style={{
+                            maxWidth: 190,
+                            overflow: "hidden",
+                            textOverflow:
+                              "ellipsis",
+                            whiteSpace:
+                              "nowrap",
+                            color:
+                              "var(--color-text-primary)",
+                            fontWeight: 850,
+                            textDecoration:
+                              "none",
+                          }}
+                        >
+                          {
+                            entry.document
+                              .fileName
+                          }
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {entries.length === 0 ? (
+                <tr>
+                  <td colSpan={9}>
+                    <div
+                      style={{
+                        padding: 28,
+                        borderRadius: 18,
+                        border:
+                          "1px dashed rgba(112, 145, 184, 0.32)",
+                        background:
+                          "rgba(70, 91, 120, 0.08)",
+                        color:
+                          "var(--color-text-secondary)",
+                        textAlign: "center",
+                        lineHeight: 1.7,
+                      }}
+                    >
+                      No ledger entries found.
+                      Approve a processed
+                      document and click{" "}
+                      <strong>
+                        Sync approved documents
+                      </strong>
+                      .
+                    </div>
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}

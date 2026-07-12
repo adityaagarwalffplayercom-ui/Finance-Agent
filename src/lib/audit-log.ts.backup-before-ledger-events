@@ -11,17 +11,15 @@ export type AuditEventType =
   | "DOCUMENT_REVIEW_RESET"
   | "DOCUMENT_DELETED"
   | "UPLOAD_BLOCKED"
-  | "PROCESSING_BLOCKED"
-  | "LEDGER_ENTRY_UPDATED"
-  | "MANUAL_LEDGER_ENTRY_CREATED"
-  | "MANUAL_LEDGER_ENTRY_DELETED";
+  | "PROCESSING_BLOCKED";
+
 type CreateAuditEventInput = {
   userId: string;
   eventType: AuditEventType;
   title: string;
   description?: string;
-  documentId?: string | null;
-  fileName?: string | null;
+  documentId?: string;
+  fileName?: string;
   metadata?: Prisma.InputJsonValue;
 };
 

@@ -1,7 +1,14 @@
+import {
+  LedgerDirection,
+  LedgerEntryStatus,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getFinancialProfile } from "@/lib/financial-profile";
 
-type CashFlowTone = "good" | "warning" | "danger" | "neutral";
+type CashFlowTone =
+  | "good"
+  | "warning"
+  | "danger"
+  | "neutral";
 
 export type CashFlowMetric = {
   label: string;
@@ -12,7 +19,10 @@ export type CashFlowMetric = {
 
 export type CashFlowSignal = {
   id: string;
-  severity: "HIGH" | "MEDIUM" | "LOW";
+  severity:
+    | "HIGH"
+    | "MEDIUM"
+    | "LOW";
   title: string;
   detail: string;
   amount: number | null;
@@ -20,7 +30,10 @@ export type CashFlowSignal = {
 };
 
 export type CashFlowAction = {
-  priority: "HIGH" | "MEDIUM" | "LOW";
+  priority:
+    | "HIGH"
+    | "MEDIUM"
+    | "LOW";
   title: string;
   detail: string;
 };
@@ -30,7 +43,10 @@ export type CashFlowLineItem = {
   label: string;
   amount: number;
   absoluteAmount: number;
-  type: "INFLOW" | "OUTFLOW" | "UNKNOWN";
+  type:
+    | "INFLOW"
+    | "OUTFLOW"
+    | "UNKNOWN";
   sourceFileName: string;
   sourceCategory: string;
 };
@@ -39,27 +55,48 @@ export type CashFlowReport = {
   generatedAt: string;
   currency: string;
   summary: string;
-  status: "HEALTHY" | "WATCH" | "CRITICAL" | "INSUFFICIENT_DATA";
+  status:
+    | "HEALTHY"
+    | "WATCH"
+    | "CRITICAL"
+    | "INSUFFICIENT_DATA";
   score: number;
+
   metrics: {
     cash: number | null;
     revenue: number | null;
     expenses: number | null;
     profit: number | null;
-    estimatedMonthlyBurn: number | null;
-    estimatedMonthlyInflow: number | null;
-    estimatedMonthlyOutflow: number | null;
-    netMonthlyCashFlow: number | null;
+    estimatedMonthlyBurn:
+      | number
+      | null;
+    estimatedMonthlyInflow:
+      | number
+      | null;
+    estimatedMonthlyOutflow:
+      | number
+      | null;
+    netMonthlyCashFlow:
+      | number
+      | null;
     runwayMonths: number | null;
-    threeMonthCashNeed: number | null;
-    sixMonthCashNeed: number | null;
-    cashGapForThreeMonths: number | null;
+    threeMonthCashNeed:
+      | number
+      | null;
+    sixMonthCashNeed:
+      | number
+      | null;
+    cashGapForThreeMonths:
+      | number
+      | null;
   };
+
   cards: CashFlowMetric[];
   signals: CashFlowSignal[];
   actions: CashFlowAction[];
   topInflows: CashFlowLineItem[];
   topOutflows: CashFlowLineItem[];
+
   documentCoverage: {
     id: string;
     fileName: string;
@@ -69,332 +106,181 @@ export type CashFlowReport = {
   }[];
 };
 
-type JsonRecord = Record<string, unknown>;
+type MonthlyMovement = {
+  key: string;
+  inflow: number;
+  outflow: number;
+  net: number;
+};
 
-function isRecord(value: unknown): value is JsonRecord {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+function clamp(
+  value: number,
+  minimum: number,
+  maximum: number,
+) {
+  return Math.min(
+    maximum,
+    Math.max(minimum, value),
+  );
 }
 
-function toNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const clean = value
-    .replace(/,/g, "")
-    .replace(/[₹$€£]/g, "")
-    .trim();
-
-  const isParenthesesNegative = /^\(.*\)$/.test(clean);
-  const match = clean.match(/-?\d+(\.\d+)?/);
-
-  if (!match) {
-    return null;
-  }
-
-  const parsed = Number(match[0]);
-
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-
-  const lower = clean.toLowerCase();
-  let multiplier = 1;
-
-  if (lower.includes("crore") || lower.includes(" cr")) {
-    multiplier = 10_000_000;
-  } else if (lower.includes("lakh") || lower.includes(" lac")) {
-    multiplier = 100_000;
-  } else if (lower.includes("b")) {
-    multiplier = 1_000_000_000;
-  } else if (lower.includes("m")) {
-    multiplier = 1_000_000;
-  } else if (lower.includes("k")) {
-    multiplier = 1_000;
-  }
-
-  const signed = isParenthesesNegative ? -Math.abs(parsed) : parsed;
-
-  return signed * multiplier;
-}
-
-function parseMetricValue(value: string) {
-  if (!value || value === "—" || value === "Not available") {
-    return null;
-  }
-
-  return toNumber(value);
+function removeTrailingZeros(
+  value: string,
+) {
+  return value
+    .replace(/\.00$/, "")
+    .replace(/(\.\d)0$/, "$1");
 }
 
 function compactNumber(value: number) {
   const absolute = Math.abs(value);
 
   if (absolute >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(2)}B`;
+    const decimals =
+      absolute >= 10_000_000_000
+        ? 1
+        : 2;
+
+    return `${removeTrailingZeros(
+      (
+        absolute /
+        1_000_000_000
+      ).toFixed(decimals),
+    )}B`;
   }
 
   if (absolute >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(2)}M`;
+    const decimals =
+      absolute >= 10_000_000
+        ? 1
+        : 2;
+
+    return `${removeTrailingZeros(
+      (
+        absolute /
+        1_000_000
+      ).toFixed(decimals),
+    )}M`;
   }
 
   if (absolute >= 1_000) {
-    return `${(value / 1_000).toFixed(2)}K`;
+    const decimals =
+      absolute >= 100_000
+        ? 0
+        : absolute >= 10_000
+          ? 1
+          : 2;
+
+    return `${removeTrailingZeros(
+      (
+        absolute / 1_000
+      ).toFixed(decimals),
+    )}K`;
   }
 
-  return `${Math.round(value)}`;
+  return absolute.toLocaleString(
+    "en-IN",
+    {
+      maximumFractionDigits: 2,
+    },
+  );
 }
 
-function currencySymbol(currency: string) {
-  const clean = currency.trim().toUpperCase();
+function currencySymbol(
+  currency: string,
+) {
+  const symbols: Record<string, string> = {
+    INR: "₹",
+    USD: "$",
+    EUR: "€",
+    GBP: "£",
+    JPY: "¥",
+    AED: "د.إ ",
+    CAD: "C$",
+    AUD: "A$",
+  };
 
-  if (clean === "INR") return "Rs. ";
-  if (clean === "USD" || currency.trim() === "$") return "$";
-  if (clean === "GBP") return "GBP ";
-  if (clean === "EUR") return "EUR ";
-
-  return currency ? `${currency} ` : "";
+  return (
+    symbols[currency.toUpperCase()] ??
+    `${currency.toUpperCase()} `
+  );
 }
 
-function formatMoney(value: number | null, currency: string) {
-  if (value === null || !Number.isFinite(value)) {
+function formatMoney(
+  value: number | null,
+  currency: string,
+) {
+  if (
+    value === null ||
+    !Number.isFinite(value)
+  ) {
     return "Not available";
   }
 
   const sign = value < 0 ? "-" : "";
 
-  return `${sign}${currencySymbol(currency)}${compactNumber(Math.abs(value))}`;
+  return `${sign}${currencySymbol(
+    currency,
+  )}${compactNumber(value)}`;
 }
 
-function formatMonths(value: number | null) {
-  if (value === null || !Number.isFinite(value)) {
-    return "Not available";
-  }
-
-  return `${value.toFixed(1)} months`;
+function getMonthKey(date: Date) {
+  return `${date.getUTCFullYear()}-${String(
+    date.getUTCMonth() + 1,
+  ).padStart(2, "0")}`;
 }
 
-function readString(record: JsonRecord, keys: string[]) {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-
-  return "";
-}
-
-function readAmount(record: JsonRecord) {
-  const keys = [
-    "amount",
-    "value",
-    "total",
-    "balance",
-    "debit",
-    "credit",
-    "inflow",
-    "outflow",
-    "revenue",
-    "income",
-    "expense",
-    "expenses",
-    "cash",
-    "cost",
-  ];
-
-  for (const key of keys) {
-    const number = toNumber(record[key]);
-
-    if (number !== null) {
-      return number;
-    }
-  }
-
-  return null;
-}
-
-function inferCashItemType(
-  record: JsonRecord,
-  label: string,
-  amount: number,
-): CashFlowLineItem["type"] {
-  const text = [
-    label,
-    record.type,
-    record.category,
-    record.section,
-    record.classification,
-    record.account,
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  if (
-    text.includes("inflow") ||
-    text.includes("receipt") ||
-    text.includes("revenue") ||
-    text.includes("income") ||
-    text.includes("sales") ||
-    text.includes("credit") ||
-    text.includes("customer")
-  ) {
-    return "INFLOW";
-  }
-
-  if (
-    text.includes("outflow") ||
-    text.includes("payment") ||
-    text.includes("expense") ||
-    text.includes("purchase") ||
-    text.includes("salary") ||
-    text.includes("rent") ||
-    text.includes("debit") ||
-    text.includes("vendor") ||
-    text.includes("supplier") ||
-    text.includes("cost")
-  ) {
-    return "OUTFLOW";
-  }
-
-  if (amount < 0) {
-    return "OUTFLOW";
-  }
-
-  return "UNKNOWN";
-}
-
-function collectCashLineItems({
-  value,
-  sourceFileName,
-  sourceCategory,
-  output,
-  documentId,
-  depth = 0,
-}: {
-  value: unknown;
-  sourceFileName: string;
-  sourceCategory: string;
-  output: CashFlowLineItem[];
-  documentId: string;
-  depth?: number;
-}) {
-  if (depth > 9) {
-    return;
-  }
-
-  if (Array.isArray(value)) {
-    value.forEach((item) =>
-      collectCashLineItems({
-        value: item,
-        sourceFileName,
-        sourceCategory,
-        output,
-        documentId,
-        depth: depth + 1,
-      }),
-    );
-
-    return;
-  }
-
-  if (!isRecord(value)) {
-    return;
-  }
-
-  const label = readString(value, [
-    "description",
-    "particulars",
-    "name",
-    "label",
-    "item",
-    "account",
-    "category",
-    "vendor",
-    "customer",
-    "narration",
-  ]);
-
-  const amount = readAmount(value);
-
-  if (label && amount !== null && Math.abs(amount) > 0) {
-    const type = inferCashItemType(value, label, amount);
-
-    output.push({
-      id: `${documentId}-${output.length + 1}`,
-      label,
-      amount,
-      absoluteAmount: Math.abs(amount),
-      type,
-      sourceFileName,
-      sourceCategory,
-    });
-  }
-
-  for (const nestedValue of Object.values(value)) {
-    if (Array.isArray(nestedValue) || isRecord(nestedValue)) {
-      collectCashLineItems({
-        value: nestedValue,
-        sourceFileName,
-        sourceCategory,
-        output,
-        documentId,
-        depth: depth + 1,
-      });
-    }
-  }
-}
-
-function makeSummary({
-  status,
-  runwayMonths,
-  netMonthlyCashFlow,
-  cashGapForThreeMonths,
-  currency,
-}: {
-  status: CashFlowReport["status"];
-  runwayMonths: number | null;
-  netMonthlyCashFlow: number | null;
-  cashGapForThreeMonths: number | null;
+function makeSummary(params: {
+  financialEntryCount: number;
+  observedMonths: number;
+  estimatedMonthlyInflow:
+    | number
+    | null;
+  estimatedMonthlyOutflow:
+    | number
+    | null;
+  netMonthlyCashFlow:
+    | number
+    | null;
+  pendingCount: number;
   currency: string;
 }) {
-  if (status === "INSUFFICIENT_DATA") {
-    return "Cash flow engine needs approved cash, revenue, expense, or bank statement data before calculating runway reliably.";
+  if (
+    params.financialEntryCount === 0
+  ) {
+    return "Cash flow needs approved credit and debit ledger entries before movement can be calculated.";
   }
 
-  if (status === "CRITICAL") {
-    return `Cash flow looks critical. Estimated runway is ${formatMonths(
-      runwayMonths,
-    )}, and the 3-month cash gap is ${formatMoney(
-      cashGapForThreeMonths,
-      currency,
-    )}.`;
-  }
+  const netText = formatMoney(
+    params.netMonthlyCashFlow,
+    params.currency,
+  );
 
-  if (status === "WATCH") {
-    return `Cash flow needs monitoring. Estimated runway is ${formatMonths(
-      runwayMonths,
-    )}, and estimated monthly net cash flow is ${formatMoney(
-      netMonthlyCashFlow,
-      currency,
-    )}.`;
-  }
+  const direction =
+    (params.netMonthlyCashFlow ?? 0) >= 0
+      ? "positive"
+      : "negative";
 
-  return `Cash flow looks healthy. Estimated runway is ${formatMonths(
-    runwayMonths,
-  )}, with monthly net cash flow around ${formatMoney(
-    netMonthlyCashFlow,
-    currency,
-  )}.`;
+  return `Based on ${params.financialEntryCount} approved ledger entries across ${params.observedMonths} month${
+    params.observedMonths === 1
+      ? ""
+      : "s"
+  }, average monthly net movement is ${netText} and is currently ${direction}. ${params.pendingCount} entr${
+    params.pendingCount === 1
+      ? "y remains"
+      : "ies remain"
+  } excluded while awaiting review.`;
 }
 
-export async function getCashFlowReport(userId: string): Promise<CashFlowReport> {
-  const [profile, business, documents] = await Promise.all([
-    getFinancialProfile(userId),
+export async function getCashFlowReport(
+  userId: string,
+): Promise<CashFlowReport> {
+  const [
+    business,
+    approvedEntries,
+    pendingCount,
+    rejectedCount,
+  ] = await Promise.all([
     prisma.business.findUnique({
       where: {
         userId,
@@ -403,185 +289,397 @@ export async function getCashFlowReport(userId: string): Promise<CashFlowReport>
         currency: true,
       },
     }),
-    prisma.document.findMany({
+
+    prisma.ledgerEntry.findMany({
       where: {
         userId,
-        status: "PROCESSED",
-        reviewStatus: "APPROVED",
+        status:
+          LedgerEntryStatus.APPROVED,
       },
       select: {
         id: true,
-        fileName: true,
+        description: true,
+        counterparty: true,
         category: true,
-        extractedData: true,
+        amount: true,
+        currency: true,
+        direction: true,
+        transactionDate: true,
+        createdAt: true,
+        sourceType: true,
+        documentId: true,
+
+        document: {
+          select: {
+            id: true,
+            fileName: true,
+            category: true,
+          },
+        },
       },
-      orderBy: {
-        uploadedAt: "desc",
+      orderBy: [
+        {
+          transactionDate: "desc",
+        },
+        {
+          createdAt: "desc",
+        },
+      ],
+      take: 1000,
+    }),
+
+    prisma.ledgerEntry.count({
+      where: {
+        userId,
+        status:
+          LedgerEntryStatus.NEEDS_REVIEW,
       },
-      take: 80,
+    }),
+
+    prisma.ledgerEntry.count({
+      where: {
+        userId,
+        status:
+          LedgerEntryStatus.REJECTED,
+      },
     }),
   ]);
 
-  const currency = business?.currency || "INR";
+  const configuredCurrency = (
+    business?.currency ?? "INR"
+  )
+    .trim()
+    .toUpperCase();
 
-  const revenue = parseMetricValue(profile.revenue.value);
-  const expenses = parseMetricValue(profile.expenses.value);
-  let profit = parseMetricValue(profile.profit.value);
-  const cash = parseMetricValue(profile.cash.value);
+  const currencyCounts = new Map<
+    string,
+    number
+  >();
 
-  if (profit === null && revenue !== null && expenses !== null) {
-    profit = revenue - expenses;
+  for (const entry of approvedEntries) {
+    if (
+      entry.direction !==
+        LedgerDirection.CREDIT &&
+      entry.direction !==
+        LedgerDirection.DEBIT
+    ) {
+      continue;
+    }
+
+    const currency =
+      entry.currency
+        .trim()
+        .toUpperCase() || "INR";
+
+    currencyCounts.set(
+      currency,
+      (currencyCounts.get(currency) ??
+        0) + 1,
+    );
   }
 
-  const allItems: CashFlowLineItem[] = [];
-  const documentCoverage: CashFlowReport["documentCoverage"] = [];
+  const dominantCurrency =
+    Array.from(
+      currencyCounts.entries(),
+    ).sort(
+      (first, second) =>
+        second[1] - first[1],
+    )[0]?.[0];
 
-  for (const document of documents) {
-    const before = allItems.length;
+  const currency =
+    currencyCounts.has(
+      configuredCurrency,
+    )
+      ? configuredCurrency
+      : dominantCurrency ??
+        configuredCurrency;
 
-    collectCashLineItems({
-      value: document.extractedData,
-      sourceFileName: document.fileName,
-      sourceCategory: String(document.category),
-      output: allItems,
-      documentId: document.id,
-    });
+  const financialEntries =
+    approvedEntries.filter(
+      (entry) =>
+        entry.currency
+          .trim()
+          .toUpperCase() ===
+          currency &&
+        (entry.direction ===
+          LedgerDirection.CREDIT ||
+          entry.direction ===
+            LedgerDirection.DEBIT),
+    );
 
-    const lineItemCount = allItems.length - before;
+  const excludedCurrencyCount =
+    approvedEntries.filter(
+      (entry) =>
+        entry.direction ===
+          LedgerDirection.CREDIT ||
+        entry.direction ===
+          LedgerDirection.DEBIT,
+    ).length -
+    financialEntries.length;
 
-    const cashSignalCount = allItems
-      .slice(before)
-      .filter((item) => item.type === "INFLOW" || item.type === "OUTFLOW").length;
+  const inflowEntries =
+    financialEntries.filter(
+      (entry) =>
+        entry.direction ===
+        LedgerDirection.CREDIT,
+    );
 
-    documentCoverage.push({
-      id: document.id,
-      fileName: document.fileName,
-      category: String(document.category),
-      lineItemCount,
-      cashSignalCount,
-    });
+  const outflowEntries =
+    financialEntries.filter(
+      (entry) =>
+        entry.direction ===
+        LedgerDirection.DEBIT,
+    );
+
+  const totalInflow =
+    inflowEntries.reduce(
+      (total, entry) =>
+        total + Number(entry.amount),
+      0,
+    );
+
+  const totalOutflow =
+    outflowEntries.reduce(
+      (total, entry) =>
+        total + Number(entry.amount),
+      0,
+    );
+
+  const profit =
+    totalInflow - totalOutflow;
+
+  const monthlyMap = new Map<
+    string,
+    MonthlyMovement
+  >();
+
+  let missingDateCount = 0;
+
+  for (const entry of financialEntries) {
+    if (!entry.transactionDate) {
+      missingDateCount += 1;
+    }
+
+    const date =
+      entry.transactionDate ??
+      entry.createdAt;
+
+    const key = getMonthKey(date);
+
+    const point =
+      monthlyMap.get(key) ?? {
+        key,
+        inflow: 0,
+        outflow: 0,
+        net: 0,
+      };
+
+    const amount =
+      Number(entry.amount);
+
+    if (
+      entry.direction ===
+      LedgerDirection.CREDIT
+    ) {
+      point.inflow += amount;
+    } else {
+      point.outflow += amount;
+    }
+
+    point.net =
+      point.inflow - point.outflow;
+
+    monthlyMap.set(key, point);
   }
 
-  const inflows = allItems
-    .filter((item) => item.type === "INFLOW")
-    .sort((a, b) => b.absoluteAmount - a.absoluteAmount);
+  const monthlyPoints =
+    Array.from(
+      monthlyMap.values(),
+    ).sort((first, second) =>
+      first.key.localeCompare(
+        second.key,
+      ),
+    );
 
-  const outflows = allItems
-    .filter((item) => item.type === "OUTFLOW")
-    .sort((a, b) => b.absoluteAmount - a.absoluteAmount);
+  const observedMonths =
+    monthlyPoints.length;
 
-  const itemInflowTotal = inflows.reduce(
-    (total, item) => total + item.absoluteAmount,
-    0,
-  );
-
-  const itemOutflowTotal = outflows.reduce(
-    (total, item) => total + item.absoluteAmount,
-    0,
-  );
+  const monthlyDivisor =
+    Math.max(observedMonths, 1);
 
   const estimatedMonthlyInflow =
-    revenue !== null && revenue > 0
-      ? revenue / 12
-      : itemInflowTotal > 0
-        ? itemInflowTotal / 12
-        : null;
+    financialEntries.length > 0
+      ? totalInflow /
+        monthlyDivisor
+      : null;
 
   const estimatedMonthlyOutflow =
-    expenses !== null && expenses > 0
-      ? expenses / 12
-      : itemOutflowTotal > 0
-        ? itemOutflowTotal / 12
-        : null;
+    financialEntries.length > 0
+      ? totalOutflow /
+        monthlyDivisor
+      : null;
 
   const netMonthlyCashFlow =
-    estimatedMonthlyInflow !== null && estimatedMonthlyOutflow !== null
-      ? estimatedMonthlyInflow - estimatedMonthlyOutflow
-      : profit !== null
-        ? profit / 12
-        : null;
+    estimatedMonthlyInflow !== null &&
+    estimatedMonthlyOutflow !== null
+      ? estimatedMonthlyInflow -
+        estimatedMonthlyOutflow
+      : null;
+
+  const negativeMonths =
+    monthlyPoints.filter(
+      (point) => point.net < 0,
+    );
 
   const estimatedMonthlyBurn =
-    netMonthlyCashFlow !== null && netMonthlyCashFlow < 0
-      ? Math.abs(netMonthlyCashFlow)
-      : estimatedMonthlyOutflow;
+    negativeMonths.length > 0
+      ? negativeMonths.reduce(
+          (total, point) =>
+            total +
+            Math.abs(point.net),
+          0,
+        ) / negativeMonths.length
+      : netMonthlyCashFlow !== null &&
+          netMonthlyCashFlow < 0
+        ? Math.abs(netMonthlyCashFlow)
+        : 0;
 
-  const runwayMonths =
-    cash !== null &&
-    estimatedMonthlyBurn !== null &&
-    estimatedMonthlyBurn > 0
-      ? cash / estimatedMonthlyBurn
-      : null;
+  /*
+   * Net movement is not the same as
+   * bank cash balance. Runway remains
+   * unavailable until a verified opening
+   * or closing cash balance is stored.
+   */
+  const cash: number | null = null;
+  const runwayMonths: number | null =
+    null;
 
   const threeMonthCashNeed =
-    estimatedMonthlyBurn !== null ? estimatedMonthlyBurn * 3 : null;
+    estimatedMonthlyBurn > 0
+      ? estimatedMonthlyBurn * 3
+      : 0;
 
   const sixMonthCashNeed =
-    estimatedMonthlyBurn !== null ? estimatedMonthlyBurn * 6 : null;
+    estimatedMonthlyBurn > 0
+      ? estimatedMonthlyBurn * 6
+      : 0;
 
-  const cashGapForThreeMonths =
-    cash !== null && threeMonthCashNeed !== null
-      ? Math.max(0, threeMonthCashNeed - cash)
-      : null;
+  const cashGapForThreeMonths:
+    | number
+    | null = null;
 
-  const status: CashFlowReport["status"] =
-    cash === null && estimatedMonthlyBurn === null && netMonthlyCashFlow === null
+  const status:
+    CashFlowReport["status"] =
+    financialEntries.length === 0
       ? "INSUFFICIENT_DATA"
-      : runwayMonths !== null && runwayMonths < 3
+      : netMonthlyCashFlow !== null &&
+          netMonthlyCashFlow < 0 &&
+          totalOutflow >
+            totalInflow * 1.25
         ? "CRITICAL"
-        : runwayMonths !== null && runwayMonths < 6
+        : netMonthlyCashFlow !== null &&
+              netMonthlyCashFlow < 0
           ? "WATCH"
-          : netMonthlyCashFlow !== null && netMonthlyCashFlow < 0
+          : pendingCount > 0
             ? "WATCH"
             : "HEALTHY";
 
-  const score = Math.round(
-    Math.max(
-      0,
-      Math.min(
-        100,
-        status === "INSUFFICIENT_DATA"
-          ? 20
-          : 100 -
-              (runwayMonths !== null && runwayMonths < 3 ? 35 : 0) -
-              (runwayMonths !== null && runwayMonths < 6 ? 15 : 0) -
-              (netMonthlyCashFlow !== null && netMonthlyCashFlow < 0 ? 20 : 0) -
-              (cashGapForThreeMonths !== null && cashGapForThreeMonths > 0
-                ? 15
-                : 0),
-      ),
-    ),
+  let score =
+    financialEntries.length === 0
+      ? 20
+      : 78;
+
+  if (
+    netMonthlyCashFlow !== null &&
+    netMonthlyCashFlow >= 0
+  ) {
+    score += 10;
+  }
+
+  if (
+    netMonthlyCashFlow !== null &&
+    netMonthlyCashFlow < 0
+  ) {
+    const pressureRatio =
+      estimatedMonthlyOutflow &&
+      estimatedMonthlyOutflow > 0
+        ? Math.abs(
+            netMonthlyCashFlow,
+          ) /
+          estimatedMonthlyOutflow
+        : 1;
+
+    score -= Math.min(
+      38,
+      15 + pressureRatio * 30,
+    );
+  }
+
+  if (observedMonths >= 3) {
+    score += 5;
+  } else if (
+    financialEntries.length > 0
+  ) {
+    score -= 8;
+  }
+
+  score -= Math.min(
+    pendingCount * 2,
+    15,
+  );
+
+  if (excludedCurrencyCount > 0) {
+    score -= 4;
+  }
+
+  score = Math.round(
+    clamp(score, 0, 95),
   );
 
   const cards: CashFlowMetric[] = [
     {
-      label: "Cash runway",
-      value: formatMonths(runwayMonths),
-      hint: "Estimated survival time from current cash",
+      label:
+        "Avg. monthly inflow",
+      value: formatMoney(
+        estimatedMonthlyInflow,
+        currency,
+      ),
+      hint:
+        "Average approved credits per observed month",
       tone:
-        runwayMonths === null
+        estimatedMonthlyInflow ===
+          null
           ? "neutral"
-          : runwayMonths >= 6
-            ? "good"
-            : runwayMonths >= 3
-              ? "warning"
-              : "danger",
+          : "good",
     },
     {
-      label: "Monthly burn",
-      value: formatMoney(estimatedMonthlyBurn, currency),
-      hint: "Estimated monthly cash requirement",
+      label:
+        "Avg. monthly outflow",
+      value: formatMoney(
+        estimatedMonthlyOutflow,
+        currency,
+      ),
+      hint:
+        "Average approved debits per observed month",
       tone:
-        estimatedMonthlyBurn === null
+        estimatedMonthlyOutflow ===
+          null
           ? "neutral"
-          : netMonthlyCashFlow !== null && netMonthlyCashFlow < 0
+          : netMonthlyCashFlow !==
+                null &&
+              netMonthlyCashFlow < 0
             ? "danger"
             : "warning",
     },
     {
-      label: "Net monthly cash flow",
-      value: formatMoney(netMonthlyCashFlow, currency),
-      hint: "Estimated inflow minus outflow",
+      label:
+        "Net monthly movement",
+      value: formatMoney(
+        netMonthlyCashFlow,
+        currency,
+      ),
+      hint:
+        "Approved inflow minus approved outflow",
       tone:
         netMonthlyCashFlow === null
           ? "neutral"
@@ -590,167 +688,356 @@ export async function getCashFlowReport(userId: string): Promise<CashFlowReport>
             : "danger",
     },
     {
-      label: "3-month cash gap",
-      value: formatMoney(cashGapForThreeMonths, currency),
-      hint: "Extra cash needed for 3-month safety",
+      label: "Monthly burn",
+      value: formatMoney(
+        estimatedMonthlyBurn,
+        currency,
+      ),
+      hint:
+        estimatedMonthlyBurn > 0
+          ? "Average negative movement in loss-making months"
+          : "No negative monthly movement detected",
       tone:
-        cashGapForThreeMonths === null
-          ? "neutral"
-          : cashGapForThreeMonths > 0
-            ? "danger"
-            : "good",
+        estimatedMonthlyBurn > 0
+          ? "danger"
+          : "good",
     },
   ];
 
   const signals: CashFlowSignal[] = [];
 
-  if (status === "INSUFFICIENT_DATA") {
+  if (financialEntries.length === 0) {
     signals.push({
-      id: "insufficient-data",
+      id: "no-approved-ledger-data",
       severity: "HIGH",
-      title: "Insufficient cash data",
+      title:
+        "No approved cash movement",
       detail:
-        "Upload and approve bank statements, financial statements, or cash flow records to calculate runway.",
+        "Approve credit and debit ledger entries to calculate trusted cash movement.",
       amount: null,
       tone: "danger",
     });
   }
 
-  if (runwayMonths !== null && runwayMonths < 3) {
+  if (
+    netMonthlyCashFlow !== null &&
+    netMonthlyCashFlow < 0
+  ) {
     signals.push({
-      id: "low-runway",
+      id: "negative-monthly-movement",
       severity: "HIGH",
-      title: "Cash runway below 3 months",
+      title:
+        "Negative monthly movement",
       detail:
-        "Runway is below the safe zone. Reduce discretionary spending and improve collections urgently.",
-      amount: cash,
-      tone: "danger",
-    });
-  }
-
-  if (netMonthlyCashFlow !== null && netMonthlyCashFlow < 0) {
-    signals.push({
-      id: "negative-net-cash-flow",
-      severity: "HIGH",
-      title: "Negative monthly cash flow",
-      detail:
-        "Estimated monthly outflow is higher than inflow. This creates cash burn.",
+        "Average approved outflow is higher than average approved inflow.",
       amount: netMonthlyCashFlow,
       tone: "danger",
     });
   }
 
-  if (cashGapForThreeMonths !== null && cashGapForThreeMonths > 0) {
+  if (
+    estimatedMonthlyOutflow !== null &&
+    estimatedMonthlyInflow !== null &&
+    estimatedMonthlyOutflow >
+      estimatedMonthlyInflow
+  ) {
     signals.push({
-      id: "three-month-gap",
+      id: "outflow-pressure",
       severity: "MEDIUM",
-      title: "3-month safety gap",
+      title:
+        "Outflow pressure is high",
       detail:
-        "Current cash may not cover the next 3 months of estimated burn.",
-      amount: cashGapForThreeMonths,
+        "Approved monthly debits are exceeding approved monthly credits.",
+      amount:
+        estimatedMonthlyOutflow -
+        estimatedMonthlyInflow,
       tone: "warning",
     });
   }
 
-  if (outflows.length > 0) {
+  if (pendingCount > 0) {
     signals.push({
-      id: "largest-outflow",
+      id: "pending-ledger-review",
+      severity: "MEDIUM",
+      title:
+        "Ledger review is incomplete",
+      detail:
+        `${pendingCount} entr${
+          pendingCount === 1
+            ? "y is"
+            : "ies are"
+        } excluded while awaiting review.`,
+      amount: null,
+      tone: "warning",
+    });
+  }
+
+  if (observedMonths < 3) {
+    signals.push({
+      id: "limited-history",
       severity: "LOW",
-      title: "Largest outflow signal",
-      detail: `${outflows[0].label} is the largest detected outflow item.`,
-      amount: outflows[0].absoluteAmount,
+      title:
+        "Limited monthly history",
+      detail:
+        `The cash-flow score is provisional because only ${observedMonths} observed month${
+          observedMonths === 1
+            ? " is"
+            : "s are"
+        } available.`,
+      amount: null,
+      tone: "neutral",
+    });
+  }
+
+  if (excludedCurrencyCount > 0) {
+    signals.push({
+      id: "mixed-currency",
+      severity: "LOW",
+      title:
+        "Mixed currencies excluded",
+      detail:
+        `${excludedCurrencyCount} approved financial entr${
+          excludedCurrencyCount === 1
+            ? "y is"
+            : "ies are"
+        } excluded from ${currency} totals.`,
+      amount: null,
+      tone: "neutral",
+    });
+  }
+
+  if (missingDateCount > 0) {
+    signals.push({
+      id: "missing-transaction-dates",
+      severity: "LOW",
+      title:
+        "Some transaction dates are missing",
+      detail:
+        `${missingDateCount} entr${
+          missingDateCount === 1
+            ? "y uses"
+            : "ies use"
+        } creation date for monthly grouping.`,
+      amount: null,
       tone: "neutral",
     });
   }
 
   if (signals.length === 0) {
     signals.push({
-      id: "healthy-signal",
+      id: "stable-ledger-movement",
       severity: "LOW",
-      title: "No major cash warning",
+      title:
+        "Approved movement is stable",
       detail:
-        "No critical cash flow warning was detected from approved documents.",
-      amount: null,
+        "No major cash-movement warning was found in approved ledger entries.",
+      amount: netMonthlyCashFlow,
       tone: "good",
     });
   }
 
   const actions: CashFlowAction[] = [];
 
-  if (status === "INSUFFICIENT_DATA") {
+  if (financialEntries.length === 0) {
     actions.push({
       priority: "HIGH",
-      title: "Upload bank statements",
+      title:
+        "Build the trusted ledger",
       detail:
-        "Cash runway is weak without bank statements or cash balance records.",
+        "Sync approved documents and review credit and debit entries.",
     });
   }
 
-  if (runwayMonths !== null && runwayMonths < 3) {
+  if (
+    netMonthlyCashFlow !== null &&
+    netMonthlyCashFlow < 0
+  ) {
     actions.push({
       priority: "HIGH",
-      title: "Protect cash immediately",
+      title:
+        "Restore positive monthly movement",
       detail:
-        "Delay non-essential spending, pause hiring, and prioritize customer collections.",
+        `Reduce monthly outflow or improve inflow by at least ${formatMoney(
+          Math.abs(
+            netMonthlyCashFlow,
+          ),
+          currency,
+        )}.`,
     });
   }
 
-  if (netMonthlyCashFlow !== null && netMonthlyCashFlow < 0) {
-    actions.push({
-      priority: "HIGH",
-      title: "Reduce monthly burn",
-      detail:
-        "Cut recurring expenses or increase recurring inflows until monthly cash flow becomes positive.",
-    });
-  }
+  if (outflowEntries.length > 0) {
+    const topOutflow =
+      [...outflowEntries].sort(
+        (first, second) =>
+          Number(second.amount) -
+          Number(first.amount),
+      )[0];
 
-  if (cashGapForThreeMonths !== null && cashGapForThreeMonths > 0) {
     actions.push({
       priority: "MEDIUM",
-      title: "Close the 3-month cash gap",
-      detail: `Build at least ${formatMoney(
-        cashGapForThreeMonths,
-        currency,
-      )} extra cash buffer for short-term safety.`,
+      title:
+        "Review the largest debit",
+      detail:
+        `Start with ${topOutflow.description}, currently ${formatMoney(
+          Number(topOutflow.amount),
+          currency,
+        )}.`,
     });
   }
 
-  if (outflows.length > 0) {
+  if (pendingCount > 0) {
     actions.push({
       priority: "MEDIUM",
-      title: "Review largest outflows",
-      detail: `Start with ${outflows
-        .slice(0, 3)
-        .map((item) => item.label)
-        .join(", ")}.`,
+      title:
+        "Complete pending review",
+      detail:
+        `Approve or reject ${pendingCount} pending ledger entr${
+          pendingCount === 1
+            ? "y"
+            : "ies"
+        } before relying on the full cash-flow picture.`,
     });
   }
 
   if (actions.length === 0) {
     actions.push({
       priority: "LOW",
-      title: "Maintain cash discipline",
+      title:
+        "Maintain cash discipline",
       detail:
-        "Cash flow looks stable. Keep monthly bank statements updated for monitoring.",
+        "Continue recording offline transactions and syncing approved documents.",
     });
   }
 
+  const topInflows: CashFlowLineItem[] =
+    [...inflowEntries]
+      .sort(
+        (first, second) =>
+          Number(second.amount) -
+          Number(first.amount),
+      )
+      .slice(0, 10)
+      .map((entry) => ({
+        id: entry.id,
+        label: entry.description,
+        amount: Number(entry.amount),
+        absoluteAmount: Number(
+          entry.amount,
+        ),
+        type: "INFLOW",
+        sourceFileName:
+          entry.document?.fileName ??
+          "Manual entry",
+        sourceCategory:
+          entry.document
+            ? String(
+                entry.document.category,
+              )
+            : entry.category ??
+              "MANUAL",
+      }));
+
+  const topOutflows: CashFlowLineItem[] =
+    [...outflowEntries]
+      .sort(
+        (first, second) =>
+          Number(second.amount) -
+          Number(first.amount),
+      )
+      .slice(0, 10)
+      .map((entry) => ({
+        id: entry.id,
+        label: entry.description,
+        amount: Number(entry.amount),
+        absoluteAmount: Number(
+          entry.amount,
+        ),
+        type: "OUTFLOW",
+        sourceFileName:
+          entry.document?.fileName ??
+          "Manual entry",
+        sourceCategory:
+          entry.document
+            ? String(
+                entry.document.category,
+              )
+            : entry.category ??
+              "MANUAL",
+      }));
+
+  const coverageMap = new Map<
+    string,
+    {
+      id: string;
+      fileName: string;
+      category: string;
+      lineItemCount: number;
+      cashSignalCount: number;
+    }
+  >();
+
+  for (const entry of financialEntries) {
+    if (!entry.document) {
+      continue;
+    }
+
+    const current =
+      coverageMap.get(
+        entry.document.id,
+      ) ?? {
+        id: entry.document.id,
+        fileName:
+          entry.document.fileName,
+        category: String(
+          entry.document.category,
+        ),
+        lineItemCount: 0,
+        cashSignalCount: 0,
+      };
+
+    current.lineItemCount += 1;
+    current.cashSignalCount += 1;
+
+    coverageMap.set(
+      entry.document.id,
+      current,
+    );
+  }
+
+  const documentCoverage =
+    Array.from(
+      coverageMap.values(),
+    ).sort(
+      (first, second) =>
+        second.lineItemCount -
+        first.lineItemCount,
+    );
+
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt:
+      new Date().toISOString(),
+
     currency,
+
     summary: makeSummary({
-      status,
-      runwayMonths,
+      financialEntryCount:
+        financialEntries.length,
+      observedMonths,
+      estimatedMonthlyInflow,
+      estimatedMonthlyOutflow,
       netMonthlyCashFlow,
-      cashGapForThreeMonths,
+      pendingCount,
       currency,
     }),
+
     status,
     score,
+
     metrics: {
       cash,
-      revenue,
-      expenses,
+      revenue: totalInflow,
+      expenses: totalOutflow,
       profit,
       estimatedMonthlyBurn,
       estimatedMonthlyInflow,
@@ -761,11 +1048,12 @@ export async function getCashFlowReport(userId: string): Promise<CashFlowReport>
       sixMonthCashNeed,
       cashGapForThreeMonths,
     },
+
     cards,
-    signals,
-    actions,
-    topInflows: inflows.slice(0, 10),
-    topOutflows: outflows.slice(0, 10),
+    signals: signals.slice(0, 6),
+    actions: actions.slice(0, 5),
+    topInflows,
+    topOutflows,
     documentCoverage,
   };
 }

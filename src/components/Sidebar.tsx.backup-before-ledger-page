@@ -38,11 +38,6 @@ const NAV_ITEMS = [
     enabled: true,
   },
   {
-    label: "Transaction Ledger",
-    href: "/ledger",
-    enabled: true,
-  },
-  {
     label: "Document Check",
     href: "/document-completeness",
     enabled: true,

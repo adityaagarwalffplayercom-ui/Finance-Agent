@@ -1,0 +1,106 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+type SyncResult = {
+  success?: boolean;
+  documentsSynced?: number;
+  entriesCreated?: number;
+  error?: string;
+};
+
+export function LedgerSyncButton() {
+  const router = useRouter();
+
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function handleSync() {
+    if (loading) {
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/ledger/sync", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      const result =
+        (await response.json().catch(() => null)) as SyncResult | null;
+
+      if (!response.ok || !result?.success) {
+        throw new Error(
+          result?.error ??
+            "Could not synchronize approved documents.",
+        );
+      }
+
+      setMessage(
+        `Synced ${result.documentsSynced ?? 0} document(s) and created ${
+          result.entriesCreated ?? 0
+        } ledger entries.`,
+      );
+
+      router.refresh();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Ledger synchronization failed.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        flexWrap: "wrap",
+        gap: 10,
+      }}
+    >
+      {message ? (
+        <span
+          style={{
+            maxWidth: 420,
+            color: "var(--color-text-secondary)",
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          {message}
+        </span>
+      ) : null}
+
+      <button
+        type="button"
+        className="btn-ghost"
+        disabled={loading}
+        onClick={handleSync}
+        style={{
+          minHeight: 42,
+          justifyContent: "center",
+          borderColor: "rgba(112, 145, 184, 0.42)",
+          background: "rgba(70, 91, 120, 0.17)",
+          color: "rgba(220, 233, 248, 0.96)",
+          opacity: loading ? 0.65 : 1,
+        }}
+      >
+        {loading
+          ? "Synchronizing..."
+          : "Sync approved documents"}
+      </button>
+    </div>
+  );
+}

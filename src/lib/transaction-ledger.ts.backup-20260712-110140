@@ -1,0 +1,436 @@
+import { createHash } from "node:crypto";
+import {
+  DocumentCategory,
+  DocumentReviewStatus,
+  DocumentStatus,
+  LedgerDirection,
+  LedgerEntryStatus,
+  LedgerSourceType,
+  Prisma,
+} from "@prisma/client";
+import type { ExtractedDocumentData } from "./gemini";
+import { prisma } from "./prisma";
+
+type LedgerDocument = {
+  id: string;
+  userId: string;
+  fileName: string;
+  category: DocumentCategory;
+  extractedData: Prisma.JsonValue | null;
+};
+
+function cleanString(value: unknown) {
+  return typeof value === "string" && value.trim()
+    ? value.trim()
+    : null;
+}
+
+function cleanNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/,/g, "").trim());
+
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function parseDate(value: unknown) {
+  const raw = cleanString(value);
+
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? `${raw}T00:00:00.000Z`
+    : raw;
+
+  const parsed = new Date(normalized);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function sourceKey(parts: Array<string | number | null | undefined>) {
+  return createHash("sha256")
+    .update(parts.map((part) => String(part ?? "")).join("|"))
+    .digest("hex")
+    .slice(0, 32);
+}
+
+function normalizeCurrency(value: unknown) {
+  const currency = cleanString(value)?.toUpperCase();
+
+  return currency && /^[A-Z]{3}$/.test(currency)
+    ? currency
+    : "INR";
+}
+
+function categoryDirection(category: DocumentCategory) {
+  if (
+    category === DocumentCategory.SALES_INVOICE ||
+    category === DocumentCategory.SALES_ORDER ||
+    category === DocumentCategory.RECEIPT
+  ) {
+    return LedgerDirection.CREDIT;
+  }
+
+  if (
+    category === DocumentCategory.PURCHASE_INVOICE ||
+    category === DocumentCategory.PURCHASE_ORDER ||
+    category === DocumentCategory.PAYROLL ||
+    category === DocumentCategory.UTILITY_BILL ||
+    category === DocumentCategory.RENT_LEASE ||
+    category === DocumentCategory.INSURANCE_DOCUMENT ||
+    category === DocumentCategory.TAX_DOCUMENT ||
+    category === DocumentCategory.GST_RETURN
+  ) {
+    return LedgerDirection.DEBIT;
+  }
+
+  return LedgerDirection.NEUTRAL;
+}
+
+function inferDirection(params: {
+  description: string;
+  itemCategory: string | null;
+  amount: number;
+  documentCategory: DocumentCategory;
+}) {
+  const text =
+    `${params.itemCategory ?? ""} ${params.description}`.toLowerCase();
+
+  const creditWords = [
+    "revenue",
+    "sales",
+    "turnover",
+    "income",
+    "receipt",
+    "cash inflow",
+    "customer payment",
+  ];
+
+  const debitWords = [
+    "expense",
+    "cost",
+    "purchase",
+    "salary",
+    "payroll",
+    "rent",
+    "utility",
+    "tax",
+    "interest",
+    "finance cost",
+    "cash outflow",
+    "vendor payment",
+  ];
+
+  if (creditWords.some((word) => text.includes(word))) {
+    return LedgerDirection.CREDIT;
+  }
+
+  if (debitWords.some((word) => text.includes(word))) {
+    return LedgerDirection.DEBIT;
+  }
+
+  if (params.amount < 0) {
+    return LedgerDirection.DEBIT;
+  }
+
+  return categoryDirection(params.documentCategory);
+}
+
+function buildEntries(document: LedgerDocument) {
+  if (
+    !document.extractedData ||
+    typeof document.extractedData !== "object" ||
+    Array.isArray(document.extractedData)
+  ) {
+    return [];
+  }
+
+  const extracted =
+    document.extractedData as unknown as ExtractedDocumentData;
+
+  const currency = normalizeCurrency(extracted.currency);
+  const counterparty = cleanString(extracted.vendorOrCounterparty);
+  const entries: Prisma.LedgerEntryCreateManyInput[] = [];
+
+  const transactions = Array.isArray(extracted.transactions)
+    ? extracted.transactions
+    : [];
+
+  if (transactions.length > 0) {
+    transactions.forEach((transaction, index) => {
+      const amount = cleanNumber(transaction.amount);
+
+      if (amount === null || amount === 0) {
+        return;
+      }
+
+      const description =
+        cleanString(transaction.description) ??
+        `Bank transaction ${index + 1}`;
+
+      const direction =
+        transaction.direction === "credit"
+          ? LedgerDirection.CREDIT
+          : LedgerDirection.DEBIT;
+
+      entries.push({
+        userId: document.userId,
+        documentId: document.id,
+        transactionDate:
+          parseDate(transaction.date) ??
+          parseDate(extracted.documentDate),
+        description,
+        counterparty,
+        category: "Bank transaction",
+        direction,
+        amount: Math.abs(amount),
+        currency,
+        confidence: 0.96,
+        status: LedgerEntryStatus.APPROVED,
+        sourceType: LedgerSourceType.BANK_TRANSACTION,
+        sourceLineKey: sourceKey([
+          "transaction",
+          index,
+          transaction.date,
+          description,
+          amount,
+          direction,
+        ]),
+        metadata: {
+          sourceIndex: index,
+          originalDirection: transaction.direction,
+          originalAmount: amount,
+        },
+      });
+    });
+
+    return entries;
+  }
+
+  const lineItems = Array.isArray(extracted.lineItems)
+    ? extracted.lineItems
+    : [];
+
+  if (lineItems.length > 0) {
+    lineItems.forEach((item, index) => {
+      const amount = cleanNumber(item.amount);
+
+      if (amount === null || amount === 0) {
+        return;
+      }
+
+      const description =
+        cleanString(item.description) ??
+        `Extracted line ${index + 1}`;
+
+      const itemCategory = cleanString(item.category);
+
+      const direction = inferDirection({
+        description,
+        itemCategory,
+        amount,
+        documentCategory: document.category,
+      });
+
+      entries.push({
+        userId: document.userId,
+        documentId: document.id,
+        transactionDate:
+          parseDate(item.date) ??
+          parseDate(extracted.documentDate),
+        description,
+        counterparty,
+        category: itemCategory,
+        direction,
+        amount: Math.abs(amount),
+        currency,
+        confidence:
+          document.category === DocumentCategory.FINANCIAL_STATEMENT
+            ? 0.82
+            : 0.88,
+        status: LedgerEntryStatus.APPROVED,
+        sourceType:
+          document.category === DocumentCategory.FINANCIAL_STATEMENT
+            ? LedgerSourceType.STATEMENT_LINE
+            : LedgerSourceType.DOCUMENT_LINE,
+        sourceLineKey: sourceKey([
+          "line",
+          index,
+          item.date,
+          description,
+          itemCategory,
+          amount,
+          direction,
+        ]),
+        metadata: {
+          sourceIndex: index,
+          originalAmount: amount,
+          originalCategory: itemCategory ?? "",
+        },
+      });
+    });
+
+    return entries;
+  }
+
+  const totalAmount = cleanNumber(extracted.totalAmount);
+
+  if (totalAmount !== null && totalAmount !== 0) {
+    const description =
+      cleanString(extracted.totalAmountLabel) ??
+      `Total from ${document.fileName}`;
+
+    entries.push({
+      userId: document.userId,
+      documentId: document.id,
+      transactionDate: parseDate(extracted.documentDate),
+      description,
+      counterparty,
+      category: document.category.replaceAll("_", " "),
+      direction: inferDirection({
+        description,
+        itemCategory: cleanString(extracted.totalAmountLabel),
+        amount: totalAmount,
+        documentCategory: document.category,
+      }),
+      amount: Math.abs(totalAmount),
+      currency,
+      confidence: 0.75,
+      status: LedgerEntryStatus.APPROVED,
+      sourceType: LedgerSourceType.DOCUMENT_TOTAL,
+      sourceLineKey: sourceKey([
+        "document-total",
+        description,
+        totalAmount,
+      ]),
+      metadata: {
+        originalAmount: totalAmount,
+      },
+    });
+  }
+
+  return entries;
+}
+
+export async function removeLedgerEntriesForDocument(params: {
+  documentId: string;
+  userId: string;
+}) {
+  return prisma.ledgerEntry.deleteMany({
+    where: {
+      documentId: params.documentId,
+      userId: params.userId,
+    },
+  });
+}
+
+export async function syncLedgerEntriesFromDocument(params: {
+  documentId: string;
+  userId: string;
+}) {
+  const document = await prisma.document.findFirst({
+    where: {
+      id: params.documentId,
+      userId: params.userId,
+    },
+    select: {
+      id: true,
+      userId: true,
+      fileName: true,
+      category: true,
+      status: true,
+      reviewStatus: true,
+      extractedData: true,
+    },
+  });
+
+  if (!document) {
+    throw new Error("Document not found during ledger sync.");
+  }
+
+  if (
+    document.status !== DocumentStatus.PROCESSED ||
+    document.reviewStatus !== DocumentReviewStatus.APPROVED
+  ) {
+    await removeLedgerEntriesForDocument(params);
+    return 0;
+  }
+
+  const entries = buildEntries(document);
+
+  await prisma.$transaction(async (transaction) => {
+    await transaction.ledgerEntry.deleteMany({
+      where: {
+        documentId: document.id,
+        userId: document.userId,
+      },
+    });
+
+    if (entries.length > 0) {
+      await transaction.ledgerEntry.createMany({
+        data: entries,
+        skipDuplicates: true,
+      });
+    }
+  });
+
+  return entries.length;
+}
+
+export async function syncLedgerForReview(params: {
+  documentId: string;
+  userId: string;
+  reviewStatus: DocumentReviewStatus;
+}) {
+  if (params.reviewStatus === DocumentReviewStatus.APPROVED) {
+    return syncLedgerEntriesFromDocument({
+      documentId: params.documentId,
+      userId: params.userId,
+    });
+  }
+
+  await removeLedgerEntriesForDocument({
+    documentId: params.documentId,
+    userId: params.userId,
+  });
+
+  return 0;
+}
+
+export async function syncAllApprovedDocuments(userId: string) {
+  const documents = await prisma.document.findMany({
+    where: {
+      userId,
+      status: DocumentStatus.PROCESSED,
+      reviewStatus: DocumentReviewStatus.APPROVED,
+    },
+    select: {
+      id: true,
+    },
+    orderBy: {
+      uploadedAt: "asc",
+    },
+  });
+
+  let entriesCreated = 0;
+
+  for (const document of documents) {
+    entriesCreated += await syncLedgerEntriesFromDocument({
+      documentId: document.id,
+      userId,
+    });
+  }
+
+  return {
+    documentsSynced: documents.length,
+    entriesCreated,
+  };
+}

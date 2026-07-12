@@ -242,6 +242,7 @@ model TaxRuleSourceLink {
   @@map("tax_rule_source_link")
 }
 
+
 model LedgerEntry {
   id              String            @id @default(cuid())
   transactionDate DateTime?
@@ -259,9 +260,19 @@ model LedgerEntry {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   userId          String
-  documentId      String?
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  document        Document?         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId      String
+
+  user User @relation(
+    fields: [userId],
+    references: [id],
+    onDelete: Cascade
+  )
+
+  document Document @relation(
+    fields: [documentId],
+    references: [id],
+    onDelete: Cascade
+  )
 
   @@unique([documentId, sourceLineKey])
   @@index([userId, transactionDate])
@@ -289,7 +300,6 @@ enum LedgerSourceType {
   DOCUMENT_TOTAL
   MANUAL
 }
-
 enum DocumentCategory {
   BANK_STATEMENT
   SALES_INVOICE
