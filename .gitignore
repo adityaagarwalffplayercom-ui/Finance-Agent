@@ -45,3 +45,5 @@ us-irs-starting-business-recordkeeping.pdf
 **/*.backup*
 **/*.backup-*
 prisma/schema.prisma.backup*
+
+.aureli-backups/
