@@ -115,7 +115,7 @@ const NAV_ITEMS = [
   {
     label: "Settings & Team",
     href: "/settings",
-    enabled: true,
+    enabled: false,
   },
   {
     label: "Privacy",
