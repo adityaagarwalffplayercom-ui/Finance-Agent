@@ -1,10 +1,12 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { LedgerEntryStatus } from "@prisma/client";
+import { LedgerEntryStatus, WorkspaceRole } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
+import { requireWorkspaceRole } from "@/lib/workspace-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +44,9 @@ export async function POST(request: Request) {
         { status: 401 },
       );
     }
+
+    const { workspace, ledgerWhere } = await getActiveWorkspaceDataScope(session.user.id);
+    await requireWorkspaceRole(session.user.id, workspace.id, WorkspaceRole.ACCOUNTANT);
 
     const body = await request
       .json()
@@ -106,12 +111,7 @@ export async function POST(request: Request) {
 
     const matchingEntries =
       await prisma.ledgerEntry.findMany({
-        where: {
-          id: {
-            in: entryIds,
-          },
-          userId: session.user.id,
-        },
+        where: { AND: [ledgerWhere, { id: { in: entryIds } }] },
         select: {
           id: true,
           status: true,
@@ -135,12 +135,7 @@ export async function POST(request: Request) {
 
     const result =
       await prisma.ledgerEntry.updateMany({
-        where: {
-          id: {
-            in: accessibleIds,
-          },
-          userId: session.user.id,
-        },
+        where: { AND: [ledgerWhere, { id: { in: accessibleIds } }] },
         data: {
           status: body.status,
         },
@@ -148,6 +143,7 @@ export async function POST(request: Request) {
 
     await createAuditEvent({
       userId: session.user.id,
+      workspaceId: workspace.id,
       eventType:
         "LEDGER_ENTRY_UPDATED",
       title:

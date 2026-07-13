@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
+import { getActiveWorkspaceDataScope } from "./active-workspace-data";
 
 export type MonthlyReportMoney = {
   raw: number;
@@ -703,13 +704,12 @@ export async function getMonthlyFinanceReport(params: {
   month?: string | null;
 }): Promise<MonthlyFinanceReport> {
   const requestedRange = getMonthRange(params.month);
+  const { documentWhere, businessWhere } = await getActiveWorkspaceDataScope(params.userId);
 
   const [business, approvedDocuments, pendingReviewDocuments, rejectedDocuments, processedDocuments] =
     await Promise.all([
-      prisma.business.findUnique({
-        where: {
-          userId: params.userId,
-        },
+      prisma.business.findFirst({
+        where: businessWhere,
         select: {
           name: true,
           industry: true,
@@ -720,11 +720,7 @@ export async function getMonthlyFinanceReport(params: {
         },
       }),
       prisma.document.findMany({
-        where: {
-          userId: params.userId,
-          status: "PROCESSED",
-          reviewStatus: "APPROVED",
-        },
+        where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "APPROVED" }] },
         orderBy: {
           uploadedAt: "desc",
         },
@@ -739,23 +735,13 @@ export async function getMonthlyFinanceReport(params: {
         },
       }),
       prisma.document.count({
-        where: {
-          userId: params.userId,
-          status: "PROCESSED",
-          reviewStatus: "NEEDS_REVIEW",
-        },
+        where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "NEEDS_REVIEW" }] },
       }),
       prisma.document.count({
-        where: {
-          userId: params.userId,
-          reviewStatus: "REJECTED",
-        },
+        where: { AND: [documentWhere, { reviewStatus: "REJECTED" }] },
       }),
       prisma.document.count({
-        where: {
-          userId: params.userId,
-          status: "PROCESSED",
-        },
+        where: { AND: [documentWhere, { status: "PROCESSED" }] },
       }),
     ]);
 

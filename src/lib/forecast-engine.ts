@@ -1,4 +1,5 @@
-﻿import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
+import { prisma } from "@/lib/prisma";
 import { getFinancialProfile } from "@/lib/financial-profile";
 
 export type ForecastStatus = "POSITIVE" | "WATCH" | "RISK" | "INSUFFICIENT_DATA";
@@ -376,21 +377,18 @@ function buildScenarioRecommendation({
 }
 
 export async function getForecastReport(userId: string): Promise<ForecastReport> {
+  const { documentWhere, businessWhere } = await getActiveWorkspaceDataScope(userId);
   const [profile, business, statusCounts] = await Promise.all([
     getFinancialProfile(userId),
-    prisma.business.findUnique({
-      where: {
-        userId,
-      },
+    prisma.business.findFirst({
+      where: businessWhere,
       select: {
         currency: true,
       },
     }),
     prisma.document.groupBy({
       by: ["status", "reviewStatus"],
-      where: {
-        userId,
-      },
+      where: documentWhere,
       _count: {
         _all: true,
       },

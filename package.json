@@ -3,22 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "24.x"
-  },
-  "prisma": {
-    "schema": "prisma/schema.prisma"
+    "node": ">=22.0.0 <25"
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate --schema=prisma/schema.prisma && next build",
+    "build": "prisma generate --config prisma.config.ts && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate --schema=prisma/schema.prisma",
-    "db:migrate": "prisma migrate deploy --schema=prisma/schema.prisma",
+    "postinstall": "prisma generate --config prisma.config.ts",
+    "prisma:validate": "prisma validate --config prisma.config.ts",
+    "prisma:format": "prisma format --config prisma.config.ts",
+    "db:migrate": "prisma migrate deploy --config prisma.config.ts",
+    "db:status": "prisma migrate status --config prisma.config.ts",
     "typecheck": "tsc --noEmit",
     "test:financial-parser": "node --experimental-strip-types --test tests/financial-statement-parser.test.mjs",
+    "test:production": "node --experimental-strip-types --test tests/production-hardening.test.mjs",
+    "test": "npm run test:financial-parser && npm run test:production",
     "verify:financial-pdf": "node --experimental-strip-types scripts/verify-financial-pdf.mjs",
-    "verify:financial-engine": "npm run lint && npm run test:financial-parser"
+    "verify:financial-engine": "npm run lint && npm run test:financial-parser",
+    "verify:production": "npm run prisma:validate && npm run lint && npm run typecheck && npm test && npm run secrets:check",
+    "storage:migrate": "node --experimental-strip-types scripts/migrate-documents-to-object-storage.mjs",
+    "queue:drain": "node --experimental-strip-types scripts/drain-processing-queue.mjs",
+    "secrets:check": "node scripts/check-secrets.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.34.0",

@@ -78,6 +78,8 @@ export function DocumentTimeline({
   processingError,
 }: DocumentTimelineProps) {
   const isUploaded = Boolean(uploadedAt);
+  const isUploading = status === "UPLOADING";
+  const isQueued = status === "QUEUED";
   const isProcessing = status === "PROCESSING";
   const isProcessed = status === "PROCESSED";
   const isFailed = status === "FAILED";
@@ -101,15 +103,17 @@ export function DocumentTimeline({
       label: "AI processing",
       description: isFailed
         ? "AI extraction failed"
-        : isProcessing
-          ? "Gemini is analyzing"
+        : isQueued
+          ? "Waiting for a background worker"
+          : isProcessing
+            ? "Aureli is analyzing"
           : isProcessed
             ? "Extraction completed"
             : "Waiting for AI",
       date: formatTimelineDate(extractedAt),
       state: isFailed
         ? "failed"
-        : isProcessing
+        : isQueued || isProcessing
           ? "active"
           : isProcessed
             ? "done"
@@ -180,7 +184,7 @@ export function DocumentTimeline({
               ? "#7bed9f"
               : isRejected || isFailed
                 ? "#ff8a95"
-                : needsReview || isProcessing
+                : needsReview || isQueued || isProcessing || isUploading
                   ? "#ffd166"
                   : "var(--color-text-secondary)",
             fontSize: 12,
@@ -195,9 +199,13 @@ export function DocumentTimeline({
                 ? "Failed"
                 : needsReview
                   ? "Needs review"
-                  : isProcessing
-                    ? "Processing"
-                    : "Ready to process"}
+                  : isQueued
+                    ? "Queued"
+                    : isProcessing
+                      ? "Processing"
+                      : isUploading
+                        ? "Uploading"
+                        : "Ready to process"}
         </span>
       </div>
 

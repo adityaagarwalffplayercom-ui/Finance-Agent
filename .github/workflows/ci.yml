@@ -1,0 +1,52 @@
+name: Aureli CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aureli
+          POSTGRES_PASSWORD: aureli_test_password
+          POSTGRES_DB: aureli_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U aureli -d aureli_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: postgresql://aureli:aureli_test_password@localhost:5432/aureli_test?schema=public
+      DIRECT_URL: postgresql://aureli:aureli_test_password@localhost:5432/aureli_test?schema=public
+      BETTER_AUTH_SECRET: ci-only-secret-that-is-longer-than-thirty-two-bytes
+      BETTER_AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_REQUIRE_EMAIL_VERIFICATION: "false"
+      GEMINI_API_KEY: ci-placeholder-not-used-by-tests
+      DOCUMENT_PROCESSING_MODE: inline
+      STRICT_PRODUCTION_ENV: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:validate
+      - run: npm run db:migrate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run secrets:check
+      - run: npm run build

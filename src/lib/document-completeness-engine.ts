@@ -1,4 +1,5 @@
-﻿import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
+import { prisma } from "@/lib/prisma";
 
 type CompletenessTone = "good" | "warning" | "danger" | "neutral";
 
@@ -538,11 +539,10 @@ function makeSummary({
 export async function getDocumentCompletenessReport(
   userId: string,
 ): Promise<DocumentCompletenessReport> {
+  const { documentWhere, businessWhere } = await getActiveWorkspaceDataScope(userId);
   const [documents, business] = await Promise.all([
     prisma.document.findMany({
-    where: {
-      userId,
-    },
+    where: documentWhere,
     select: {
       id: true,
       fileName: true,
@@ -555,10 +555,8 @@ export async function getDocumentCompletenessReport(
     orderBy: {
       uploadedAt: "desc",
     },    }),
-    prisma.business.findUnique({
-      where: {
-        userId,
-      },
+    prisma.business.findFirst({
+      where: businessWhere,
       select: {
         currency: true,
       },

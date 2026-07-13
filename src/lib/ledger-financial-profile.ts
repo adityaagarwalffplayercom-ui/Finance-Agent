@@ -9,6 +9,7 @@ import type {
   FinancialProfile,
 } from "./financial-profile";
 import { prisma } from "./prisma";
+import { getActiveWorkspaceDataScope } from "./active-workspace-data";
 
 type MonthlyPoint = {
   key: string;
@@ -322,28 +323,21 @@ function createEmptyProfile(params: {
 export async function getFinancialProfile(
   userId: string,
 ): Promise<FinancialProfile> {
+  const { ledgerWhere, businessWhere } = await getActiveWorkspaceDataScope(userId);
   const [
     business,
     approvedEntries,
     reviewCount,
-    rejectedCount,
   ] = await Promise.all([
-    prisma.business.findUnique({
-      where: {
-        userId,
-      },
+    prisma.business.findFirst({
+      where: businessWhere,
       select: {
         currency: true,
       },
     }),
 
     prisma.ledgerEntry.findMany({
-      where: {
-        userId,
-        status:
-          LedgerEntryStatus.APPROVED,
-        isPosting: true,
-      },
+      where: { AND: [ledgerWhere, { status: LedgerEntryStatus.APPROVED, isPosting: true }] },
       select: {
         id: true,
         amount: true,
@@ -365,21 +359,7 @@ export async function getFinancialProfile(
     }),
 
     prisma.ledgerEntry.count({
-      where: {
-        userId,
-        status:
-          LedgerEntryStatus.NEEDS_REVIEW,
-        isPosting: true,
-      },
-    }),
-
-    prisma.ledgerEntry.count({
-      where: {
-        userId,
-        status:
-          LedgerEntryStatus.REJECTED,
-        isPosting: true,
-      },
+      where: { AND: [ledgerWhere, { status: LedgerEntryStatus.NEEDS_REVIEW, isPosting: true }] },
     }),
   ]);
 

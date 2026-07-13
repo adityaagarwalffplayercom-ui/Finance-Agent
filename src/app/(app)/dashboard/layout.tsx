@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
 import { DemoSampleDataButton } from "./components/DemoSampleDataButton";
 
 type DashboardLayoutProps = {
@@ -193,12 +194,11 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  const { documentWhere, businessWhere } = await getActiveWorkspaceDataScope(session.user.id);
   const [business, approvedDocuments, pendingDocuments, totalDocuments] =
     await Promise.all([
-      prisma.business.findUnique({
-        where: {
-          userId: session.user.id,
-        },
+      prisma.business.findFirst({
+        where: businessWhere,
         select: {
           name: true,
           industry: true,
@@ -209,23 +209,13 @@ export default async function DashboardLayout({
         },
       }),
       prisma.document.count({
-        where: {
-          userId: session.user.id,
-          status: "PROCESSED",
-          reviewStatus: "APPROVED",
-        },
+        where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "APPROVED" }] },
       }),
       prisma.document.count({
-        where: {
-          userId: session.user.id,
-          status: "PROCESSED",
-          reviewStatus: "NEEDS_REVIEW",
-        },
+        where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "NEEDS_REVIEW" }] },
       }),
       prisma.document.count({
-        where: {
-          userId: session.user.id,
-        },
+        where: documentWhere,
       }),
     ]);
 

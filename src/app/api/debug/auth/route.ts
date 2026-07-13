@@ -1,31 +1,20 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { productionConfig } from "@/lib/production-config";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const result = {
-    nodeVersion: process.version,
-    hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
-    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
-    hasBetterAuthSecret: Boolean(process.env.BETTER_AUTH_SECRET),
-    hasBetterAuthUrl: Boolean(process.env.BETTER_AUTH_URL),
-    hasPublicBetterAuthUrl: Boolean(process.env.NEXT_PUBLIC_BETTER_AUTH_URL),
-    betterAuthUrl: process.env.BETTER_AUTH_URL ?? null,
-    publicBetterAuthUrl: process.env.NEXT_PUBLIC_BETTER_AUTH_URL ?? null,
-    vercelUrl: process.env.VERCEL_URL ?? null,
-    databaseConnected: false,
-    databaseError: null as string | null,
-  };
-
-  try {
-    await prisma.user.count();
-    result.databaseConnected = true;
-  } catch (error) {
-    result.databaseConnected = false;
-    result.databaseError =
-      error instanceof Error ? error.message : "Unknown database error";
+  if (!productionConfig.debugRoutesEnabled || productionConfig.isProduction) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json({
+    nodeVersion: process.version,
+    environment: process.env.NODE_ENV ?? "development",
+    databaseConfigured: Boolean(process.env.DATABASE_URL),
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    authConfigured: Boolean(process.env.BETTER_AUTH_SECRET),
+    storageMode: process.env.OBJECT_STORAGE_ENDPOINT ? "s3" : "database",
+    processingMode: productionConfig.processingMode,
+  });
 }

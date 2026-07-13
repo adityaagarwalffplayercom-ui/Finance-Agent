@@ -2,6 +2,7 @@ import {
   LedgerDirection,
   LedgerEntryStatus,
 } from "@prisma/client";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
 import { prisma } from "@/lib/prisma";
 
 type CashFlowTone =
@@ -275,16 +276,14 @@ function makeSummary(params: {
 export async function getCashFlowReport(
   userId: string,
 ): Promise<CashFlowReport> {
+  const { ledgerWhere, businessWhere } = await getActiveWorkspaceDataScope(userId);
   const [
     business,
     approvedEntries,
     pendingCount,
-    rejectedCount,
   ] = await Promise.all([
-    prisma.business.findUnique({
-      where: {
-        userId,
-      },
+    prisma.business.findFirst({
+      where: businessWhere,
       select: {
         currency: true,
       },
@@ -292,10 +291,10 @@ export async function getCashFlowReport(
 
     prisma.ledgerEntry.findMany({
       where: {
-        userId,
-        status:
-          LedgerEntryStatus.APPROVED,
-        isPosting: true,
+        AND: [ledgerWhere, {
+          status: LedgerEntryStatus.APPROVED,
+          isPosting: true,
+        }],
       },
       select: {
         id: true,
@@ -330,21 +329,7 @@ export async function getCashFlowReport(
     }),
 
     prisma.ledgerEntry.count({
-      where: {
-        userId,
-        status:
-          LedgerEntryStatus.NEEDS_REVIEW,
-        isPosting: true,
-      },
-    }),
-
-    prisma.ledgerEntry.count({
-      where: {
-        userId,
-        status:
-          LedgerEntryStatus.REJECTED,
-        isPosting: true,
-      },
+      where: { AND: [ledgerWhere, { status: LedgerEntryStatus.NEEDS_REVIEW, isPosting: true }] },
     }),
   ]);
 

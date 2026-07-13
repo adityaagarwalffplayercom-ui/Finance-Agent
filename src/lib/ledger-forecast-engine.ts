@@ -2,6 +2,7 @@ import {
   LedgerDirection,
   LedgerEntryStatus,
 } from "@prisma/client";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
 import { prisma } from "@/lib/prisma";
 
 export type ForecastStatus =
@@ -515,21 +516,18 @@ function percentage(
 export async function getForecastReport(
   userId: string,
 ): Promise<ForecastReport> {
+  const { ledgerWhere, businessWhere } = await getActiveWorkspaceDataScope(userId);
   const [business, entries] =
     await Promise.all([
-      prisma.business.findUnique({
-        where: {
-          userId,
-        },
+      prisma.business.findFirst({
+        where: businessWhere,
         select: {
           currency: true,
         },
       }),
 
       prisma.ledgerEntry.findMany({
-        where: {
-          userId,
-        },
+        where: ledgerWhere,
         select: {
           id: true,
           status: true,

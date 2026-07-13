@@ -16,6 +16,8 @@ model User {
   image         String?
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
+  activeWorkspaceId String?
+  activeWorkspace Workspace?          @relation("ActiveWorkspace", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
   accounts      Account[]
   auditEvents   AuditEvent[]
   business      Business?
@@ -24,7 +26,14 @@ model User {
   ledgerEntries LedgerEntry[]
   sessions      Session[]
   usageEvents   UsageEvent[]
+  ownedWorkspaces Workspace[]          @relation("WorkspaceOwner")
+  workspaceMemberships WorkspaceMember[]
+  processingJobs ProcessingJob[]
+  extractionRuns ExtractionRun[]
+  documentCorrections DocumentCorrection[] @relation("CorrectionCreator")
+  workspaceInvitations WorkspaceInvitation[] @relation("WorkspaceInvitationSender")
 
+  @@index([activeWorkspaceId])
   @@map("user")
 }
 
@@ -83,8 +92,14 @@ model Business {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   userId        String   @unique
+  workspaceId    String?
+  aiProcessingConsentAt DateTime?
+  termsAcceptedAt DateTime?
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  documents     Document[]
 
+  @@index([workspaceId])
   @@map("business")
 }
 
@@ -92,46 +107,71 @@ model Document {
   id              String               @id @default(cuid())
   fileName        String
   mimeType        String
+  detectedMimeType String?
   fileSize        Int
   category        DocumentCategory
   status          DocumentStatus       @default(UPLOADED)
-  content         Bytes
+  content         Bytes?
+  storageProvider DocumentStorageProvider @default(DATABASE)
+  storageKey      String?              @unique
+  sha256          String?
+  pageCount       Int?
+  version         Int                  @default(1)
+  retentionUntil  DateTime?
   extractedData   Json?
   extractedAt     DateTime?
   processingError String?
   uploadedAt      DateTime             @default(now())
   userId          String
+  workspaceId     String?
+  businessId      String?
   reviewNote      String?
   reviewStatus    DocumentReviewStatus @default(NEEDS_REVIEW)
   reviewedAt      DateTime?
   ledgerEntries   LedgerEntry[]
+  processingJobs  ProcessingJob[]
+  extractionRuns  ExtractionRun[]
+  corrections     DocumentCorrection[]
   user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace       Workspace?           @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  business        Business?            @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   @@index([userId, uploadedAt])
   @@index([userId, status, reviewStatus])
+  @@index([userId, sha256])
+  @@index([workspaceId, uploadedAt])
+  @@index([retentionUntil])
   @@map("document")
 }
 
 model BusinessChatMessage {
-  id        String   @id @default(cuid())
-  role      String
-  content   String
-  createdAt DateTime @default(now())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String     @id @default(cuid())
+  role        String
+  content     String
+  createdAt   DateTime   @default(now())
+  userId      String
+  workspaceId String?
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([workspaceId, createdAt])
   @@map("business_chat_message")
 }
 
 model UsageEvent {
   id        String   @id @default(cuid())
   eventType String
+  quantity  Int      @default(1)
+  metadata  Json?
   createdAt DateTime @default(now())
   userId    String
+  workspaceId String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([userId, eventType, createdAt])
+  @@index([workspaceId, eventType, createdAt])
   @@map("usage_event")
 }
 
@@ -145,9 +185,12 @@ model AuditEvent {
   metadata    Json?
   createdAt   DateTime @default(now())
   userId      String
+  workspaceId String?
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([workspaceId, createdAt])
   @@index([userId, eventType, createdAt])
   @@map("audit_event")
 }
@@ -242,6 +285,186 @@ model TaxRuleSourceLink {
   @@map("tax_rule_source_link")
 }
 
+model Workspace {
+  id                    String             @id @default(cuid())
+  name                  String
+  slug                  String             @unique
+  ownerId               String
+  plan                  WorkspacePlan      @default(FREE)
+  retentionDays         Int                @default(365)
+  aiProcessingConsentAt DateTime?
+  termsAcceptedAt       DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  owner                 User               @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  activeUsers           User[]             @relation("ActiveWorkspace")
+  members               WorkspaceMember[]
+  businesses            Business[]
+  documents             Document[]
+  usageEvents           UsageEvent[]
+  auditEvents           AuditEvent[]
+  processingJobs        ProcessingJob[]
+  extractionRuns        ExtractionRun[]
+  corrections           DocumentCorrection[]
+  invitations           WorkspaceInvitation[]
+  monthlyUsage          WorkspaceUsageMonthly[]
+  chatMessages          BusinessChatMessage[]
+  ledgerEntries         LedgerEntry[]
+
+  @@index([ownerId])
+  @@map("workspace")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(VIEWER)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_member")
+}
+
+model ProcessingJob {
+  id              String              @id @default(cuid())
+  documentId      String
+  userId          String
+  workspaceId     String?
+  status          ProcessingJobStatus @default(QUEUED)
+  idempotencyKey  String              @unique
+  documentVersion Int
+  engineVersion   String
+  attemptCount    Int                 @default(0)
+  maxAttempts     Int                 @default(3)
+  priority        Int                 @default(100)
+  lockToken       String?
+  lockedAt        DateTime?
+  heartbeatAt     DateTime?
+  availableAt     DateTime            @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  lastError       String?
+  result          Json?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  document        Document            @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace       Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([status, availableAt, priority])
+  @@index([documentId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("processing_job")
+}
+
+model ExtractionRun {
+  id             String              @id @default(cuid())
+  documentId     String
+  userId         String
+  workspaceId    String?
+  runNumber      Int
+  status         ExtractionRunStatus @default(RUNNING)
+  engineVersion  String
+  parserVersion  String
+  promptVersion  String
+  modelName      String?
+  sourceFileHash String?
+  output         Json?
+  diagnostics    Json?
+  warnings       Json?
+  startedAt      DateTime            @default(now())
+  finishedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  document       Document            @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace      Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  corrections    DocumentCorrection[]
+
+  @@unique([documentId, runNumber])
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
+  @@map("extraction_run")
+}
+
+model DocumentCorrection {
+  id              String           @id @default(cuid())
+  documentId      String
+  extractionRunId String?
+  userId          String
+  workspaceId     String?
+  fieldPath       String
+  originalValue   Json?
+  correctedValue  Json
+  reason          String?
+  status          CorrectionStatus @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  document        Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  extractionRun   ExtractionRun?   @relation(fields: [extractionRunId], references: [id], onDelete: SetNull)
+  creator         User             @relation("CorrectionCreator", fields: [userId], references: [id], onDelete: Cascade)
+  workspace       Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, status])
+  @@index([workspaceId, createdAt])
+  @@map("document_correction")
+}
+
+
+model WorkspaceInvitation {
+  id          String        @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole
+  tokenHash   String        @unique
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User          @relation("WorkspaceInvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, email])
+  @@index([email, expiresAt])
+  @@map("workspace_invitation")
+}
+
+model RateLimit {
+  id          String @id @default(cuid())
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rateLimit")
+}
+
+model WorkspaceUsageMonthly {
+  id             String        @id @default(cuid())
+  workspaceId    String
+  month          DateTime
+  plan           WorkspacePlan
+  uploads        Int           @default(0)
+  aiProcesses    Int           @default(0)
+  processedPages Int           @default(0)
+  storageBytes   BigInt        @default(0)
+  aiInputTokens  BigInt        @default(0)
+  aiOutputTokens BigInt        @default(0)
+  estimatedCostMicros BigInt   @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, month])
+  @@index([month])
+  @@map("workspace_usage_monthly")
+}
+
 model LedgerEntry {
   id              String            @id @default(cuid())
   transactionDate DateTime?
@@ -261,14 +484,18 @@ model LedgerEntry {
   updatedAt       DateTime          @updatedAt
   userId          String
   documentId      String?
+  workspaceId     String?
   user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   document        Document?         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  workspace       Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@unique([documentId, sourceLineKey])
   @@index([userId, transactionDate])
   @@index([userId, direction, status])
   @@index([userId, isPosting, direction, status])
   @@index([documentId])
+  @@index([workspaceId, transactionDate])
+  @@index([workspaceId, isPosting, direction, status])
   @@map("ledger_entry")
 }
 
@@ -290,6 +517,47 @@ enum LedgerSourceType {
   STATEMENT_LINE
   DOCUMENT_TOTAL
   MANUAL
+}
+
+enum DocumentStorageProvider {
+  DATABASE
+  S3
+}
+
+enum ProcessingJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ExtractionRunStatus {
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum CorrectionStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  ACCOUNTANT
+  ANALYST
+  VIEWER
+  AUDITOR
+}
+
+enum WorkspacePlan {
+  FREE
+  STARTER
+  BUSINESS
+  ENTERPRISE
 }
 
 enum DocumentCategory {
@@ -314,7 +582,9 @@ enum DocumentCategory {
 }
 
 enum DocumentStatus {
+  UPLOADING
   UPLOADED
+  QUEUED
   PROCESSING
   PROCESSED
   FAILED

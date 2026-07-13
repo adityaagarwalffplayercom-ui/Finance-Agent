@@ -3,6 +3,7 @@
 // getDashboardData from here instead.
 
 import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
 import type { ExtractedDocumentData } from "@/lib/gemini";
 import type { DocumentCategory } from "@prisma/client";
 
@@ -31,13 +32,14 @@ export type DashboardData = {
 };
 
 export async function getDashboardData(userId: string): Promise<DashboardData> {
+  const { documentWhere } = await getActiveWorkspaceDataScope(userId);
   const [rawDocuments, failedCount] = await Promise.all([
     prisma.document.findMany({
-      where: { userId, status: "PROCESSED" },
+      where: { AND: [documentWhere, { status: "PROCESSED" }] },
       select: { id: true, category: true, extractedAt: true, extractedData: true },
       orderBy: { extractedAt: "desc" },
     }),
-    prisma.document.count({ where: { userId, status: "FAILED" } }),
+    prisma.document.count({ where: { AND: [documentWhere, { status: "FAILED" }] } }),
   ]);
 
   // extractedData is untyped Json in the DB. We trust it matches

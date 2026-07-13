@@ -59,6 +59,13 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
+async function sha256File(file: File) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest))
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function DocumentTypeSelect({
   value,
   onChange,
@@ -306,52 +313,69 @@ export function UploadForm() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("category", category);
-
-    setState({
-      type: "idle",
-      message: "",
-    });
+    setState({ type: "idle", message: "" });
 
     startTransition(async () => {
       try {
-        const response = await fetch("/api/documents", {
+        const sha256 = await sha256File(file);
+        const initiateResponse = await fetch("/api/documents/upload/initiate", {
           method: "POST",
-          body: formData,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+            category,
+            sha256,
+          }),
         });
-
-        const data = (await response.json().catch(() => null)) as {
-          error?: string;
-          message?: string;
-        } | null;
-
-        if (!response.ok) {
-          throw new Error(data?.error ?? "Document upload failed.");
+        const initiate = (await initiateResponse.json().catch(() => null)) as
+          | { mode?: "s3" | "database"; documentId?: string; uploadUrl?: string; error?: string }
+          | null;
+        if (!initiateResponse.ok) {
+          throw new Error(initiate?.error ?? "Could not start document upload.");
         }
+
+        let response: Response;
+        if (initiate?.mode === "s3" && initiate.documentId && initiate.uploadUrl) {
+          const uploadResponse = await fetch(initiate.uploadUrl, {
+            method: "PUT",
+            body: file,
+            headers: { "content-type": file.type || "application/octet-stream" },
+          });
+          if (!uploadResponse.ok) {
+            throw new Error(`Private storage upload failed (${uploadResponse.status}).`);
+          }
+          response = await fetch("/api/documents/upload/finalize", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ documentId: initiate.documentId, sha256 }),
+          });
+        } else {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("category", category);
+          response = await fetch("/api/documents", { method: "POST", body: formData });
+        }
+
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; message?: string }
+          | null;
+        if (!response.ok) throw new Error(data?.error ?? "Document upload failed.");
 
         setFile(null);
-
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-
+        if (fileInputRef.current) fileInputRef.current.value = "";
         setState({
           type: "success",
           message:
             data?.message ??
-            "Document uploaded successfully. You can process it with AI from the review queue.",
+            "Document uploaded securely. Process it from the review queue before it affects the dashboard.",
         });
-
         router.refresh();
       } catch (error) {
         setState({
           type: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Document upload failed. Please try again.",
+          message: error instanceof Error ? error.message : "Document upload failed. Please try again.",
         });
       }
     });

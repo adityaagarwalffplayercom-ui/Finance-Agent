@@ -10,6 +10,7 @@ import {
 } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
 import { AddManualTransaction } from "./AddManualTransaction";
 import {
   LedgerReviewTable,
@@ -230,6 +231,7 @@ export default async function LedgerPage({
     return null;
   }
 
+  const { ledgerWhere, documentWhere } = await getActiveWorkspaceDataScope(session.user.id);
   const params = await searchParams;
 
   const query = params.q?.trim() ?? "";
@@ -264,8 +266,7 @@ export default async function LedgerPage({
       entryType,
   );
 
-  const where: Prisma.LedgerEntryWhereInput = {
-    userId: session.user.id,
+  const filterWhere: Prisma.LedgerEntryWhereInput = {
 
     ...(direction
       ? {
@@ -327,6 +328,8 @@ export default async function LedgerPage({
       : {}),
   };
 
+  const where: Prisma.LedgerEntryWhereInput = { AND: [ledgerWhere, filterWhere] };
+
   const [
     entries,
     totalEntries,
@@ -359,57 +362,31 @@ export default async function LedgerPage({
     }),
 
     prisma.ledgerEntry.count({
-      where: {
-        userId: session.user.id,
-      },
+      where: ledgerWhere,
     }),
 
     prisma.ledgerEntry.count({
-      where: {
-        userId: session.user.id,
-        status:
-          LedgerEntryStatus.NEEDS_REVIEW,
-      },
+      where: { AND: [ledgerWhere, { status: LedgerEntryStatus.NEEDS_REVIEW }] },
     }),
 
     prisma.ledgerEntry.count({
-      where: {
-        userId: session.user.id,
-        status:
-          LedgerEntryStatus.APPROVED,
-      },
+      where: { AND: [ledgerWhere, { status: LedgerEntryStatus.APPROVED }] },
     }),
 
     prisma.ledgerEntry.count({
-      where: {
-        userId: session.user.id,
-        status:
-          LedgerEntryStatus.REJECTED,
-      },
+      where: { AND: [ledgerWhere, { status: LedgerEntryStatus.REJECTED }] },
     }),
 
     prisma.ledgerEntry.count({
-      where: {
-        userId: session.user.id,
-        isPosting: true,
-      },
+      where: { AND: [ledgerWhere, { isPosting: true }] },
     }),
 
     prisma.ledgerEntry.count({
-      where: {
-        userId: session.user.id,
-        isPosting: false,
-      },
+      where: { AND: [ledgerWhere, { isPosting: false }] },
     }),
 
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-        status:
-          DocumentStatus.PROCESSED,
-        reviewStatus:
-          DocumentReviewStatus.APPROVED,
-      },
+      where: { AND: [documentWhere, { status: DocumentStatus.PROCESSED, reviewStatus: DocumentReviewStatus.APPROVED }] },
     }),
   ]);
 

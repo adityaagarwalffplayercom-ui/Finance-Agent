@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { getActiveWorkspaceDataScope } from "./active-workspace-data";
 import type { ExtractedDocumentData } from "./gemini";
 import {
   buildFinancialIntelligence,
@@ -237,21 +238,16 @@ function buildFinancialMetrics(intelligence: FinancialIntelligence) {
 export async function getFinancialProfile(
   userId: string,
 ): Promise<FinancialProfile> {
-  const business = await prisma.business.findUnique({
-    where: {
-      userId,
-    },
+  const { documentWhere, businessWhere } = await getActiveWorkspaceDataScope(userId);
+  const business = await prisma.business.findFirst({
+    where: businessWhere,
     select: {
       currency: true,
     },
   });
 
   const rawDocuments = await prisma.document.findMany({
-    where: {
-      userId,
-      status: "PROCESSED",
-      reviewStatus: "APPROVED",
-    },
+    where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "APPROVED" }] },
     select: {
       id: true,
       fileName: true,

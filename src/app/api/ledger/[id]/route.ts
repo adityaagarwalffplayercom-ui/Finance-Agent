@@ -6,10 +6,13 @@ import {
   LedgerEntryStatus,
   LedgerSourceType,
   Prisma,
+  WorkspaceRole,
 } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
+import { requireWorkspaceRole } from "@/lib/workspace-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,6 +112,8 @@ export async function PATCH(
       );
     }
 
+    const { workspace, ledgerWhere } = await getActiveWorkspaceDataScope(session.user.id);
+    await requireWorkspaceRole(session.user.id, workspace.id, WorkspaceRole.ACCOUNTANT);
     const { id } = await context.params;
 
     const body = await request
@@ -124,10 +129,7 @@ export async function PATCH(
 
     const existingEntry =
       await prisma.ledgerEntry.findFirst({
-        where: {
-          id,
-          userId: session.user.id,
-        },
+        where: { AND: [ledgerWhere, { id }] },
         include: {
           document: {
             select: {
@@ -308,6 +310,7 @@ export async function PATCH(
 
     await createAuditEvent({
       userId: session.user.id,
+      workspaceId: workspace.id,
       eventType: "LEDGER_ENTRY_UPDATED",
       title: "Ledger entry updated",
       description:
@@ -379,14 +382,13 @@ export async function DELETE(
       );
     }
 
+    const { workspace, ledgerWhere } = await getActiveWorkspaceDataScope(session.user.id);
+    await requireWorkspaceRole(session.user.id, workspace.id, WorkspaceRole.ACCOUNTANT);
     const { id } = await context.params;
 
     const entry =
       await prisma.ledgerEntry.findFirst({
-        where: {
-          id,
-          userId: session.user.id,
-        },
+        where: { AND: [ledgerWhere, { id }] },
         include: {
           document: {
             select: {
@@ -428,6 +430,7 @@ export async function DELETE(
 
     await createAuditEvent({
       userId: session.user.id,
+      workspaceId: workspace.id,
       eventType:
         "MANUAL_LEDGER_ENTRY_DELETED",
       title:

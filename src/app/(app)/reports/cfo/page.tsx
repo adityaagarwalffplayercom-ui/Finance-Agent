@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
 import { getFinancialProfile } from "@/lib/financial-profile";
 import { ExportCfoReportButton } from "./ExportCfoReportButton";
 
@@ -249,6 +250,7 @@ export default async function CfoReportPage() {
   }
 
   const profile = await getFinancialProfile(session.user.id);
+  const { documentWhere, businessWhere } = await getActiveWorkspaceDataScope(session.user.id);
 
   const [
     business,
@@ -259,10 +261,8 @@ export default async function CfoReportPage() {
     failedDocuments,
     latestApprovedDocument,
   ] = await Promise.all([
-    prisma.business.findUnique({
-      where: {
-        userId: session.user.id,
-      },
+    prisma.business.findFirst({
+      where: businessWhere,
       select: {
         name: true,
         industry: true,
@@ -274,42 +274,22 @@ export default async function CfoReportPage() {
       },
     }),
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-      },
+      where: documentWhere,
     }),
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-        status: "PROCESSED",
-        reviewStatus: "APPROVED",
-      },
+      where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "APPROVED" }] },
     }),
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-        status: "PROCESSED",
-        reviewStatus: "NEEDS_REVIEW",
-      },
+      where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "NEEDS_REVIEW" }] },
     }),
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-        reviewStatus: "REJECTED",
-      },
+      where: { AND: [documentWhere, { reviewStatus: "REJECTED" }] },
     }),
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-        status: "FAILED",
-      },
+      where: { AND: [documentWhere, { status: "FAILED" }] },
     }),
     prisma.document.findFirst({
-      where: {
-        userId: session.user.id,
-        status: "PROCESSED",
-        reviewStatus: "APPROVED",
-      },
+      where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "APPROVED" }] },
       orderBy: [
         {
           reviewedAt: "desc",

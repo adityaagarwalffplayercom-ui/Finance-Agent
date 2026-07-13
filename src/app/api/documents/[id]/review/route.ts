@@ -4,11 +4,13 @@ import { NextResponse } from "next/server";
 import {
   DocumentReviewStatus,
   DocumentStatus,
+  WorkspaceRole,
 } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 import { syncLedgerForReviewInTransaction } from "@/lib/transaction-ledger";
+import { requireWorkspaceRole } from "@/lib/workspace-context";
 
 type RouteContext = {
   params: Promise<{
@@ -117,10 +119,15 @@ export async function PATCH(
       await prisma.document.findFirst({
         where: {
           id,
-          userId: session.user.id,
+          OR: [
+            { userId: session.user.id },
+            { workspace: { members: { some: { userId: session.user.id } } } },
+          ],
         },
         select: {
           id: true,
+          userId: true,
+          workspaceId: true,
           fileName: true,
           status: true,
           reviewStatus: true,
@@ -133,6 +140,12 @@ export async function PATCH(
         { status: 404 },
       );
     }
+
+    await requireWorkspaceRole(
+      session.user.id,
+      document.workspaceId,
+      WorkspaceRole.ACCOUNTANT,
+    );
 
     if (
       reviewStatus ===
@@ -181,7 +194,7 @@ export async function PATCH(
             transaction,
             {
               documentId: document.id,
-              userId: session.user.id,
+              userId: document.userId,
               reviewStatus,
             },
           );
@@ -195,6 +208,7 @@ export async function PATCH(
 
     await createAuditEvent({
       userId: session.user.id,
+      workspaceId: document.workspaceId,
       eventType:
         getReviewAuditType(reviewStatus),
       title:

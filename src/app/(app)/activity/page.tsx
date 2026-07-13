@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
 
 type Tone = "green" | "amber" | "yellow" | "red" | "neutral";
 
@@ -907,6 +908,9 @@ export default async function ActivityPage() {
     redirect("/login");
   }
 
+  const { workspace, documentWhere, businessWhere } = await getActiveWorkspaceDataScope(session.user.id);
+  const chatWhere = { OR: [{ workspaceId: workspace.id }, { workspaceId: null, userId: session.user.id }] };
+
   const [
     business,
     totalDocuments,
@@ -916,10 +920,8 @@ export default async function ActivityPage() {
     recentDocuments,
     recentChatMessages,
   ] = await Promise.all([
-    prisma.business.findUnique({
-      where: {
-        userId: session.user.id,
-      },
+    prisma.business.findFirst({
+      where: businessWhere,
       select: {
         name: true,
         industry: true,
@@ -931,34 +933,19 @@ export default async function ActivityPage() {
       },
     }),
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-      },
+      where: documentWhere,
     }),
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-        status: "PROCESSED",
-        reviewStatus: "APPROVED",
-      },
+      where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "APPROVED" }] },
     }),
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-        status: "PROCESSED",
-        reviewStatus: "NEEDS_REVIEW",
-      },
+      where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "NEEDS_REVIEW" }] },
     }),
     prisma.document.count({
-      where: {
-        userId: session.user.id,
-        status: "FAILED",
-      },
+      where: { AND: [documentWhere, { status: "FAILED" }] },
     }),
     prisma.document.findMany({
-      where: {
-        userId: session.user.id,
-      },
+      where: documentWhere,
       orderBy: {
         uploadedAt: "desc",
       },
@@ -976,9 +963,7 @@ export default async function ActivityPage() {
       },
     }),
     prisma.businessChatMessage.findMany({
-      where: {
-        userId: session.user.id,
-      },
+      where: chatWhere,
       orderBy: {
         createdAt: "desc",
       },

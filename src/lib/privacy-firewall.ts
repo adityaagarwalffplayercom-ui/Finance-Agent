@@ -70,9 +70,11 @@ function blockPrivateModel(model?: string, operation?: string): never {
   );
 }
 
+type AdminOperationContext = { model?: string; operation: string };
+
 function blockPrivateModelOperations() {
   return {
-    async $allOperations({ model, operation }: any) {
+    async $allOperations({ model, operation }: AdminOperationContext) {
       blockPrivateModel(model, operation);
     },
   };

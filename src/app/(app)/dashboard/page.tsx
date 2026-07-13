@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getActiveWorkspaceDataScope } from "@/lib/active-workspace-data";
 import { getLedgerDataConfidence } from "@/lib/ledger-data-confidence";
 import { getFinancialProfile } from "@/lib/ledger-financial-profile";
 
@@ -503,6 +504,7 @@ export default async function DashboardPage() {
   }
 
   const userId = session.user.id;
+  const { documentWhere, businessWhere } = await getActiveWorkspaceDataScope(userId);
 
   const [
     profile,
@@ -517,10 +519,8 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     getFinancialProfile(userId),
     getLedgerDataConfidence(userId),
-    prisma.business.findUnique({
-      where: {
-        userId,
-      },
+    prisma.business.findFirst({
+      where: businessWhere,
       select: {
         name: true,
         industry: true,
@@ -531,9 +531,7 @@ export default async function DashboardPage() {
       },
     }),
     prisma.document.findMany({
-      where: {
-        userId,
-      },
+      where: documentWhere,
       select: {
         id: true,
         fileName: true,
@@ -548,35 +546,19 @@ export default async function DashboardPage() {
       take: 8,
     }),
     prisma.document.count({
-      where: {
-        userId,
-      },
+      where: documentWhere,
     }),
     prisma.document.count({
-      where: {
-        userId,
-        status: "PROCESSED",
-      },
+      where: { AND: [documentWhere, { status: "PROCESSED" }] },
     }),
     prisma.document.count({
-      where: {
-        userId,
-        reviewStatus: "APPROVED",
-      },
+      where: { AND: [documentWhere, { reviewStatus: "APPROVED" }] },
     }),
     prisma.document.count({
-      where: {
-        userId,
-        status: "FAILED",
-      },
+      where: { AND: [documentWhere, { status: "FAILED" }] },
     }),
     prisma.document.count({
-      where: {
-        userId,
-        fileName: {
-          startsWith: "[DEMO]",
-        },
-      },
+      where: { AND: [documentWhere, { fileName: { startsWith: "[DEMO]" } }] },
     }),
   ]);
 

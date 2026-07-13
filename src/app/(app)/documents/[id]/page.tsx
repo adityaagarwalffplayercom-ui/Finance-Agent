@@ -7,6 +7,8 @@ import { categoryLabel, formatFileSize } from "@/lib/document-categories";
 import type { ExtractedDocumentData } from "@/lib/gemini";
 import { DocumentTimeline } from "../components/DocumentTimeline";
 import { DocumentReviewPanel } from "./DocumentReviewPanel";
+import { DocumentCorrectionPanel } from "./DocumentCorrectionPanel";
+import { DocumentStatusAutoRefresh } from "./DocumentStatusAutoRefresh";
 
 type PageProps = {
   params: Promise<{
@@ -52,11 +54,23 @@ const STATUS_COPY: Record<
     background: string;
   }
 > = {
+  UPLOADING: {
+    label: "Uploading",
+    color: "#8abfff",
+    border: "rgba(88,166,255,0.30)",
+    background: "rgba(88,166,255,0.10)",
+  },
   UPLOADED: {
     label: "Uploaded",
     color: "#8abfff",
     border: "rgba(88,166,255,0.30)",
     background: "rgba(88,166,255,0.10)",
+  },
+  QUEUED: {
+    label: "Queued",
+    color: "#c4a1ff",
+    border: "rgba(168,85,247,0.30)",
+    background: "rgba(168,85,247,0.10)",
   },
   PROCESSING: {
     label: "Processing",
@@ -498,7 +512,10 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
   const document = await prisma.document.findFirst({
     where: {
       id,
-      userId: session.user.id,
+      OR: [
+        { userId: session.user.id },
+        { workspace: { members: { some: { userId: session.user.id } } } },
+      ],
     },
     select: {
       id: true,
@@ -594,6 +611,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
 
   return (
     <>
+      <DocumentStatusAutoRefresh status={document.status} />
       <header
         className="dashboard-header"
         style={{
@@ -953,6 +971,22 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
           </div>
         )}
       </section>
+
+      {document.status === "PROCESSED" && (
+        <DocumentCorrectionPanel
+          documentId={document.id}
+          currency={currency}
+          initialValues={{
+            revenue,
+            expenses,
+            netIncome: profit,
+            cash,
+            assets,
+            liabilities,
+            equity,
+          }}
+        />
+      )}
 
       <section
         className="section-card"

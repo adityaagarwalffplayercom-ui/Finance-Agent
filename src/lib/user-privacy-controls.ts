@@ -1,5 +1,7 @@
 import { jsPDF } from "jspdf";
+import { DocumentStorageProvider } from "@prisma/client";
 import { prisma } from "./prisma";
+import { deleteObject } from "./object-storage";
 
 export type UserPrivacyExport = {
   exportedAt: string;
@@ -566,7 +568,43 @@ export async function buildUserDataExportPdf(userId: string) {
   return Buffer.from(arrayBuffer);
 }
 
+async function deleteStoredSourceObjectsForUser(userId: string) {
+  const documents = await prisma.document.findMany({
+    where: { userId },
+    select: { id: true, storageProvider: true, storageKey: true },
+  });
+
+  for (const document of documents) {
+    if (
+      document.storageProvider === DocumentStorageProvider.S3 &&
+      document.storageKey
+    ) {
+      await deleteObject(document.storageKey);
+    }
+  }
+
+  return documents.length;
+}
+
+async function assertAccountCanBeDeleted(userId: string) {
+  const workspace = await prisma.workspace.findFirst({
+    where: {
+      ownerId: userId,
+      members: { some: { userId: { not: userId } } },
+    },
+    select: { id: true, name: true },
+  });
+
+  if (workspace) {
+    throw new Error(
+      `OWNER_TRANSFER_REQUIRED:${workspace.name}`,
+    );
+  }
+}
+
 export async function deleteOwnBusinessData(userId: string) {
+  await deleteStoredSourceObjectsForUser(userId);
+
   return prisma.$transaction(async (tx) => {
     const [chatMessages, auditEvents, usageEvents, documents, business] =
       await Promise.all([
@@ -617,6 +655,9 @@ export async function deleteOwnBusinessData(userId: string) {
 }
 
 export async function deleteOwnAccountCompletely(userId: string) {
+  await assertAccountCanBeDeleted(userId);
+  await deleteStoredSourceObjectsForUser(userId);
+
   return prisma.$transaction(async (tx) => {
     const [chatMessages, auditEvents, usageEvents, documents, business] =
       await Promise.all([

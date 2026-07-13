@@ -3,6 +3,7 @@ import {
   LedgerEntryStatus,
 } from "@prisma/client";
 import { prisma } from "./prisma";
+import { getActiveWorkspaceDataScope } from "./active-workspace-data";
 
 export type LedgerConfidenceLevel =
   | "LOW"
@@ -57,11 +58,10 @@ function monthKey(date: Date) {
 export async function getLedgerDataConfidence(
   userId: string,
 ): Promise<LedgerDataConfidence> {
+  const { ledgerWhere } = await getActiveWorkspaceDataScope(userId);
   const entries =
     await prisma.ledgerEntry.findMany({
-      where: {
-        userId,
-      },
+      where: ledgerWhere,
       select: {
         status: true,
         isPosting: true,

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -111,7 +112,7 @@ function demoTransactions() {
   ];
 }
 
-function buildDemoDocuments(userId: string) {
+function buildDemoDocuments(userId: string): Prisma.DocumentUncheckedCreateInput[] {
   const now = new Date();
 
   return [
@@ -398,7 +399,7 @@ export async function POST(request: Request) {
         financialYear: "2026-27",
         currency: "INR",
         country: "India",
-      } as any,
+      } satisfies Prisma.BusinessUpdateInput,
       create: {
         userId,
         name: "Aureli Demo Pvt Ltd",
@@ -407,14 +408,14 @@ export async function POST(request: Request) {
         financialYear: "2026-27",
         currency: "INR",
         country: "India",
-      } as any,
+      } satisfies Prisma.BusinessUncheckedCreateInput,
     });
 
     const documents = buildDemoDocuments(userId);
 
     for (const document of documents) {
       await prisma.document.create({
-        data: document as any,
+        data: document,
       });
     }
 

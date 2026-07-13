@@ -14,6 +14,7 @@ import { prisma } from "./prisma";
 type LedgerDocument = {
   id: string;
   userId: string;
+  workspaceId: string | null;
   fileName: string;
   category: DocumentCategory;
   extractedData: Prisma.JsonValue | null;
@@ -723,6 +724,7 @@ async function syncLedgerEntriesFromDocumentInTransaction(
     select: {
       id: true,
       userId: true,
+      workspaceId: true,
       fileName: true,
       category: true,
       status: true,
@@ -749,7 +751,10 @@ async function syncLedgerEntriesFromDocumentInTransaction(
     return 0;
   }
 
-  const entries = buildEntries(document);
+  const entries = buildEntries(document).map((entry) => ({
+    ...entry,
+    workspaceId: document.workspaceId,
+  }));
 
   await transaction.ledgerEntry.deleteMany({
     where: {
@@ -815,14 +820,22 @@ export async function syncLedgerForReview(params: LedgerSyncParams & {
 }
 
 export async function syncAllApprovedDocuments(userId: string) {
+  const { documentWhere } = await import("./active-workspace-data").then(({ getActiveWorkspaceDataScope }) =>
+    getActiveWorkspaceDataScope(userId),
+  );
   const documents = await prisma.document.findMany({
     where: {
-      userId,
-      status: DocumentStatus.PROCESSED,
-      reviewStatus: DocumentReviewStatus.APPROVED,
+      AND: [
+        documentWhere,
+        {
+          status: DocumentStatus.PROCESSED,
+          reviewStatus: DocumentReviewStatus.APPROVED,
+        },
+      ],
     },
     select: {
       id: true,
+      userId: true,
     },
     orderBy: {
       uploadedAt: "asc",
@@ -834,7 +847,7 @@ export async function syncAllApprovedDocuments(userId: string) {
   for (const document of documents) {
     entriesCreated += await syncLedgerEntriesFromDocument({
       documentId: document.id,
-      userId,
+      userId: document.userId,
     });
   }
 

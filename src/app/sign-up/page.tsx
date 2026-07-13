@@ -27,16 +27,22 @@ export default function SignUpPage() {
         email,
         password,
         callbackURL: "/onboarding",
-      } as any);
+      });
 
-      if ((result as any)?.error) {
+      if (result?.error) {
         throw new Error(
-          (result as any).error.message ||
+          result.error.message ||
             "Account creation failed. Please try again.",
         );
       }
 
-      router.push("/onboarding");
+      const verificationRequired =
+        process.env.NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION === "true";
+      router.push(
+        verificationRequired
+          ? `/verify-email-sent?email=${encodeURIComponent(email)}`
+          : "/onboarding",
+      );
       router.refresh();
     } catch (signUpError) {
       setError(

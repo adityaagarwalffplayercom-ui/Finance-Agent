@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -6,6 +6,7 @@ import {
   optimizeActionsWithLearning,
   summarizeLearningFeedback,
   type LearningFeedbackEvent,
+  type LearningOptimizedAction,
   type LearningRewardType,
 } from "@/lib/learning-feedback-engine";
 
@@ -208,10 +209,10 @@ function ActionCard({
   action,
   onReward,
 }: {
-  action: any;
+  action: LearningOptimizedAction;
   onReward: (type: LearningRewardType) => void;
 }) {
-  const style = toneStyle(priorityTone(action.priority));
+  const style = toneStyle(priorityTone(action.priority ?? "LOW"));
 
   return (
     <article

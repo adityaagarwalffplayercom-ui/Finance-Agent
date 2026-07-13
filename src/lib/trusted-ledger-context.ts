@@ -8,6 +8,7 @@ import {
   type LedgerDataConfidence,
 } from "./ledger-data-confidence";
 import { prisma } from "./prisma";
+import { getActiveWorkspaceDataScope } from "./active-workspace-data";
 
 export type TrustedLedgerEntryEvidence = {
   id: string;
@@ -336,16 +337,15 @@ function evidenceSource(
 export async function getTrustedLedgerContext(
   userId: string,
 ): Promise<TrustedLedgerContext> {
+  const { ledgerWhere, documentWhere, businessWhere } = await getActiveWorkspaceDataScope(userId);
   const [
     business,
     ledgerEntries,
     documents,
     confidence,
   ] = await Promise.all([
-    prisma.business.findUnique({
-      where: {
-        userId,
-      },
+    prisma.business.findFirst({
+      where: businessWhere,
       select: {
         name: true,
         industry: true,
@@ -357,9 +357,7 @@ export async function getTrustedLedgerContext(
     }),
 
     prisma.ledgerEntry.findMany({
-      where: {
-        userId,
-      },
+      where: ledgerWhere,
       select: {
         id: true,
         transactionDate: true,
@@ -395,9 +393,7 @@ export async function getTrustedLedgerContext(
     }),
 
     prisma.document.findMany({
-      where: {
-        userId,
-      },
+      where: documentWhere,
       select: {
         status: true,
         reviewStatus: true,

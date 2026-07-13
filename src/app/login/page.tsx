@@ -91,7 +91,8 @@ export default function LoginPage() {
         </form>
 
         <p className="auth-footer">
-          New here? <Link href="/signup">Create an account</Link>
+          <Link href="/forgot-password">Forgot password?</Link>
+          {" · "}New here? <Link href="/signup">Create an account</Link>
         </p>
       </section>
     </main>

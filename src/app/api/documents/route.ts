@@ -1,162 +1,188 @@
 import { NextRequest, NextResponse } from "next/server";
+import { DocumentStatus, DocumentStorageProvider } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
-import {
-  ALLOWED_MIME_TYPES,
-  MAX_FILE_SIZE_BYTES,
-  formatFileSize,
-  isValidCategory,
-} from "@/lib/document-categories";
+import { ALLOWED_MIME_TYPES, isValidCategory } from "@/lib/document-categories";
+import { inspectFile, sanitizeFileName } from "@/lib/file-security";
+import { buildStorageKey, configuredStorageProvider, putObject } from "@/lib/object-storage";
 import { checkAndRecordUploadUsage } from "@/lib/usage-events";
+import { ensureDefaultWorkspaceForUser } from "@/lib/workspace-context";
+import { limitsForPlan } from "@/lib/plan-limits";
+import { checkWorkspaceStorageCapacity } from "@/lib/workspace-storage";
+import { productionConfig } from "@/lib/production-config";
+import { logger, getRequestId } from "@/lib/logger";
+import { scanStoredDocument } from "@/lib/malware-scan";
 
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request.headers);
   try {
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-    }
-
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session?.user?.id) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
     const userId = session.user.id;
-
     const formData = await request.formData();
-
     const file = formData.get("file");
     const category = formData.get("category");
-
-    if (!(file instanceof File)) {
-      return NextResponse.json(
-        { error: "No file was provided." },
-        { status: 400 },
-      );
-    }
-
+    if (!(file instanceof File)) return NextResponse.json({ error: "No file was provided." }, { status: 400 });
     if (typeof category !== "string" || !isValidCategory(category)) {
+      return NextResponse.json({ error: "Pick a document category." }, { status: 400 });
+    }
+    if (file.size <= 0) return NextResponse.json({ error: "That file is empty." }, { status: 400 });
+
+    const workspace = await ensureDefaultWorkspaceForUser(userId);
+    const limits = limitsForPlan(workspace.plan);
+    if (file.size > limits.maxFileBytes) {
       return NextResponse.json(
-        { error: "Pick a document category." },
-        { status: 400 },
+        { error: `Your ${workspace.plan.toLowerCase()} plan allows files up to ${Math.round(limits.maxFileBytes / 1024 / 1024)} MB.` },
+        { status: 413 },
       );
     }
 
-    if (file.size === 0) {
+    const storageCapacity = await checkWorkspaceStorageCapacity({
+      workspaceId: workspace.id,
+      incomingBytes: file.size,
+      limitBytes: limits.storageBytes,
+    });
+    if (!storageCapacity.allowed) {
       return NextResponse.json(
-        { error: "That file is empty." },
-        { status: 400 },
+        { error: "Workspace storage limit reached. Delete older documents or upgrade the plan." },
+        { status: 429 },
       );
     }
 
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      const message = `Files must be ${formatFileSize(
-        MAX_FILE_SIZE_BYTES,
-      )} or smaller. This protects AI quota and prevents large annual reports from exhausting Gemini.`;
-
-      await createAuditEvent({
-        userId,
-        eventType: "UPLOAD_BLOCKED",
-        title: "Upload blocked",
-        description: message,
-        fileName: file.name,
-        metadata: {
-          fileSize: file.size,
-          mimeType: file.type,
-          category,
-        },
-      });
-
-      return NextResponse.json({ error: message }, { status: 413 });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const safeName = sanitizeFileName(file.name);
+    const inspection = inspectFile(buffer, safeName, file.type);
+    if (!ALLOWED_MIME_TYPES.includes(inspection.detectedMimeType ?? "")) {
+      return NextResponse.json({ error: "Use a supported PDF, image, CSV, or Excel file." }, { status: 400 });
+    }
+    if (inspection.isEncryptedPdf) {
+      return NextResponse.json({ error: "Password-protected PDFs must be unlocked before upload." }, { status: 400 });
     }
 
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      const message = "Use a PDF, image (JPG/PNG/WebP), CSV, or Excel file.";
-
-      await createAuditEvent({
-        userId,
-        eventType: "UPLOAD_BLOCKED",
-        title: "Upload blocked",
-        description: message,
-        fileName: file.name,
-        metadata: {
-          fileSize: file.size,
-          mimeType: file.type,
-          category,
-        },
-      });
-
-      return NextResponse.json({ error: message }, { status: 400 });
+    const duplicate = await prisma.document.findFirst({
+      where: {
+        workspaceId: workspace.id,
+        sha256: inspection.sha256,
+        status: { not: DocumentStatus.FAILED },
+      },
+      select: { id: true, fileName: true },
+    });
+    if (duplicate) {
+      return NextResponse.json(
+        { error: `This exact file already exists as ${duplicate.fileName}.`, existingDocumentId: duplicate.id },
+        { status: 409 },
+      );
     }
 
-    const uploadUsage = await checkAndRecordUploadUsage(userId);
+    const usage = await checkAndRecordUploadUsage(userId, {
+      storageBytes: file.size,
+      metadata: { requestId, category },
+    });
+    if (!usage.allowed) return NextResponse.json({ error: usage.message }, { status: 429 });
 
-    if (!uploadUsage.allowed) {
-      const message =
-        uploadUsage.message ?? "Daily upload limit reached. Try again later.";
-
-      await createAuditEvent({
-        userId,
-        eventType: "UPLOAD_BLOCKED",
-        title: "Upload limit reached",
-        description: message,
-        fileName: file.name,
-        metadata: {
-          fileSize: file.size,
-          mimeType: file.type,
-          category,
-        },
-      });
-
-      return NextResponse.json({ error: message }, { status: 429 });
-    }
-
-    const arrayBuffer = await file.arrayBuffer();
-    const content = Buffer.from(arrayBuffer);
-
-    const document = await prisma.document.create({
+    const business = await prisma.business.findUnique({ where: { userId }, select: { id: true } });
+    const provider = configuredStorageProvider();
+    const retentionUntil = new Date(Date.now() + (workspace.retentionDays || productionConfig.defaultRetentionDays) * 86400000);
+    let storageKey: string | null = null;
+    const created = await prisma.document.create({
       data: {
-        fileName: file.name.slice(0, 255),
-        mimeType: file.type,
+        fileName: safeName,
+        mimeType: inspection.detectedMimeType!,
+        detectedMimeType: inspection.detectedMimeType,
         fileSize: file.size,
         category,
-        content,
+        status: DocumentStatus.UPLOADED,
+        content: provider === DocumentStorageProvider.DATABASE ? buffer : null,
+        storageProvider: provider,
+        sha256: inspection.sha256,
         userId,
-      },
-      select: {
-        id: true,
-        fileName: true,
-        mimeType: true,
-        fileSize: true,
-        category: true,
-        status: true,
-        uploadedAt: true,
+        workspaceId: workspace.id,
+        businessId: business?.id ?? null,
+        retentionUntil,
       },
     });
+
+    if (provider === DocumentStorageProvider.S3) {
+      storageKey = buildStorageKey({
+        workspaceId: workspace.id,
+        userId,
+        documentId: created.id,
+        fileName: safeName,
+      });
+      try {
+        await putObject(storageKey, buffer, inspection.detectedMimeType!);
+        await prisma.document.update({ where: { id: created.id }, data: { storageKey } });
+      } catch (error) {
+        await prisma.document.delete({ where: { id: created.id } }).catch(() => undefined);
+        throw error;
+      }
+    }
+
+    let scan;
+    try {
+      scan = await scanStoredDocument({
+        fileName: safeName,
+        mimeType: inspection.detectedMimeType!,
+        fileSize: file.size,
+        sha256: inspection.sha256,
+        document: {
+          storageProvider: provider,
+          storageKey,
+        },
+      });
+      if (scan.status === "infected") {
+        throw new Error(scan.message ?? "The file failed malware scanning.");
+      }
+    } catch (error) {
+      if (storageKey) {
+        const { deleteObject } = await import("@/lib/object-storage");
+        await deleteObject(storageKey).catch(() => undefined);
+      }
+      await prisma.document.delete({ where: { id: created.id } }).catch(() => undefined);
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Upload security verification failed." },
+        { status: 400 },
+      );
+    }
 
     await createAuditEvent({
       userId,
+      workspaceId: workspace.id,
       eventType: "DOCUMENT_UPLOADED",
       title: "Document uploaded",
-      description: `${document.fileName} was uploaded and is ready for AI processing.`,
-      documentId: document.id,
-      fileName: document.fileName,
+      description: `${safeName} was uploaded and is ready for AI processing.`,
+      documentId: created.id,
+      fileName: safeName,
       metadata: {
-        category: document.category,
-        fileSize: document.fileSize,
-        mimeType: document.mimeType,
-        status: document.status,
+        requestId,
+        category,
+        fileSize: file.size,
+        declaredMimeType: file.type,
+        detectedMimeType: inspection.detectedMimeType,
+        storageProvider: provider,
+        sha256: inspection.sha256,
+        warnings: inspection.warnings,
+        malwareScan: scan,
       },
     });
 
-    return NextResponse.json({ document }, { status: 201 });
-  } catch (error) {
-    console.error("Document upload failed:", error);
-
     return NextResponse.json(
       {
-        error: "Upload failed. Please try again.",
+        document: {
+          id: created.id,
+          fileName: safeName,
+          mimeType: inspection.detectedMimeType,
+          fileSize: file.size,
+          category,
+          status: created.status,
+          uploadedAt: created.uploadedAt,
+        },
       },
-      { status: 500 },
+      { status: 201 },
     );
+  } catch (error) {
+    logger.error("document.upload_failed", error, { requestId });
+    return NextResponse.json({ error: "Upload failed. Please try again." }, { status: 500 });
   }
 }

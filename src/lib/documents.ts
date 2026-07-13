@@ -1,11 +1,13 @@
 import { prisma } from "./prisma";
+import { ensureDefaultWorkspaceForUser } from "./workspace-context";
 
 // Deliberately excludes `content`.
 // The list view only needs metadata, extracted JSON, and review status.
 export async function getDocumentsForUser(userId: string) {
+  const workspace = await ensureDefaultWorkspaceForUser(userId);
   return prisma.document.findMany({
     where: {
-      userId,
+      workspaceId: workspace.id,
     },
     orderBy: {
       uploadedAt: "desc",

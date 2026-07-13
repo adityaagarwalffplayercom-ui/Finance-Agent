@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
+import { getActiveWorkspaceDataScope } from "./active-workspace-data";
 import {
   buildTrustedLedgerPromptBlock,
   getTrustedLedgerContext,
@@ -267,6 +268,7 @@ async function getFinancialProfileSafely(userId: string) {
 }
 
 async function buildBusinessContext(userId: string) {
+  const { documentWhere, businessWhere } = await getActiveWorkspaceDataScope(userId);
   const [
     business,
     approvedDocuments,
@@ -275,10 +277,8 @@ async function buildBusinessContext(userId: string) {
     processedDocuments,
     profile,
   ] = await Promise.all([
-    prisma.business.findUnique({
-      where: {
-        userId,
-      },
+    prisma.business.findFirst({
+      where: businessWhere,
       select: {
         name: true,
         industry: true,
@@ -289,11 +289,7 @@ async function buildBusinessContext(userId: string) {
       },
     }),
     prisma.document.findMany({
-      where: {
-        userId,
-        status: "PROCESSED",
-        reviewStatus: "APPROVED",
-      },
+      where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "APPROVED" }] },
       orderBy: {
         uploadedAt: "desc",
       },
@@ -307,23 +303,13 @@ async function buildBusinessContext(userId: string) {
       },
     }),
     prisma.document.count({
-      where: {
-        userId,
-        status: "PROCESSED",
-        reviewStatus: "NEEDS_REVIEW",
-      },
+      where: { AND: [documentWhere, { status: "PROCESSED", reviewStatus: "NEEDS_REVIEW" }] },
     }),
     prisma.document.count({
-      where: {
-        userId,
-        reviewStatus: "REJECTED",
-      },
+      where: { AND: [documentWhere, { reviewStatus: "REJECTED" }] },
     }),
     prisma.document.count({
-      where: {
-        userId,
-        status: "PROCESSED",
-      },
+      where: { AND: [documentWhere, { status: "PROCESSED" }] },
     }),
     getFinancialProfileSafely(userId),
   ]);
@@ -692,10 +678,9 @@ export async function getBusinessChatHistory(
   userId: string,
   limit = 20,
 ): Promise<BusinessChatMessageView[]> {
+  const { workspace } = await getActiveWorkspaceDataScope(userId);
   const messages = await prisma.businessChatMessage.findMany({
-    where: {
-      userId,
-    },
+    where: { OR: [{ workspaceId: workspace.id }, { workspaceId: null, userId }] },
     orderBy: {
       createdAt: "desc",
     },
@@ -711,10 +696,9 @@ export async function getBusinessChatHistory(
 }
 
 export async function clearBusinessChatHistory(userId: string) {
+  const { workspace } = await getActiveWorkspaceDataScope(userId);
   await prisma.businessChatMessage.deleteMany({
-    where: {
-      userId,
-    },
+    where: { OR: [{ workspaceId: workspace.id }, { workspaceId: null, userId }] },
   });
 }
 
@@ -737,10 +721,13 @@ export async function saveBusinessChatExchange(
     return;
   }
 
+  const { workspace } = await getActiveWorkspaceDataScope(userId);
+
   await prisma.$transaction([
     prisma.businessChatMessage.create({
       data: {
         userId,
+        workspaceId: workspace.id,
         role: "user",
         content: question,
       },
@@ -748,6 +735,7 @@ export async function saveBusinessChatExchange(
     prisma.businessChatMessage.create({
       data: {
         userId,
+        workspaceId: workspace.id,
         role: "assistant",
         content: answer,
       },

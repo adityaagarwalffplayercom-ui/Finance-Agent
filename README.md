@@ -60,4 +60,33 @@ Owner Reviews Extraction
 Approved Data Powers Dashboard
         ↓
 AI Finance Team Answers Business Questions
+```
 
+---
+
+## Production architecture
+
+The production hardening release adds:
+
+- private S3-compatible object storage and direct signed uploads;
+- file-signature, encrypted-PDF and spreadsheet expansion checks;
+- optional malware-scanning webhooks;
+- database-backed processing jobs with retries, heartbeats and idempotency;
+- extraction-run versioning and audited manual corrections;
+- workspaces, active-workspace switching, roles, invitations, consent and retention controls;
+- workspace-isolated documents, ledgers, dashboards, forecasts and AI chat history;
+- persistent plan quotas and monthly usage/cost records;
+- email verification, password recovery and database-backed auth rate limits;
+- privacy-aware source deletion, retention jobs and safe health/debug endpoints;
+- PostgreSQL migration testing, parser/security tests, secret scanning and CI.
+
+Start with [`docs/PRODUCTION_DEPLOYMENT.md`](docs/PRODUCTION_DEPLOYMENT.md). The release is provider-ready, but production credentials, buckets, domains, email verification and monitoring accounts must be configured by the deployer.
+
+```bash
+npm ci
+npm run db:migrate
+npm run verify:production
+npm run build
+```
+
+No financial parser can guarantee a correct result for every source document. Aureli therefore preserves source evidence, blocks unreviewed posting, records extraction versions and requires human approval for financial dashboard impact.

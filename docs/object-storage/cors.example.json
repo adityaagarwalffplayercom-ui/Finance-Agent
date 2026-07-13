@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedOrigins": ["https://app.example.com", "https://staging.example.com"],
+    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedHeaders": ["content-type", "x-amz-*"],
+    "ExposeHeaders": ["etag"],
+    "MaxAgeSeconds": 3600
+  }
+]

@@ -25,11 +25,11 @@ export default function SignInPage() {
         email,
         password,
         callbackURL: "/dashboard",
-      } as any);
+      });
 
-      if ((result as any)?.error) {
+      if (result?.error) {
         throw new Error(
-          (result as any).error.message || "Sign in failed. Please try again.",
+          result.error.message || "Sign in failed. Please try again.",
         );
       }
 
@@ -381,6 +381,18 @@ export default function SignInPage() {
                 textAlign: "center",
               }}
             >
+              <Link
+                href="/forgot-password"
+                style={{
+                  color: "rgba(235,238,245,0.62)",
+                  fontSize: 13,
+                  textDecoration: "none",
+                  fontWeight: 750,
+                }}
+              >
+                Forgot password?
+              </Link>
+
               <p
                 style={{
                   margin: 0,

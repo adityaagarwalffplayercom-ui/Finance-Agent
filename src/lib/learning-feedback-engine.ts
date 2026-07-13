@@ -34,6 +34,9 @@ export type LearningActionInput = {
 };
 
 export type LearningOptimizedAction = LearningActionInput & {
+  problem?: string;
+  action?: string;
+  expectedImpact?: string;
   originalRank: number;
   optimizedScore: number;
   rewardScore: number;

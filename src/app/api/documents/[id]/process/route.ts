@@ -5,6 +5,8 @@ import {
   DocumentCategory,
   DocumentReviewStatus,
   DocumentStatus,
+  ExtractionRunStatus,
+  WorkspaceRole,
   type Prisma,
 } from "@prisma/client";
 import { auth } from "@/lib/auth";
@@ -23,9 +25,26 @@ import { extractFinancialStatementProduction } from "@/lib/financial-statement-e
 import { USAGE_LIMITS, formatUsageSize } from "@/lib/usage-limits";
 import {
   checkAndRecordAiProcessUsage,
+  recordProcessingUsageDetails,
   releaseProcessingLock,
   tryAcquireProcessingLock,
 } from "@/lib/usage-events";
+import { loadDocumentBuffer } from "@/lib/object-storage";
+import { estimatePdfPageCount, inspectFile } from "@/lib/file-security";
+import {
+  completeProcessingJob,
+  enqueueDocumentProcessing,
+  failProcessingJob,
+  getWorkerJob,
+  heartbeatProcessingJob,
+} from "@/lib/processing-jobs";
+import {
+  AURELI_ENGINE_VERSION,
+  productionConfig,
+} from "@/lib/production-config";
+import { finishExtractionRun, startExtractionRun } from "@/lib/extraction-runs";
+import { getRequestId, logger } from "@/lib/logger";
+import { requireWorkspaceRole } from "@/lib/workspace-context";
 import {
   extractLineItemsFromText,
   extractLineItemsFromWorkbook,
@@ -195,16 +214,18 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const requestId = getRequestId(request.headers);
+  const workerJob = await getWorkerJob(request, id);
+  const session = workerJob
+    ? null
+    : await auth.api.getSession({ headers: request.headers });
 
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
-
-  if (!session?.user?.id) {
+  if (!workerJob && !session?.user?.id) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const userId = session.user.id;
+  const actorUserId = workerJob?.userId ?? session!.user.id;
+  const isWorkerExecution = Boolean(workerJob);
 
   const document = await prisma.document.findUnique({
     where: {
@@ -220,15 +241,77 @@ export async function POST(
       status: true,
       reviewStatus: true,
       content: true,
+      storageProvider: true,
+      storageKey: true,
+      sha256: true,
+      detectedMimeType: true,
+      workspaceId: true,
+      workspace: { select: { aiProcessingConsentAt: true } },
+      version: true,
       extractedData: true,
     },
   });
 
-  if (!document || document.userId !== userId) {
+  if (!document) {
     return NextResponse.json({ error: "Document not found." }, { status: 404 });
   }
+  if (isWorkerExecution) {
+    if (document.userId !== actorUserId) {
+      return NextResponse.json({ error: "Document not found." }, { status: 404 });
+    }
+  } else {
+    try {
+      await requireWorkspaceRole(
+        actorUserId,
+        document.workspaceId,
+        WorkspaceRole.ACCOUNTANT,
+      );
+    } catch {
+      return NextResponse.json({ error: "Document not found." }, { status: 404 });
+    }
+  }
 
-  if (document.status === DocumentStatus.PROCESSING) {
+  const userId = document.userId;
+
+  if (
+    productionConfig.requireAiProcessingConsent &&
+    !document.workspace?.aiProcessingConsentAt
+  ) {
+    const message =
+      "AI processing consent is required. Open Settings and enable AI document processing.";
+    await createAuditEvent({
+      userId,
+      workspaceId: document.workspaceId,
+      eventType: "PROCESSING_BLOCKED",
+      title: "AI processing consent required",
+      description: message,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: { reason: "ai_processing_consent_missing" },
+    });
+    return NextResponse.json({ error: message }, { status: 403 });
+  }
+
+  if (document.status === DocumentStatus.QUEUED && !isWorkerExecution) {
+    const existingJob = await prisma.processingJob.findFirst({
+      where: {
+        documentId: document.id,
+        status: { in: ["QUEUED", "RUNNING"] },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    return NextResponse.json(
+      {
+        status: DocumentStatus.QUEUED,
+        jobId: existingJob?.id ?? null,
+        message: "This document is already queued.",
+      },
+      { status: 202 },
+    );
+  }
+
+  if (document.status === DocumentStatus.PROCESSING && !isWorkerExecution) {
     const message =
       "This document is already being processed. Wait for it to finish before retrying.";
 
@@ -289,7 +372,10 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 413 });
   }
 
-  const usage = await checkAndRecordAiProcessUsage(userId);
+  const usage: { allowed: boolean; message?: string; workspaceId?: string } =
+    isWorkerExecution
+      ? { allowed: true, workspaceId: document.workspaceId ?? undefined }
+      : await checkAndRecordAiProcessUsage(userId);
 
   if (!usage.allowed) {
     const message =
@@ -310,7 +396,31 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 429 });
   }
 
-  const lockAcquired = tryAcquireProcessingLock(userId);
+  if (!isWorkerExecution && productionConfig.processingMode === "queue") {
+    const job = await enqueueDocumentProcessing({
+      documentId: document.id,
+      userId,
+      workspaceId: document.workspaceId,
+    });
+
+    await createAuditEvent({
+      userId,
+      workspaceId: document.workspaceId,
+      eventType: "DOCUMENT_PROCESSING_QUEUED",
+      title: "Document processing queued",
+      description: `${document.fileName} was added to the secure processing queue.`,
+      documentId: document.id,
+      fileName: document.fileName,
+      metadata: { requestId, jobId: job.id, engineVersion: AURELI_ENGINE_VERSION },
+    });
+
+    return NextResponse.json(
+      { status: DocumentStatus.QUEUED, jobId: job.id, message: "Processing queued." },
+      { status: 202 },
+    );
+  }
+
+  const lockAcquired = isWorkerExecution ? true : tryAcquireProcessingLock(userId);
 
   if (!lockAcquired) {
     const message =
@@ -333,8 +443,12 @@ export async function POST(
 
   let rawLineItems: RawFinancialLineItem[] = [];
   let sourceTextForSummary = "";
+  let extractionRunId: string | null = null;
+  let pageCount: number | null = null;
 
   try {
+    if (workerJob) await heartbeatProcessingJob(workerJob.id);
+
     const markProcessing = await prisma.document.updateMany({
       where: {
         id,
@@ -388,14 +502,48 @@ export async function POST(
       description: `${document.fileName} is being processed by AI.`,
       documentId: document.id,
       fileName: document.fileName,
+      workspaceId: document.workspaceId,
       metadata: {
+        requestId,
+        jobId: workerJob?.id ?? null,
+        engineVersion: AURELI_ENGINE_VERSION,
         category: document.category,
         fileSize: document.fileSize,
         mimeType: document.mimeType,
       },
     });
 
-    const buffer = Buffer.from(document.content);
+    const buffer = await loadDocumentBuffer(document);
+    const inspection = inspectFile(
+      buffer,
+      document.fileName,
+      document.detectedMimeType ?? document.mimeType,
+    );
+    if (inspection.isEncryptedPdf) {
+      throw new Error("Password-protected PDFs must be unlocked before processing.");
+    }
+    if (document.sha256 && document.sha256 !== inspection.sha256) {
+      throw new Error("Document integrity verification failed: SHA-256 mismatch.");
+    }
+    pageCount = estimatePdfPageCount(buffer);
+    if (pageCount !== null && pageCount > productionConfig.maxPdfPages) {
+      throw new Error(`PDF has ${pageCount} pages; the production limit is ${productionConfig.maxPdfPages}.`);
+    }
+    await prisma.document.update({
+      where: { id: document.id },
+      data: {
+        sha256: inspection.sha256,
+        detectedMimeType: inspection.detectedMimeType,
+        pageCount,
+      },
+    });
+    const extractionRun = await startExtractionRun({
+      documentId: document.id,
+      userId,
+      workspaceId: document.workspaceId,
+      sourceFileHash: inspection.sha256,
+    });
+    extractionRunId = extractionRun.id;
     const previousExtracted = getPreviousExtractedData(document.extractedData);
     const summaryOnly =
       document.category === DocumentCategory.FINANCIAL_STATEMENT;
@@ -568,6 +716,16 @@ export async function POST(
       summaryMetricEvidence: combinedMetricEvidence,
     });
 
+    if (extractionRunId) {
+      await finishExtractionRun({
+        runId: extractionRunId,
+        status: ExtractionRunStatus.COMPLETED,
+        output: mergedExtraction as unknown as Prisma.InputJsonValue,
+        diagnostics: (mergedExtraction.extractionDiagnostics ?? {}) as Prisma.InputJsonValue,
+        warnings: extractionWarning ? ([extractionWarning] as Prisma.InputJsonValue) : undefined,
+      });
+    }
+
     // Every new extraction requires fresh human approval. This call removes
     // previously posted entries while the document is back in NEEDS_REVIEW.
     const ledgerEntriesSynced = await syncLedgerEntriesFromDocument({
@@ -577,6 +735,18 @@ export async function POST(
 
     if (ledgerEntriesSynced > 0) {
       revalidatePath("/ledger");
+    }
+
+    await recordProcessingUsageDetails({
+      workspaceId: document.workspaceId,
+      processedPages: pageCount,
+    });
+
+    if (workerJob) {
+      await completeProcessingJob(workerJob.id, {
+        finalLineItemsStored: mergedExtraction.lineItems?.length ?? 0,
+        requestId,
+      });
     }
 
     return NextResponse.json({
@@ -596,7 +766,12 @@ export async function POST(
       finalLineItemsStored: mergedExtraction.lineItems?.length ?? 0,
     });
   } catch (error) {
-    console.error(`Document processing failed for ${id}:`, error);
+    logger.error("document.processing_failed", error, {
+      requestId,
+      documentId: id,
+      userId,
+      jobId: workerJob?.id ?? null,
+    });
 
     const message = getErrorMessage(error);
     if (rawLineItems.length > 0) {
@@ -631,6 +806,27 @@ export async function POST(
         summaryFieldsBackfilled: deterministicSummary.backfilledFields,
         summaryMetricEvidence: deterministicSummary.evidence,
       });
+
+      if (extractionRunId) {
+        await finishExtractionRun({
+          runId: extractionRunId,
+          status: ExtractionRunStatus.PARTIAL,
+          output: deterministicOnlyExtraction as unknown as Prisma.InputJsonValue,
+          diagnostics: { fallback: "deterministic_only", requestId },
+          warnings: [cleanProcessingError(message)],
+        });
+      }
+      await recordProcessingUsageDetails({
+        workspaceId: document.workspaceId,
+        processedPages: pageCount,
+      });
+      if (workerJob) {
+        await completeProcessingJob(workerJob.id, {
+          fallback: "deterministic_only",
+          finalLineItemsStored: deterministicOnlyExtraction.lineItems?.length ?? 0,
+          requestId,
+        });
+      }
 
       return NextResponse.json({
         status: DocumentStatus.PROCESSED,
@@ -667,8 +863,21 @@ export async function POST(
       },
     });
 
+    if (extractionRunId) {
+      await finishExtractionRun({
+        runId: extractionRunId,
+        status: ExtractionRunStatus.FAILED,
+        diagnostics: { requestId },
+        warnings: [cleanProcessingError(friendlyMessage)],
+      }).catch(() => undefined);
+    }
+    if (workerJob) {
+      await failProcessingJob(workerJob.id, friendlyMessage).catch(() => undefined);
+    }
+
     await createAuditEvent({
       userId,
+      workspaceId: document.workspaceId,
       eventType: "DOCUMENT_PROCESSING_FAILED",
       title: "AI processing failed",
       description: cleanProcessingError(friendlyMessage),
@@ -692,6 +901,6 @@ export async function POST(
       },
     );
   } finally {
-    releaseProcessingLock(userId);
+    if (!isWorkerExecution) releaseProcessingLock(userId);
   }
 }

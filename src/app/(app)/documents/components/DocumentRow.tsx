@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DocumentListItem } from "@/lib/documents";
 import { categoryLabel, formatFileSize } from "@/lib/document-categories";
@@ -9,7 +9,9 @@ import type { ExtractedDocumentData } from "@/lib/gemini";
 import { DocumentTimeline } from "./DocumentTimeline";
 
 const STATUS_LABEL: Record<string, string> = {
+  UPLOADING: "Uploading",
   UPLOADED: "Uploaded",
+  QUEUED: "Queued",
   PROCESSING: "Processing",
   PROCESSED: "Processed",
   FAILED: "Failed",
@@ -24,11 +26,23 @@ const STATUS_STYLE: Record<
     border: string;
   }
 > = {
+  UPLOADING: {
+    label: "Uploading",
+    background: "rgba(88,166,255,0.12)",
+    color: "#8abfff",
+    border: "rgba(88,166,255,0.28)",
+  },
   UPLOADED: {
     label: "Ready",
     background: "rgba(88,166,255,0.12)",
     color: "#8abfff",
     border: "rgba(88,166,255,0.28)",
+  },
+  QUEUED: {
+    label: "Queued",
+    background: "rgba(168,85,247,0.12)",
+    color: "#c4a1ff",
+    border: "rgba(168,85,247,0.30)",
   },
   PROCESSING: {
     label: "Processing",
@@ -238,6 +252,20 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
 
   const extracted = doc.extractedData as ExtractedDocumentData | null;
   const canProcess = doc.status === "UPLOADED" || doc.status === "FAILED";
+  const isPending =
+    doc.status === "UPLOADING" ||
+    doc.status === "QUEUED" ||
+    doc.status === "PROCESSING";
+
+  useEffect(() => {
+    if (!isPending) return;
+
+    const interval = window.setInterval(() => {
+      router.refresh();
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, [isPending, router]);
 
   const currency = getStringValue(extracted, ["currency"]) ?? "INR";
   const displayAmount = getNumberValue(extracted, [
@@ -308,6 +336,10 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
         return;
       }
 
+      const payload = await response.json().catch(() => null);
+      if (response.status === 202 || payload?.status === "QUEUED") {
+        setProcessError("Document queued. Aureli will refresh this status automatically.");
+      }
       router.refresh();
     } catch (error) {
       setProcessError(getFriendlyNetworkError(error));
@@ -467,7 +499,7 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
         <button
           type="button"
           onClick={handleDelete}
-          disabled={isDeleting || isProcessing}
+          disabled={isDeleting || isProcessing || isPending}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -477,17 +509,17 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
             color: "#ff8a95",
             borderRadius: 12,
             padding: "9px 12px",
-            cursor: isDeleting || isProcessing ? "not-allowed" : "pointer",
+            cursor: isDeleting || isProcessing || isPending ? "not-allowed" : "pointer",
             fontSize: 13,
             fontWeight: 850,
-            opacity: isDeleting || isProcessing ? 0.65 : 1,
+            opacity: isDeleting || isProcessing || isPending ? 0.65 : 1,
           }}
         >
           {isDeleting ? "Removing..." : "Delete"}
         </button>
       </div>
 
-      {isProcessing && (
+      {(isProcessing || isPending) && (
         <div
           style={{
             border: "1px solid rgba(255,193,7,0.28)",
@@ -499,9 +531,11 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
             lineHeight: 1.5,
           }}
         >
-          Gemini is analyzing this document. If quota is hit, the backend may
-          wait and retry automatically. Do not click Retry again while this is
-          running.
+          {doc.status === "QUEUED"
+            ? "Document is queued. A background worker will start it shortly."
+            : doc.status === "UPLOADING"
+              ? "Secure upload is being finalized."
+              : "Aureli is analyzing this document. The status refreshes automatically."}
         </div>
       )}
 

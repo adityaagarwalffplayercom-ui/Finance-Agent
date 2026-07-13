@@ -82,7 +82,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await deleteOwnAccountCompletely(userId);
+    let result;
+    try {
+      result = await deleteOwnAccountCompletely(userId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Account deletion failed.";
+      if (message.startsWith("OWNER_TRANSFER_REQUIRED:")) {
+        return NextResponse.json(
+          {
+            error:
+              "Transfer or remove all other workspace members before deleting the owner account.",
+          },
+          { status: 409 },
+        );
+      }
+      throw error;
+    }
 
     return NextResponse.json({
       message: "Your account and user-owned data were deleted.",

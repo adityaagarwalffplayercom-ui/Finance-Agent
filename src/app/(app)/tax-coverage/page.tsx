@@ -338,7 +338,7 @@ export default function TaxCoveragePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const countries = coverage.countries ?? [];
+  const countries = useMemo(() => coverage.countries ?? [], [coverage.countries]);
 
   const summary = useMemo(() => buildCoverageSummary(countries), [countries]);
 
