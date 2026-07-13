@@ -12,7 +12,6 @@ import { createAuditEvent } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 import {
   extractDocumentData,
-  extractDocumentLineItemsFromTextChunks,
   type ExtractedDocumentData,
 } from "@/lib/gemini";
 import { syncLedgerEntriesFromDocument } from "@/lib/transaction-ledger";
@@ -20,6 +19,7 @@ import { buildFinancialSummaryText } from "@/lib/financial-text-chunks";
 import { backfillFinancialStatementSummary } from "@/lib/financial-summary-backfill";
 import { validateFinancialStatementSummary } from "@/lib/financial-summary-validation";
 import { sanitizeFinancialStatementExtraction } from "@/lib/financial-statement-sanitizer";
+import { extractFinancialStatementFromPdf } from "@/lib/financial-statement-table-parser";
 import { USAGE_LIMITS, formatUsageSize } from "@/lib/usage-limits";
 import {
   checkAndRecordAiProcessUsage,
@@ -119,11 +119,9 @@ function getTextForAi(text: string, summaryOnly: boolean) {
 }
 
 function buildDeterministicOnlyExtraction(params: {
-  previous: ExtractedDocumentData | null;
   rawLineItems: RawFinancialLineItem[];
-  fileName: string;
 }): ExtractedDocumentData {
-  const base: ExtractedDocumentData = params.previous ?? {
+  const base: ExtractedDocumentData = {
     summary:
       "Deterministic line-item extraction completed. AI extraction did not finish, so totals may be incomplete.",
     lineItems: [],
@@ -375,15 +373,16 @@ export async function POST(
     const summaryOnly =
       document.category === DocumentCategory.FINANCIAL_STATEMENT;
 
-    let extracted: ExtractedDocumentData = previousExtracted ?? {
+    let extracted: ExtractedDocumentData = {
       summary: "Financial document processing in progress.",
       lineItems: [],
       transactions: [],
     };
-    let chunkLineItems: RawFinancialLineItem[] = [];
-    let candidateChunks = 0;
-    let completedChunks = 0;
-    let failedChunks = 0;
+    let deterministicMetricEvidence: Record<string, string> = {};
+    const chunkLineItems: RawFinancialLineItem[] = [];
+    const candidateChunks = 0;
+    const completedChunks = 0;
+    const failedChunks = 0;
 
     if (document.mimeType === "text/csv") {
       const text = buffer.toString("utf-8");
@@ -436,42 +435,30 @@ export async function POST(
         summaryOnly,
       });
     } else if (PDF_MIME_TYPES.includes(document.mimeType)) {
-      const pdfText = await extractPdfText(buffer);
-      sourceTextForSummary = pdfText;
       const isFinancialStatement =
         document.category === DocumentCategory.FINANCIAL_STATEMENT;
 
       if (isFinancialStatement) {
-        // Read headline metrics from the original PDF, not flattened pdf-parse
-        // text. Native PDF input preserves table columns and prevents phone,
-        // date, note and stock-code values from becoming financial totals.
-        extracted = await extractDocumentData({
-          fileName: document.fileName,
-          category: document.category,
-          content: {
-            kind: "inline",
-            mimeType: document.mimeType,
-            base64Data: buffer.toString("base64"),
-          },
-          summaryOnly: true,
-        });
+        const deterministicStatement = await extractFinancialStatementFromPdf(
+          buffer,
+          document.fileName,
+        );
 
-        rawLineItems = extractLineItemsFromText(pdfText, {
-          documentDate:
-            extracted.documentDate ?? extracted.periodEnd ?? previousExtracted?.documentDate ?? null,
-          scaleMultiplier: extracted.scaleMultiplier ?? null,
-          defaultCategory: document.category,
-        });
+        extracted = deterministicStatement.data;
+        rawLineItems = deterministicStatement.rawLineItems;
+        sourceTextForSummary = deterministicStatement.sourceText;
+        deterministicMetricEvidence = deterministicStatement.metricEvidence;
       } else {
+        const pdfText = await extractPdfText(buffer);
+        sourceTextForSummary = pdfText;
+
         rawLineItems = extractLineItemsFromText(pdfText, {
           documentDate: previousExtracted?.documentDate ?? null,
           scaleMultiplier: previousExtracted?.scaleMultiplier ?? null,
           defaultCategory: document.category,
         });
-      }
 
-      if (pdfText.trim().length > 2000) {
-        if (!isFinancialStatement) {
+        if (pdfText.trim().length > 2000) {
           extracted = await extractDocumentData({
             fileName: document.fileName,
             category: document.category,
@@ -481,44 +468,18 @@ export async function POST(
             },
             summaryOnly,
           });
+        } else {
+          extracted = await extractDocumentData({
+            fileName: document.fileName,
+            category: document.category,
+            content: {
+              kind: "inline",
+              mimeType: document.mimeType,
+              base64Data: buffer.toString("base64"),
+            },
+            summaryOnly,
+          });
         }
-
-        if (isFinancialStatement) {
-          try {
-            const chunkedExtraction =
-              await extractDocumentLineItemsFromTextChunks({
-                fileName: document.fileName,
-                category: document.category,
-                text: pdfText,
-                reportedUnit: extracted.reportedUnit,
-                scaleMultiplier: extracted.scaleMultiplier,
-                documentDate:
-                  extracted.documentDate ?? extracted.periodEnd ?? null,
-              });
-
-            chunkLineItems = chunkedExtraction.lineItems;
-            candidateChunks = chunkedExtraction.candidateChunks;
-            completedChunks = chunkedExtraction.completedChunks;
-            failedChunks = chunkedExtraction.failedChunks;
-          } catch (chunkError) {
-            failedChunks = Math.max(failedChunks, 1);
-            console.warn(
-              "Optional chunked financial-row extraction failed; continuing with whole-document and deterministic rows.",
-              getErrorMessage(chunkError),
-            );
-          }
-        }
-      } else if (!isFinancialStatement) {
-        extracted = await extractDocumentData({
-          fileName: document.fileName,
-          category: document.category,
-          content: {
-            kind: "inline",
-            mimeType: document.mimeType,
-            base64Data: buffer.toString("base64"),
-          },
-          summaryOnly,
-        });
       }
     } else {
       extracted = await extractDocumentData({
@@ -547,10 +508,14 @@ export async function POST(
             rawText: sourceTextForSummary,
           })
         : { data: sanitizedExtraction, backfilledFields: [], evidence: {} };
+    const combinedMetricEvidence = {
+      ...summaryBackfill.evidence,
+      ...deterministicMetricEvidence,
+    };
     const summaryValidation =
       document.category === DocumentCategory.FINANCIAL_STATEMENT
         ? validateFinancialStatementSummary(summaryBackfill.data, {
-            evidence: summaryBackfill.evidence,
+            evidence: combinedMetricEvidence,
           })
         : {
             data: summaryBackfill.data,
@@ -570,7 +535,7 @@ export async function POST(
       completedChunks,
       failedChunks,
       summaryFieldsBackfilled: summaryBackfill.backfilledFields,
-      summaryMetricEvidence: summaryBackfill.evidence,
+      summaryMetricEvidence: combinedMetricEvidence,
     });
 
     const ledgerEntriesSynced =
@@ -594,7 +559,7 @@ export async function POST(
       completedChunks,
       failedChunks,
       summaryFieldsBackfilled: summaryBackfill.backfilledFields,
-      summaryMetricEvidence: summaryBackfill.evidence,
+      summaryMetricEvidence: combinedMetricEvidence,
       metricValidation: summaryValidation.validation,
       ledgerEntriesSynced,
       finalLineItemsStored: mergedExtraction.lineItems?.length ?? 0,
@@ -603,20 +568,20 @@ export async function POST(
     console.error(`Document processing failed for ${id}:`, error);
 
     const message = getErrorMessage(error);
-    const previousExtracted = getPreviousExtractedData(document.extractedData);
-
     if (rawLineItems.length > 0) {
       const deterministicBase = buildDeterministicOnlyExtraction({
-        previous: previousExtracted,
         rawLineItems,
-        fileName: document.fileName,
       });
+      const sanitizedDeterministicBase =
+        document.category === DocumentCategory.FINANCIAL_STATEMENT
+          ? sanitizeFinancialStatementExtraction(deterministicBase)
+          : deterministicBase;
       const deterministicSummary =
         document.category === DocumentCategory.FINANCIAL_STATEMENT
-          ? backfillFinancialStatementSummary(deterministicBase, {
+          ? backfillFinancialStatementSummary(sanitizedDeterministicBase, {
               rawText: sourceTextForSummary,
             })
-          : { data: deterministicBase, backfilledFields: [], evidence: {} };
+          : { data: sanitizedDeterministicBase, backfilledFields: [], evidence: {} };
       const deterministicValidation =
         document.category === DocumentCategory.FINANCIAL_STATEMENT
           ? validateFinancialStatementSummary(deterministicSummary.data, {
