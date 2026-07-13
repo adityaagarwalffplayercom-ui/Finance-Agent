@@ -6,6 +6,20 @@ export type RawFinancialLineItem = {
   amount: number;
   category?: string | null;
   date?: string | null;
+  displayedAmount?: number | null;
+  displayedUnit?: string | null;
+  currency?: string | null;
+  statementType?: string | null;
+  scope?: string | null;
+  pageNumber?: number | null;
+  sourcePage?: number | null;
+  sourceColumn?: string | null;
+  sourceText?: string | null;
+  sourceStatement?: string | null;
+  extractionEngine?: string | null;
+  confidence?: number | null;
+  isAggregate?: boolean | null;
+  section?: string | null;
 };
 
 type ExtractOptions = {
@@ -402,6 +416,7 @@ function dedupeLineItems(items: RawFinancialLineItem[]) {
     seen.add(key);
 
     deduped.push({
+      ...item,
       description,
       amount: item.amount,
       category: item.category ?? "Other",
@@ -604,6 +619,7 @@ function normalizeExistingLineItems(data: ExtractedDocumentData) {
       }
 
       return {
+        ...item,
         description,
         amount,
         category: item.category ?? inferCategory(description, "Other"),

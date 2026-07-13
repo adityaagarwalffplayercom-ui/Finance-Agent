@@ -14,7 +14,11 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate --schema=prisma/schema.prisma",
-    "db:migrate": "prisma migrate deploy --schema=prisma/schema.prisma"
+    "db:migrate": "prisma migrate deploy --schema=prisma/schema.prisma",
+    "typecheck": "tsc --noEmit",
+    "test:financial-parser": "node --experimental-strip-types --test tests/financial-statement-parser.test.mjs",
+    "verify:financial-pdf": "node --experimental-strip-types scripts/verify-financial-pdf.mjs",
+    "verify:financial-engine": "npm run lint && npm run test:financial-parser"
   },
   "dependencies": {
     "@google/genai": "^1.34.0",

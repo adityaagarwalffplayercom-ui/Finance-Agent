@@ -19,7 +19,7 @@ import { buildFinancialSummaryText } from "@/lib/financial-text-chunks";
 import { backfillFinancialStatementSummary } from "@/lib/financial-summary-backfill";
 import { validateFinancialStatementSummary } from "@/lib/financial-summary-validation";
 import { sanitizeFinancialStatementExtraction } from "@/lib/financial-statement-sanitizer";
-import { extractFinancialStatementFromPdf } from "@/lib/financial-statement-table-parser";
+import { extractFinancialStatementProduction } from "@/lib/financial-statement-extraction-engine";
 import { USAGE_LIMITS, formatUsageSize } from "@/lib/usage-limits";
 import {
   checkAndRecordAiProcessUsage,
@@ -154,6 +154,9 @@ async function saveProcessedDocument(params: {
       extractedData: params.extracted as unknown as Prisma.InputJsonValue,
       extractedAt: new Date(),
       processingError: null,
+      reviewStatus: DocumentReviewStatus.NEEDS_REVIEW,
+      reviewedAt: null,
+      reviewNote: null,
     },
   });
 
@@ -178,6 +181,7 @@ async function saveProcessedDocument(params: {
       failedChunks: params.failedChunks ?? 0,
       summaryFieldsBackfilled: params.summaryFieldsBackfilled ?? [],
       summaryMetricEvidence: params.summaryMetricEvidence ?? {},
+      extractionDiagnostics: params.extracted.extractionDiagnostics ?? null,
     },
   });
 
@@ -255,8 +259,18 @@ export async function POST(
       data: {
         status: DocumentStatus.FAILED,
         processingError: message,
+        reviewStatus: DocumentReviewStatus.NEEDS_REVIEW,
+        reviewedAt: null,
+        reviewNote: null,
       },
     });
+
+    await syncLedgerEntriesFromDocument({
+      documentId: document.id,
+      userId,
+    });
+    revalidatePath("/dashboard");
+    revalidatePath("/ledger");
 
     await createAuditEvent({
       userId,
@@ -332,6 +346,9 @@ export async function POST(
       data: {
         status: DocumentStatus.PROCESSING,
         processingError: null,
+        reviewStatus: DocumentReviewStatus.NEEDS_REVIEW,
+        reviewedAt: null,
+        reviewNote: null,
       },
     });
 
@@ -353,6 +370,16 @@ export async function POST(
 
       return NextResponse.json({ error: message }, { status: 409 });
     }
+
+    // Reprocessing invalidates the previous approval immediately. Because the
+    // document is PROCESSING + NEEDS_REVIEW, ledger sync removes every old
+    // posting/detail row until the new extraction is reviewed and approved.
+    await syncLedgerEntriesFromDocument({
+      documentId: document.id,
+      userId,
+    });
+    revalidatePath("/dashboard");
+    revalidatePath("/ledger");
 
     await createAuditEvent({
       userId,
@@ -379,6 +406,7 @@ export async function POST(
       transactions: [],
     };
     let deterministicMetricEvidence: Record<string, string> = {};
+    let extractionWarning: string | null = null;
     const chunkLineItems: RawFinancialLineItem[] = [];
     const candidateChunks = 0;
     const completedChunks = 0;
@@ -439,15 +467,17 @@ export async function POST(
         document.category === DocumentCategory.FINANCIAL_STATEMENT;
 
       if (isFinancialStatement) {
-        const deterministicStatement = await extractFinancialStatementFromPdf(
+        const productionExtraction = await extractFinancialStatementProduction({
           buffer,
-          document.fileName,
-        );
+          fileName: document.fileName,
+          mimeType: document.mimeType,
+        });
 
-        extracted = deterministicStatement.data;
-        rawLineItems = deterministicStatement.rawLineItems;
-        sourceTextForSummary = deterministicStatement.sourceText;
-        deterministicMetricEvidence = deterministicStatement.metricEvidence;
+        extracted = productionExtraction.data;
+        rawLineItems = productionExtraction.rawLineItems;
+        sourceTextForSummary = productionExtraction.sourceText;
+        deterministicMetricEvidence = productionExtraction.metricEvidence;
+        extractionWarning = productionExtraction.warning;
       } else {
         const pdfText = await extractPdfText(buffer);
         sourceTextForSummary = pdfText;
@@ -538,13 +568,12 @@ export async function POST(
       summaryMetricEvidence: combinedMetricEvidence,
     });
 
-    const ledgerEntriesSynced =
-      document.reviewStatus === DocumentReviewStatus.APPROVED
-        ? await syncLedgerEntriesFromDocument({
-            documentId: document.id,
-            userId,
-          })
-        : 0;
+    // Every new extraction requires fresh human approval. This call removes
+    // previously posted entries while the document is back in NEEDS_REVIEW.
+    const ledgerEntriesSynced = await syncLedgerEntriesFromDocument({
+      documentId: document.id,
+      userId,
+    });
 
     if (ledgerEntriesSynced > 0) {
       revalidatePath("/ledger");
@@ -561,6 +590,8 @@ export async function POST(
       summaryFieldsBackfilled: summaryBackfill.backfilledFields,
       summaryMetricEvidence: combinedMetricEvidence,
       metricValidation: summaryValidation.validation,
+      extractionDiagnostics: mergedExtraction.extractionDiagnostics ?? null,
+      warning: extractionWarning,
       ledgerEntriesSynced,
       finalLineItemsStored: mergedExtraction.lineItems?.length ?? 0,
     });

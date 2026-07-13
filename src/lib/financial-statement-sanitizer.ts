@@ -18,13 +18,12 @@ const FINANCIAL_TERMS = [
   "capital",
   "reserve",
   "cash",
-  "bankbalance",
+  "bank balance",
   "receivable",
   "payable",
   "borrowing",
   "debt",
   "inventory",
-  "inventor",
   "property",
   "plant",
   "equipment",
@@ -35,13 +34,21 @@ const FINANCIAL_TERMS = [
   "depreciation",
   "amorti",
   "employee",
-  "financecost",
+  "finance",
   "dividend",
-  "operatingactivit",
-  "investingactivit",
-  "financingactivit",
-  "comprehensiveincome",
-  "earningspershare",
+  "operating",
+  "investing",
+  "financing",
+  "materials",
+  "purchase",
+  "goodwill",
+  "intangible",
+  "lease",
+  "insurance",
+  "exchange difference",
+  "working capital",
+  "share",
+  "earnings per share",
 ];
 
 const METADATA_TERMS = [
@@ -49,138 +56,151 @@ const METADATA_TERMS = [
   "telephone",
   "email",
   "website",
-  "registeredoffice",
-  "corporateoffice",
-  "gurugram",
-  "gurgaon",
-  "mumbai",
-  "newdelhi",
-  "sandraeast",
-  "plot",
-  "sector",
-  "scripcode",
-  "bsescrip",
-  "nsesymbol",
-  "bse500",
+  "registered office",
+  "corporate office",
+  "scrip code",
+  "nse symbol",
+  "bse code",
   "din",
   "cin",
-  "llpidentity",
-  "limitedliabilitypartnership",
-  "auditcommittee",
-  "boardmeeting",
-  "recorddate",
-  "agmandrecorddate",
-  "sebibircular",
-  "seb icircular",
+  "audit committee",
+  "board meeting",
+  "record date",
+  "sebi circular",
   "regulation",
-  "pursuantto",
-  "independentauditor",
-  "datevalue",
-  "marchvalue",
-  "aprilvalue",
-  "sectionvalue",
-  "comparisionwithreference",
-  "businesscomment",
-  "keyhighlights",
+  "pursuant to",
+  "independent auditor",
+  "for and on behalf",
+  "signature",
+  "signed",
 ];
 
-const HEADING_ONLY_TERMS = [
-  "standalonefinancialresultsforthequarter",
-  "consolidatedfinancialresultsforthequarter",
-  "statementofunauditedfinancialresults",
-  "standalonebalancesheetasat",
-  "consolidatedbalancesheetasat",
-  "standalonestatementofcashflow",
-  "consolidatedstatementofcashflow",
-  "financialyearended",
-  "quarterended",
+const HEADER_ONLY_PATTERNS = [
+  /^particulars?$/i,
+  /^notes?$/i,
+  /^note no\.?$/i,
+  /^current year$/i,
+  /^previous year$/i,
+  /^quarter ended$/i,
+  /^financial year ended$/i,
+  /^year ended$/i,
+  /^audited$/i,
+  /^unaudited$/i,
+  /^un-audited$/i,
 ];
+
+function clean(value: unknown) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
 
 function compact(value: unknown) {
-  return typeof value === "string"
-    ? value
-        .toLowerCase()
-        .replace(/&/g, "and")
-        .replace(/[^a-z0-9]/g, "")
-    : "";
+  return clean(value)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function isFiniteAmount(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value !== 0;
+  return typeof value === "number" && Number.isFinite(value);
 }
 
-function isFinancialDescription(description: string) {
-  const value = compact(description);
+function hasTrustedSource(item: FinancialLineItem) {
+  return (
+    item.extractionEngine === "pdf_layout" &&
+    typeof (item.sourcePage ?? item.pageNumber) === "number" &&
+    Boolean(clean(item.statementType))
+  );
+}
 
-  if (!value || value.length < 5) {
-    return false;
-  }
+function isMetadataDescription(description: string) {
+  const lower = description.toLowerCase();
+  return METADATA_TERMS.some((term) => lower.includes(term));
+}
 
-  if (METADATA_TERMS.some((term) => value.includes(compact(term)))) {
-    return false;
-  }
+function isUsableDescription(description: string) {
+  const value = clean(description);
+  const normalized = compact(value);
 
-  if (
-    HEADING_ONLY_TERMS.some((term) => value.includes(compact(term))) &&
-    !/total|revenue|income|expense|profit|loss|asset|liabilit|equity|cash/.test(value)
-  ) {
-    return false;
-  }
+  if (!value || normalized.length < 2 || !/[a-z]/i.test(value)) return false;
+  if (isMetadataDescription(value)) return false;
+  if (HEADER_ONLY_PATTERNS.some((pattern) => pattern.test(value))) return false;
+  if (/^\d+$/.test(normalized)) return false;
+  return true;
+}
 
-  return FINANCIAL_TERMS.some((term) => value.includes(compact(term)));
+function isFinancialDescription(item: FinancialLineItem) {
+  const description = clean(item.description);
+  if (!isUsableDescription(description)) return false;
+  if (hasTrustedSource(item)) return true;
+
+  const searchable = `${item.category ?? ""} ${description}`.toLowerCase();
+  return FINANCIAL_TERMS.some((term) => searchable.includes(term));
 }
 
 function normalizeCategory(item: FinancialLineItem) {
   const text = compact(`${item.category ?? ""} ${item.description}`);
 
   if (/revenue|sales|turnover|incomefromoperation/.test(text)) return "Revenue";
-  if (/expense|expenditure|cost|depreciation|amorti|employeebenefit/.test(text)) {
+  if (/otherincome|interestincome|totalincome/.test(text)) return "Income";
+  if (/expense|expenditure|cost|purchase|depreciation|amorti|employeebenefit|materials/.test(text)) {
     return "Expense";
   }
-  if (/profit|loss|comprehensiveincome/.test(text)) return "Profit / Loss";
+  if (/profit|loss|comprehensiveincome|earningspershare/.test(text)) {
+    return "Profit / Loss";
+  }
   if (/cash|bankbalance/.test(text)) return "Cash";
-  if (/asset|property|plant|equipment|inventory|receivable|investment/.test(text)) {
+  if (/asset|property|plant|equipment|inventory|receivable|investment|goodwill|intangible/.test(text)) {
     return "Asset";
   }
-  if (/liabilit|payable|borrowing|debt|provision/.test(text)) return "Liability";
+  if (/liabilit|payable|borrowing|debt|provision|lease/.test(text)) {
+    return "Liability";
+  }
   if (/equity|sharecapital|reserve|networth/.test(text)) return "Equity";
-  if (/tax/.test(text)) return "Tax";
+  if (/tax|gst|tds/.test(text)) return "Tax";
+  if (/operatingactivit|investingactivit|financingactivit|cashflow/.test(text)) {
+    return "Cash Flow";
+  }
+  if (/interest|financecost/.test(text)) return "Finance Cost";
 
   return item.category ?? "Other";
 }
 
-/**
- * Annual-report PDFs contain phone numbers, dates, stock codes, addresses and
- * note references beside financial tables. This firewall keeps only rows whose
- * labels are financially meaningful before they can reach review, ledger or AI.
- */
 export function sanitizeFinancialStatementLineItems(
   items: ExtractedDocumentData["lineItems"],
 ): FinancialLineItem[] {
-  if (!Array.isArray(items)) {
-    return [];
-  }
+  if (!Array.isArray(items)) return [];
 
   const seen = new Set<string>();
   const result: FinancialLineItem[] = [];
 
   for (const item of items) {
-    if (!item || !isFiniteAmount(item.amount) || !isFinancialDescription(item.description)) {
+    if (!item || !isFiniteAmount(item.amount) || !isFinancialDescription(item)) {
       continue;
     }
 
-    const description = item.description.replace(/\s+/g, " ").trim();
-    const key = `${compact(description)}|${Math.round(item.amount * 100) / 100}|${item.date ?? ""}`;
+    const description = clean(item.description);
+    const sourcePage = item.sourcePage ?? item.pageNumber ?? null;
+    const key = [
+      compact(description),
+      Math.round(item.amount * 100) / 100,
+      item.date ?? "",
+      item.statementType ?? "",
+      sourcePage ?? "",
+    ].join("|");
 
-    if (seen.has(key)) {
-      continue;
-    }
-
+    if (seen.has(key)) continue;
     seen.add(key);
+
     result.push({
       ...item,
       description,
       category: normalizeCategory(item),
+      sourcePage,
+      pageNumber: item.pageNumber ?? sourcePage,
+      confidence:
+        typeof item.confidence === "number" && Number.isFinite(item.confidence)
+          ? Math.max(0, Math.min(1, item.confidence))
+          : null,
     });
   }
 

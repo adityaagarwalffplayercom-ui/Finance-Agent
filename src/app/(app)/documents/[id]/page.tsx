@@ -18,6 +18,29 @@ type LineItem = {
   description: string;
   category: string;
   amount: number | null;
+  sourcePage: number | null;
+  sourceStatement: string | null;
+  sourceColumn: string | null;
+  confidence: number | null;
+  extractionEngine: string | null;
+};
+
+type ExtractionDiagnostics = {
+  engine: string;
+  confidence: number;
+  quality: "high" | "medium" | "low";
+  requiresReview: boolean;
+  selectedScope?: string | null;
+  statementPages?: number[];
+  detectedSections?: string[];
+  lineItemCount?: number;
+  currentPeriod?: string | null;
+  warnings?: string[];
+  checks?: {
+    key: string;
+    passed: boolean;
+    message: string;
+  }[];
 };
 
 const STATUS_COPY: Record<
@@ -130,6 +153,84 @@ function getMetricValidation(data: ExtractedDocumentData | null) {
   return validation;
 }
 
+function getExtractionDiagnostics(
+  data: ExtractedDocumentData | null,
+): ExtractionDiagnostics | null {
+  const diagnostics = data?.extractionDiagnostics;
+
+  if (!diagnostics || typeof diagnostics !== "object") {
+    return null;
+  }
+
+  const confidence =
+    typeof diagnostics.confidence === "number" &&
+    Number.isFinite(diagnostics.confidence)
+      ? Math.max(0, Math.min(1, diagnostics.confidence))
+      : 0;
+
+  return {
+    engine:
+      typeof diagnostics.engine === "string"
+        ? diagnostics.engine
+        : "unknown",
+    confidence,
+    quality:
+      diagnostics.quality === "high" ||
+      diagnostics.quality === "medium" ||
+      diagnostics.quality === "low"
+        ? diagnostics.quality
+        : confidence >= 0.9
+          ? "high"
+          : confidence >= 0.72
+            ? "medium"
+            : "low",
+    requiresReview: diagnostics.requiresReview !== false,
+    selectedScope:
+      typeof diagnostics.selectedScope === "string"
+        ? diagnostics.selectedScope
+        : null,
+    statementPages: Array.isArray(diagnostics.statementPages)
+      ? diagnostics.statementPages.filter(
+          (page): page is number =>
+            typeof page === "number" && Number.isFinite(page),
+        )
+      : [],
+    detectedSections: Array.isArray(diagnostics.detectedSections)
+      ? diagnostics.detectedSections.filter(
+          (section): section is string => typeof section === "string",
+        )
+      : [],
+    lineItemCount:
+      typeof diagnostics.lineItemCount === "number"
+        ? diagnostics.lineItemCount
+        : undefined,
+    currentPeriod:
+      typeof diagnostics.currentPeriod === "string"
+        ? diagnostics.currentPeriod
+        : null,
+    warnings: Array.isArray(diagnostics.warnings)
+      ? diagnostics.warnings.filter(
+          (warning): warning is string => typeof warning === "string",
+        )
+      : [],
+    checks: Array.isArray(diagnostics.checks)
+      ? diagnostics.checks
+          .filter(
+            (check): check is {
+              key: string;
+              passed: boolean;
+              message: string;
+            } =>
+              Boolean(check) &&
+              typeof check === "object" &&
+              typeof check.key === "string" &&
+              typeof check.passed === "boolean" &&
+              typeof check.message === "string",
+          )
+      : [],
+  };
+}
+
 function getStringValue(
   data: ExtractedDocumentData | null,
   keys: string[],
@@ -204,6 +305,31 @@ function getLineItems(data: ExtractedDocumentData | null): LineItem[] {
         amount:
           typeof lineItem.amount === "number" && Number.isFinite(lineItem.amount)
             ? lineItem.amount
+            : null,
+        sourcePage:
+          typeof lineItem.sourcePage === "number" &&
+          Number.isFinite(lineItem.sourcePage)
+            ? lineItem.sourcePage
+            : typeof lineItem.pageNumber === "number" &&
+                Number.isFinite(lineItem.pageNumber)
+              ? lineItem.pageNumber
+              : null,
+        sourceStatement:
+          typeof lineItem.sourceStatement === "string"
+            ? lineItem.sourceStatement
+            : null,
+        sourceColumn:
+          typeof lineItem.sourceColumn === "string"
+            ? lineItem.sourceColumn
+            : null,
+        confidence:
+          typeof lineItem.confidence === "number" &&
+          Number.isFinite(lineItem.confidence)
+            ? Math.max(0, Math.min(1, lineItem.confidence))
+            : null,
+        extractionEngine:
+          typeof lineItem.extractionEngine === "string"
+            ? lineItem.extractionEngine
             : null,
       };
     })
@@ -419,13 +545,15 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
     "expenditure",
   ]);
 
-  const profit = getNumberValue(extracted, [
-    "profit",
+  const positiveOrSignedNetIncome = getNumberValue(extracted, [
     "netIncome",
+    "profit",
     "netProfit",
-    "netLoss",
-    "loss",
   ]);
+  const reportedLoss = getNumberValue(extracted, ["loss", "netLoss"]);
+  const profit =
+    positiveOrSignedNetIncome ??
+    (reportedLoss === null ? null : -Math.abs(reportedLoss));
 
   const cash = getNumberValue(extracted, [
     "cash",
@@ -442,6 +570,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
 
   const equity = getNumberValue(extracted, ["equity", "totalEquity"]);
   const metricValidation = getMetricValidation(extracted);
+  const extractionDiagnostics = getExtractionDiagnostics(extracted);
   const invalidatedMetrics = new Set(metricValidation?.invalidatedFields ?? []);
   const validationNeedsReview = metricValidation?.status === "needs_review";
 
@@ -658,6 +787,97 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
             tone={invalidatedMetrics.has("equity") ? "yellow" : "green"}
           />
         </div>
+
+        {extractionDiagnostics && (
+          <div
+            style={{
+              border: `1px solid ${
+                extractionDiagnostics.quality === "high"
+                  ? "rgba(46,213,115,0.28)"
+                  : extractionDiagnostics.quality === "medium"
+                    ? "rgba(255,193,7,0.30)"
+                    : "rgba(255,71,87,0.30)"
+              }`,
+              background:
+                extractionDiagnostics.quality === "high"
+                  ? "rgba(46,213,115,0.07)"
+                  : extractionDiagnostics.quality === "medium"
+                    ? "rgba(255,193,7,0.07)"
+                    : "rgba(255,71,87,0.07)",
+              borderRadius: 18,
+              padding: 16,
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 16,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <strong style={{ color: "var(--color-text-primary)", fontSize: 14 }}>
+                Extraction confidence
+              </strong>
+              <span className="badge-sample">
+                {Math.round(extractionDiagnostics.confidence * 100)}% · {extractionDiagnostics.engine}
+              </span>
+            </div>
+
+            <p
+              style={{
+                margin: 0,
+                color: "var(--color-text-secondary)",
+                fontSize: 13,
+                lineHeight: 1.6,
+              }}
+            >
+              {extractionDiagnostics.selectedScope
+                ? `${extractionDiagnostics.selectedScope} scope`
+                : "Scope not identified"}
+              {extractionDiagnostics.statementPages?.length
+                ? ` · pages ${extractionDiagnostics.statementPages.join(", ")}`
+                : ""}
+              {typeof extractionDiagnostics.lineItemCount === "number"
+                ? ` · ${extractionDiagnostics.lineItemCount} detailed rows`
+                : ""}
+              {extractionDiagnostics.currentPeriod
+                ? ` · period ${extractionDiagnostics.currentPeriod}`
+                : ""}
+            </p>
+
+            {extractionDiagnostics.checks?.map((check) => (
+              <p
+                key={check.key}
+                style={{
+                  margin: 0,
+                  color: check.passed ? "#7bed9f" : "#ff8a95",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                }}
+              >
+                {check.passed ? "✓" : "!"} {check.message}
+              </p>
+            ))}
+
+            {extractionDiagnostics.warnings?.slice(0, 4).map((warning) => (
+              <p
+                key={warning}
+                style={{
+                  margin: 0,
+                  color: "#ffd166",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                }}
+              >
+                ! {warning}
+              </p>
+            ))}
+          </div>
+        )}
 
         {validationNeedsReview && (
           <div
@@ -888,7 +1108,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                minWidth: 680,
+                minWidth: 920,
               }}
             >
               <thead>
@@ -897,7 +1117,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
                     background: "rgba(255,255,255,0.045)",
                   }}
                 >
-                  {["Description", "Category", "Amount"].map((heading) => (
+                  {["Description", "Source", "Category", "Confidence", "Amount"].map((heading) => (
                     <th
                       key={heading}
                       style={{
@@ -905,7 +1125,10 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
                         fontSize: 12,
                         textTransform: "uppercase",
                         letterSpacing: "0.08em",
-                        textAlign: heading === "Amount" ? "right" : "left",
+                        textAlign:
+                          heading === "Amount" || heading === "Confidence"
+                            ? "right"
+                            : "left",
                         padding: 13,
                         borderBottom: "1px solid var(--color-border)",
                       }}
@@ -934,11 +1157,53 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
                       style={{
                         padding: 13,
                         color: "var(--color-text-secondary)",
+                        fontSize: 12,
+                        borderBottom: "1px solid var(--color-border)",
+                        minWidth: 210,
+                      }}
+                      title={item.sourceColumn ?? undefined}
+                    >
+                      <div style={{ display: "grid", gap: 3 }}>
+                        <span>{item.sourceStatement ?? "Source not mapped"}</span>
+                        <span>
+                          {item.sourcePage ? `Page ${item.sourcePage}` : "Page unavailable"}
+                          {item.extractionEngine
+                            ? ` · ${item.extractionEngine}`
+                            : ""}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 13,
+                        color: "var(--color-text-secondary)",
                         fontSize: 13,
                         borderBottom: "1px solid var(--color-border)",
                       }}
                     >
                       {item.category}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: 13,
+                        color:
+                          item.confidence !== null && item.confidence >= 0.9
+                            ? "#7bed9f"
+                            : item.confidence !== null && item.confidence >= 0.72
+                              ? "#ffd166"
+                              : "var(--color-text-secondary)",
+                        fontSize: 12,
+                        fontWeight: 800,
+                        textAlign: "right",
+                        borderBottom: "1px solid var(--color-border)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {item.confidence === null
+                        ? "—"
+                        : `${Math.round(item.confidence * 100)}%`}
                     </td>
 
                     <td

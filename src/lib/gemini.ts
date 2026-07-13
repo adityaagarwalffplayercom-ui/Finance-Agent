@@ -377,7 +377,44 @@ export type ExtractedDocumentData = {
     amount: number;
     category?: string | null;
     date?: string | null;
+    displayedAmount?: number | null;
+    displayedUnit?: string | null;
+    currency?: string | null;
+    statementType?: string | null;
+    scope?: string | null;
+    pageNumber?: number | null;
+    sourcePage?: number | null;
+    sourceColumn?: string | null;
+    sourceText?: string | null;
+    sourceStatement?: string | null;
+    extractionEngine?: string | null;
+    confidence?: number | null;
+    isAggregate?: boolean | null;
+    section?: string | null;
   }[];
+
+  extractionDiagnostics?: {
+    engine: string;
+    confidence: number;
+    quality: "high" | "medium" | "low";
+    requiresReview: boolean;
+    textLayerAvailable?: boolean;
+    likelyScanned?: boolean;
+    selectedScope?: string | null;
+    statementPages?: number[];
+    detectedSections?: string[];
+    lineItemCount?: number;
+    currentPeriod?: string | null;
+    warnings?: string[];
+    checks?: {
+      key: string;
+      passed: boolean;
+      message: string;
+      difference?: number | null;
+    }[];
+    enginesAttempted?: string[];
+    conflicts?: string[];
+  } | null;
 
   transactions?: {
     date: string;
