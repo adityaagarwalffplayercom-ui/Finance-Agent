@@ -1,4 +1,4 @@
-name: Aureli CI
+name: Actic Finance CI
 
 on:
   pull_request:

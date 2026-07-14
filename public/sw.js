@@ -1,9 +1,9 @@
-const CACHE_NAME = "aureli-pwa-v1";
+const CACHE_NAME = "actic-finance-pwa-v3";
 
 const APP_SHELL = [
   "/",
-  "/login",
-  "/signup",
+  "/sign-in",
+  "/sign-up",
   "/offline",
   "/aureli-icon.svg",
 ];
