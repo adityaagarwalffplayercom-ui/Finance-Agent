@@ -434,7 +434,7 @@ export default function LearningCenterPage() {
                 maxWidth: 850,
               }}
             >
-              Aureli learns from user feedback. Helpful, accepted, and completed
+              Actic Finance learns from user feedback. Helpful, accepted, and completed
               actions get rewarded, while unhelpful actions reduce future ranking.
             </p>
           </div>

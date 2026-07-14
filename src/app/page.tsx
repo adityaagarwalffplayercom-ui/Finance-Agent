@@ -90,7 +90,7 @@ export default function HomePage() {
             >
               <AureliLogo />
             </span>
-            <span>Aureli</span>
+            <span>Actic Finance</span>
           </Link>
 
           <div
@@ -173,7 +173,7 @@ export default function HomePage() {
                 maxWidth: 760,
               }}
             >
-              Aureli turns business documents into an executive finance team:
+              Actic Finance turns business documents into an executive finance team:
               CFO decisions, risk score, cash runway, forecasts, tax readiness,
               and AI explanations in one clean workspace.
             </p>

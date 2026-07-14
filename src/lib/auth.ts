@@ -50,9 +50,9 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url }) => {
       void sendTransactionalEmail({
         to: user.email,
-        subject: "Verify your Aureli account",
-        text: `Verify your Aureli account: ${url}`,
-        html: `<p>Verify your Aureli account by opening this secure link:</p><p><a href="${url}">Verify email</a></p>`,
+        subject: "Verify your Actic Finance account",
+        text: `Verify your Actic Finance account: ${url}`,
+        html: `<p>Verify your Actic Finance account by opening this secure link:</p><p><a href="${url}">Verify email</a></p>`,
       }).catch((error) => logger.error("auth.verification_email_failed", error, { userId: user.id }));
     },
   },
@@ -65,9 +65,9 @@ export const auth = betterAuth({
     sendResetPassword: async ({ user, url }) => {
       void sendTransactionalEmail({
         to: user.email,
-        subject: "Reset your Aureli password",
-        text: `Reset your Aureli password: ${url}`,
-        html: `<p>A password reset was requested for your Aureli account.</p><p><a href="${url}">Reset password</a></p><p>If this was not you, ignore this email.</p>`,
+        subject: "Reset your Actic Finance password",
+        text: `Reset your Actic Finance password: ${url}`,
+        html: `<p>A password reset was requested for your Actic Finance account.</p><p><a href="${url}">Reset password</a></p><p>If this was not you, ignore this email.</p>`,
       }).catch((error) => logger.error("auth.reset_email_failed", error, { userId: user.id }));
     },
   },

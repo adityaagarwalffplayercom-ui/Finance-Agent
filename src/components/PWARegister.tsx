@@ -18,7 +18,7 @@ export function PWARegister() {
 
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("/sw.js").catch((error) => {
-        console.error("Aureli service worker registration failed:", error);
+        console.error("Actic Finance service worker registration failed:", error);
       });
     });
   }, []);

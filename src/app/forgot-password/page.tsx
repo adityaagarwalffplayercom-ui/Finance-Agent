@@ -22,7 +22,7 @@ export default function ForgotPasswordPage() {
       if ((result as { error?: { message?: string } }).error) {
         throw new Error((result as { error: { message?: string } }).error.message ?? "Reset request failed.");
       }
-      setMessage("If an Aureli account exists for this email, a reset link has been sent.");
+      setMessage("If an Actic Finance account exists for this email, a reset link has been sent.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Reset request failed.");
     } finally {
@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
       <section className="section-card" style={{ width: "min(480px, 100%)", display: "grid", gap: 18 }}>
         <span style={{ width: 54, height: 54 }}><AureliLogo /></span>
         <div><p className="eyebrow" style={{ margin: 0 }}>Account recovery</p><h1 style={{ margin: "8px 0 0" }}>Reset password</h1></div>
-        <p className="page-intro">Enter your account email. For privacy, Aureli always returns the same response.</p>
+        <p className="page-intro">Enter your account email. For privacy, Actic Finance always returns the same response.</p>
         <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
           <input type="email" required autoComplete="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
           <button className="button-primary" disabled={busy}>{busy ? "Sending…" : "Send reset link"}</button>

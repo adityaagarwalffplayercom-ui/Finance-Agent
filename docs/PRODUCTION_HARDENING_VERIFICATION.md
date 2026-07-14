@@ -1,11 +1,11 @@
-# Aureli production-hardening verification
+# Actic Finance production-hardening verification
 
 Verification date: 13 July 2026
 
 ## Release scope
 
 This release adds a backwards-compatible production foundation around the
-existing Aureli financial engine:
+existing Actic Finance financial engine:
 
 - private S3-compatible source storage with signed direct uploads;
 - database source-storage fallback for local development;

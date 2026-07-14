@@ -325,7 +325,7 @@ export function WorkspaceSettingsPanel({
                 disabled={!canAdmin || busy}
               />
               <span>
-                I accept the workspace terms and understand that Aureli
+                I accept the workspace terms and understand that Actic Finance
                 provides decision support, not statutory accounting advice.
               </span>
             </label>
@@ -410,7 +410,7 @@ export function WorkspaceSettingsPanel({
           {members.map((member) => (
             <div className="settings-member-row" key={member.id}>
               <div className="settings-member-copy">
-                <strong>{member.user.name || "Aureli member"}</strong>
+                <strong>{member.user.name || "Actic Finance member"}</strong>
                 <span className="section-hint">
                   {member.user.email} · {member.role}
                 </span>

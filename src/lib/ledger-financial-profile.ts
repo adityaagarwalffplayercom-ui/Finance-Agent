@@ -292,7 +292,7 @@ function createEmptyProfile(params: {
     alerts,
 
     executiveSummary:
-      "Aureli has not found enough approved credit and debit ledger entries to calculate a trusted financial position.",
+      "Actic Finance has not found enough approved credit and debit ledger entries to calculate a trusted financial position.",
 
     recommendations: [
       {

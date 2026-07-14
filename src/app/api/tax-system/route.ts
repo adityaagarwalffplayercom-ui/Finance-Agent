@@ -65,7 +65,7 @@ export async function GET() {
       },
       documents,
       disclaimer:
-        "Aureli uses verified uploaded tax knowledge and tax rules for readiness and checklist guidance only. It does not replace a CA, CPA, accountant, auditor, lawyer, tax professional, or government authority.",
+        "Actic Finance uses verified uploaded tax knowledge and tax rules for readiness and checklist guidance only. It does not replace a CA, CPA, accountant, auditor, lawyer, tax professional, or government authority.",
     });
   } catch (error) {
     console.error("Tax system public API failed:", error);

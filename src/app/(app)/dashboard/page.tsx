@@ -671,7 +671,7 @@ const documentTone = getDocumentTrustTone(approvedDocuments, processedDocuments)
                 maxWidth: 1040,
               }}
             >
-              {business?.name || "Aureli Finance Dashboard"}
+              {business?.name || "Actic Finance Finance Dashboard"}
             </h1>
 
             <p
@@ -808,7 +808,7 @@ const documentTone = getDocumentTrustTone(approvedDocuments, processedDocuments)
             <SectionHeader
               eyebrow="Owner priority"
               title={ownerFocus}
-              detail="Aureli combines profit, cash, document trust, and risk signals to show what the owner should focus on first."
+              detail="Actic Finance combines profit, cash, document trust, and risk signals to show what the owner should focus on first."
             />
 
             <div
@@ -1087,7 +1087,7 @@ const documentTone = getDocumentTrustTone(approvedDocuments, processedDocuments)
             <SectionHeader
               eyebrow="Recent documents"
               title="Latest trusted data sources"
-              detail="Approved processed documents power Aureli’s dashboard and agents."
+              detail="Approved processed documents power Actic Finance’s dashboard and agents."
             />
 
             {documents.length > 0 ? (

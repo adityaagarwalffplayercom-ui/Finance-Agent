@@ -1,8 +1,8 @@
-# Aureli production deployment
+# Actic Finance production deployment
 
 ## Release gates
 
-Do not expose Aureli to real financial users until all of these pass in staging:
+Do not expose Actic Finance to real financial users until all of these pass in staging:
 
 ```bash
 npm ci
@@ -20,7 +20,7 @@ Use separate development, staging and production databases, storage buckets, Gem
 ## Required production architecture
 
 1. PostgreSQL with pooling for runtime and a direct connection for migrations.
-2. Private S3-compatible object storage with CORS limited to the Aureli domain.
+2. Private S3-compatible object storage with CORS limited to the Actic Finance domain.
 3. `DOCUMENT_PROCESSING_MODE=queue` and the authenticated cron worker.
 4. A verified email sender for verification, recovery and workspace invitations.
 5. Error/uptime monitoring that consumes structured JSON logs.

@@ -823,7 +823,7 @@ export function BusinessProfileForm({
       <TextInput
         label="Business name"
         value={name}
-        placeholder="Example: Aureli Foods Pvt Ltd"
+        placeholder="Example: Actic Finance Foods Pvt Ltd"
         onChange={setName}
         disabled={isPending}
       />
@@ -938,7 +938,7 @@ export function BusinessProfileForm({
             lineHeight: 1.45,
           }}
         >
-          Approved documents plus this profile power Aureli&apos;s finance
+          Approved documents plus this profile power Actic Finance&apos;s finance
           intelligence.
         </span>
       </div>

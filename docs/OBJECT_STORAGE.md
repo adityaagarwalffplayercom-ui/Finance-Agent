@@ -1,6 +1,6 @@
 # Private object storage
 
-Aureli supports AWS S3, Cloudflare R2 and compatible private object stores using SigV4. Source documents are never public. The browser receives a short-lived PUT URL and the application issues short-lived GET URLs only after authorization.
+Actic Finance supports AWS S3, Cloudflare R2 and compatible private object stores using SigV4. Source documents are never public. The browser receives a short-lived PUT URL and the application issues short-lived GET URLs only after authorization.
 
 Required environment variables are `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID` and `OBJECT_STORAGE_SECRET_ACCESS_KEY`.
 

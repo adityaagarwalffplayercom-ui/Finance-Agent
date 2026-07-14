@@ -77,22 +77,22 @@ export default function TermsPage() {
                 lineHeight: 1.7,
               }}
             >
-              These Terms explain the rules for using Aureli, an AI-powered
+              These Terms explain the rules for using Actic Finance, an AI-powered
               finance workspace.
             </p>
           </div>
 
           <div className="legal-content">
-            <h2>1. Use of Aureli</h2>
+            <h2>1. Use of Actic Finance</h2>
             <p>
-              Aureli provides tools for uploading financial documents, extracting
+              Actic Finance provides tools for uploading financial documents, extracting
               financial information, viewing dashboard insights, asking AI
               finance questions, and generating CFO-style reports.
             </p>
 
             <h2>2. No professional advice</h2>
             <p>
-              Aureli is not a replacement for a certified accountant, auditor,
+              Actic Finance is not a replacement for a certified accountant, auditor,
               tax advisor, lawyer, or financial advisor. Outputs are generated
               for informational and productivity purposes only.
             </p>
@@ -126,27 +126,27 @@ export default function TermsPage() {
 
             <h2>7. Acceptable use</h2>
             <p>
-              Users may not misuse Aureli, attempt to break security, upload
+              Users may not misuse Actic Finance, attempt to break security, upload
               malicious files, violate laws, or use the service in a way that
               harms other users or the platform.
             </p>
 
             <h2>8. Service availability</h2>
             <p>
-              Aureli may change, pause, or discontinue features. We do not
+              Actic Finance may change, pause, or discontinue features. We do not
               guarantee uninterrupted or error-free operation.
             </p>
 
             <h2>9. Limitation of liability</h2>
             <p>
-              Aureli is provided as-is. To the maximum extent permitted by law,
+              Actic Finance is provided as-is. To the maximum extent permitted by law,
               we are not liable for losses caused by reliance on AI outputs,
               inaccurate data, downtime, or user decisions.
             </p>
 
             <h2>10. Contact</h2>
             <p>
-              For questions about these Terms, contact the Aureli support team
+              For questions about these Terms, contact the Actic Finance support team
               using the support email provided in the app or store listing.
             </p>
           </div>

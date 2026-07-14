@@ -340,7 +340,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
           }
 
           /*
-           * Main app scrollbar is now inside the Aureli workspace,
+           * Main app scrollbar is now inside the Actic Finance workspace,
            * instead of appearing as an outside browser scrollbar.
            */
           .dashboard-main {

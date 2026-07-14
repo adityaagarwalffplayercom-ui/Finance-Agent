@@ -875,7 +875,7 @@ export default function TaxCoveragePage() {
               </h1>
 
               <p className="coverage-description">
-                Review how much verified tax knowledge Aureli has for India,
+                Review how much verified tax knowledge Actic Finance has for India,
                 USA, and UK. The Tax Agent uses this coverage before giving
                 source-backed tax readiness answers.
               </p>
@@ -958,7 +958,7 @@ export default function TaxCoveragePage() {
             <p className="coverage-stat-label">Source docs</p>
             <p className="coverage-stat-value">{summary.sources}</p>
             <p className="coverage-stat-hint">
-              Verified official documents uploaded into Aureli.
+              Verified official documents uploaded into Actic Finance.
             </p>
           </article>
 
@@ -1100,7 +1100,7 @@ export default function TaxCoveragePage() {
         <section className="section-card">
           <p className="coverage-note">
             Tax note: Coverage status only shows how much verified source data
-            Aureli has. It is not a legal or filing certification. Always verify
+            Actic Finance has. It is not a legal or filing certification. Always verify
             official filing, notices, audits, and legal compliance with a
             qualified tax professional.
           </p>

@@ -95,10 +95,10 @@ function createPdfWriter() {
   });
 
   doc.setProperties({
-    title: "Aureli User Data Export",
+    title: "Actic Finance User Data Export",
     subject: "User privacy data export",
-    author: "Aureli",
-    creator: "Aureli Finance OS",
+    author: "Actic Finance",
+    creator: "Actic Finance Finance OS",
   });
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -374,7 +374,7 @@ export async function buildUserDataExportPdf(userId: string) {
   const writer = createPdfWriter();
 
   addSmallLabel(writer, "AURELI USER PRIVACY EXPORT");
-  addTitle(writer, "Aureli User Data Export");
+  addTitle(writer, "Actic Finance User Data Export");
 
   addText(writer, `Generated at: ${exportData.exportedAt}`, {
     fontSize: 10,
@@ -557,7 +557,7 @@ export async function buildUserDataExportPdf(userId: string) {
 
   addText(
     writer,
-    "End of Aureli PDF export. For full machine-readable data, use JSON export if enabled.",
+    "End of Actic Finance PDF export. For full machine-readable data, use JSON export if enabled.",
     {
       fontSize: 9,
       color: [100, 116, 139],
@@ -724,7 +724,7 @@ export async function deleteOwnAccountCompletely(userId: string) {
 
 export function getPrivacyControlsSummary() {
   return {
-    title: "Aureli User Privacy Controls",
+    title: "Actic Finance User Privacy Controls",
     principles: [
       "A user can export their own data as PDF.",
       "A user can delete their own business data.",

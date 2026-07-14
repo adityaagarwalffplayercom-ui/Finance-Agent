@@ -315,7 +315,7 @@ export default function DemoModePage() {
                 maxWidth: 960,
               }}
             >
-              Explore Aureli with sample data.
+              Explore Actic Finance with sample data.
             </h1>
 
             <p
@@ -327,7 +327,7 @@ export default function DemoModePage() {
               }}
             >
               Seed a ready-made demo business with approved financial documents
-              so Aureli works smoothly even if live uploads or AI quota fail.
+              so Actic Finance works smoothly even if live uploads or AI quota fail.
             </p>
           </div>
 

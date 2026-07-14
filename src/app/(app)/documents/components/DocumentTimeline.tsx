@@ -106,7 +106,7 @@ export function DocumentTimeline({
         : isQueued
           ? "Waiting for a background worker"
           : isProcessing
-            ? "Aureli is analyzing"
+            ? "Actic Finance is analyzing"
           : isProcessed
             ? "Extraction completed"
             : "Waiting for AI",

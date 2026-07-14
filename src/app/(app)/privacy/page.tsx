@@ -93,7 +93,7 @@ export default function PrivacyPage() {
     }
 
     const confirmed = window.confirm(
-      "This will permanently delete your Aureli account and user-owned data. This action cannot be undone. Continue?",
+      "This will permanently delete your Actic Finance account and user-owned data. This action cannot be undone. Continue?",
     );
 
     if (!confirmed) {
@@ -448,7 +448,7 @@ export default function PrivacyPage() {
               <h1 className="privacy-title">Export and control your data.</h1>
 
               <p className="privacy-description">
-                Download your Aureli user-owned data as a PDF, review what is
+                Download your Actic Finance user-owned data as a PDF, review what is
                 included, and delete business data when needed. Every action is
                 scoped to your logged-in session.
               </p>
@@ -541,7 +541,7 @@ export default function PrivacyPage() {
         <section className="section-card">
           <div>
             <p className="privacy-eyebrow">Protection model</p>
-            <h2 className="privacy-card-title">How Aureli protects user data</h2>
+            <h2 className="privacy-card-title">How Actic Finance protects user data</h2>
             <p className="section-hint">
               These are application-level privacy controls for the logged-in
               workspace.
@@ -592,7 +592,7 @@ export default function PrivacyPage() {
             <p className="privacy-eyebrow">Permanent delete</p>
             <h2 className="privacy-card-title">Delete account</h2>
             <p className="privacy-card-text">
-              Permanently deletes your Aureli account and user-owned data. This
+              Permanently deletes your Actic Finance account and user-owned data. This
               action cannot be undone.
             </p>
 

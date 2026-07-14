@@ -107,7 +107,7 @@ export default function SignInPage() {
               >
                 <AureliLogo />
               </span>
-              Aureli
+              Actic Finance
             </Link>
 
             <p className="eyebrow" style={{ margin: "36px 0 0" }}>
@@ -258,7 +258,7 @@ export default function SignInPage() {
                     letterSpacing: "-0.06em",
                   }}
                 >
-                  Enter Aureli
+                  Enter Actic Finance
                 </h2>
 
                 <p
@@ -401,7 +401,7 @@ export default function SignInPage() {
                   lineHeight: 1.6,
                 }}
               >
-                New to Aureli?{" "}
+                New to Actic Finance?{" "}
                 <Link
                   href="/sign-up"
                   style={{

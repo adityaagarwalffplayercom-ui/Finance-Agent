@@ -37,7 +37,7 @@ const legalPrinciples = [
   {
     title: "Informational support only",
     description:
-      "Aureli can explain financial and tax readiness signals, but it does not provide certified legal, tax, audit, investment, or filing advice.",
+      "Actic Finance can explain financial and tax readiness signals, but it does not provide certified legal, tax, audit, investment, or filing advice.",
   },
   {
     title: "Verified source boundary",
@@ -769,7 +769,7 @@ export default function LegalPage() {
               </h1>
 
               <p className="legal-description">
-                Aureli gives finance and tax readiness support using uploaded
+                Actic Finance gives finance and tax readiness support using uploaded
                 business documents, verified tax coverage, and source-backed tax
                 knowledge. It does not replace a qualified legal, tax, audit, or
                 filing professional.
@@ -837,11 +837,11 @@ export default function LegalPage() {
             <p className="legal-eyebrow">Important disclaimer</p>
 
             <h2 className="legal-card-title">
-              Aureli is not a legal or tax professional.
+              Actic Finance is not a legal or tax professional.
             </h2>
 
             <p className="legal-card-text">
-              Aureli can help organize financial information, detect missing
+              Actic Finance can help organize financial information, detect missing
               documents, explain tax-readiness risks, and surface source-backed
               guidance. Final decisions must be reviewed by a qualified
               professional.
@@ -850,7 +850,7 @@ export default function LegalPage() {
             <div className="legal-list">
               <div className="legal-list-item">
                 <span>!</span>
-                Do not treat Aureli responses as certified legal, tax, audit,
+                Do not treat Actic Finance responses as certified legal, tax, audit,
                 investment, or filing advice.
               </div>
 
@@ -896,7 +896,7 @@ export default function LegalPage() {
               </h2>
 
               <p className="legal-card-text">
-                Aureli is strongest only where verified tax rules, verified
+                Actic Finance is strongest only where verified tax rules, verified
                 source documents, and knowledge chunks exist. Coverage can be
                 strong, partial, or missing depending on uploaded official data.
               </p>
@@ -1031,7 +1031,7 @@ export default function LegalPage() {
 
         <section className="legal-warning-card">
           <p className="legal-note">
-            Tax note: Tax Coverage shows how much verified source data Aureli
+            Tax note: Tax Coverage shows how much verified source data Actic Finance
             has. It is not a legal, tax, audit, or filing certification. Always
             verify official filing, notices, deadlines, audits, and legal
             compliance with a qualified professional.

@@ -223,7 +223,7 @@ export async function getDecisionCenterReport(
       title:
         "Build and approve the transaction ledger",
       problem:
-        "Aureli cannot make reliable owner-level financial decisions without approved credit and debit entries.",
+        "Actic Finance cannot make reliable owner-level financial decisions without approved credit and debit entries.",
       action:
         "Sync approved documents, add missing manual transactions, and review every pending ledger entry.",
       expectedImpact:

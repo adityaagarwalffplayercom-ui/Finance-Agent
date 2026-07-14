@@ -619,7 +619,7 @@ export default function MonthlyReportPage() {
               </h1>
 
               <p className="monthly-description">
-                Aureli reviews approved documents, extracted line items,
+                Actic Finance reviews approved documents, extracted line items,
                 financial metrics, and risk signals to create a monthly
                 share-ready report for your business.
               </p>
@@ -762,7 +762,9 @@ export default function MonthlyReportPage() {
 
                 <div className="monthly-narrative" style={{ marginTop: 14 }}>
                   {narrativeLines.length > 0 ? (
-                    narrativeLines.map((line) => <p key={line}>{line}</p>)
+                    narrativeLines.map((line, index) => (
+                      <p key={`monthly-narrative-${index}-${line}`}>{line}</p>
+                    ))
                   ) : (
                     <p>No AI narrative available.</p>
                   )}
@@ -877,8 +879,8 @@ export default function MonthlyReportPage() {
                 <h2 className="monthly-card-title">Risk signals</h2>
 
                 <div className="monthly-list">
-                  {report.riskSignals.map((risk) => (
-                    <div key={risk} className="monthly-list-item">
+                  {report.riskSignals.map((risk, index) => (
+                    <div key={`risk-${index}-${risk}`} className="monthly-list-item">
                       <span>!</span>
                       {risk}
                     </div>
@@ -890,8 +892,11 @@ export default function MonthlyReportPage() {
                 <h2 className="monthly-card-title">Recommended actions</h2>
 
                 <div className="monthly-list">
-                  {report.opportunities.map((opportunity) => (
-                    <div key={opportunity} className="monthly-list-item">
+                  {report.opportunities.map((opportunity, index) => (
+                    <div
+                      key={`opportunity-${index}-${opportunity}`}
+                      className="monthly-list-item"
+                    >
                       <span>✓</span>
                       {opportunity}
                     </div>
@@ -904,8 +909,8 @@ export default function MonthlyReportPage() {
               <h2 className="monthly-card-title">Missing data</h2>
 
               <div className="monthly-list">
-                {report.missingData.map((item) => (
-                  <div key={item} className="monthly-list-item">
+                {report.missingData.map((item, index) => (
+                  <div key={`missing-${index}-${item}`} className="monthly-list-item">
                     <span>?</span>
                     {item}
                   </div>
@@ -918,8 +923,11 @@ export default function MonthlyReportPage() {
 
               <div className="monthly-list">
                 {report.documentSummary.sourceDocuments.length > 0 ? (
-                  report.documentSummary.sourceDocuments.map((document) => (
-                    <div key={document} className="monthly-list-item">
+                  report.documentSummary.sourceDocuments.map((document, index) => (
+                    <div
+                      key={`source-${index}-${document}`}
+                      className="monthly-list-item"
+                    >
                       <span>✓</span>
                       {document}
                     </div>

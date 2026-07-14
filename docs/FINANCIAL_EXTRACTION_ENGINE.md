@@ -1,4 +1,4 @@
-# Aureli Financial Statement Extraction Engine
+# Actic Finance Financial Statement Extraction Engine
 
 ## Purpose
 
@@ -58,7 +58,7 @@ review-required unless source validation is sufficient.
 
 ## Important production rule
 
-No parser can guarantee perfect extraction from every document. Aureli therefore
+No parser can guarantee perfect extraction from every document. Actic Finance therefore
 uses confidence, source evidence, reconciliation, and mandatory review instead of
 silently trusting uncertain values.
 

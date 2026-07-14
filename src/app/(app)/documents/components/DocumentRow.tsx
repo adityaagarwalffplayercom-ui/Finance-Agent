@@ -338,7 +338,7 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
 
       const payload = await response.json().catch(() => null);
       if (response.status === 202 || payload?.status === "QUEUED") {
-        setProcessError("Document queued. Aureli will refresh this status automatically.");
+        setProcessError("Document queued. Actic Finance will refresh this status automatically.");
       }
       router.refresh();
     } catch (error) {
@@ -535,7 +535,7 @@ export function DocumentRow({ doc }: { doc: DocumentListItem }) {
             ? "Document is queued. A background worker will start it shortly."
             : doc.status === "UPLOADING"
               ? "Secure upload is being finalized."
-              : "Aureli is analyzing this document. The status refreshes automatically."}
+              : "Actic Finance is analyzing this document. The status refreshes automatically."}
         </div>
       )}
 

@@ -599,7 +599,7 @@ export default function BusinessChatPage() {
                     isLoading || isLoadingHistory || !question.trim() ? 0.65 : 1,
                 }}
               >
-                {isLoading ? "Analyzing..." : "Ask Aureli"}
+                {isLoading ? "Analyzing..." : "Ask Actic Finance"}
               </button>
             </form>
           </article>

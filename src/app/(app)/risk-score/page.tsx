@@ -584,7 +584,7 @@ export default function RiskScorePage() {
               </h1>
 
               <p className="risk-description">
-                Aureli scores financial risk using approved documents, profit
+                Actic Finance scores financial risk using approved documents, profit
                 signals, expenses, liabilities, cash position, missing data, and
                 extracted line items.
               </p>

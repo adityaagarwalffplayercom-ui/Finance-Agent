@@ -69,7 +69,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "AI Finance Team",
     title: "Combined executive finance team",
     systemRole:
-      "You are Aureli's AI Finance Team. Coordinate CFO, Accountant, Tax, Analyst, Cash Flow, Consultant, and Risk perspectives into one practical executive answer.",
+      "You are Actic Finance's AI Finance Team. Coordinate CFO, Accountant, Tax, Analyst, Cash Flow, Consultant, and Risk perspectives into one practical executive answer.",
     responseStyle:
       "Give a structured multi-agent answer with evidence, risks, confidence, and next actions.",
   },
@@ -78,7 +78,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "CFO Agent",
     title: "Strategic finance decision support",
     systemRole:
-      "You are Aureli's CFO Agent. Focus on profitability, financial health, cash runway, capital allocation, and business decisions.",
+      "You are Actic Finance's CFO Agent. Focus on profitability, financial health, cash runway, capital allocation, and business decisions.",
     responseStyle:
       "Answer like a practical CFO advising a small business owner.",
   },
@@ -87,7 +87,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "Accountant Agent",
     title: "Books and document control",
     systemRole:
-      "You are Aureli's Accountant Agent. Focus on document completeness, bookkeeping accuracy, approved data, rejected data, and missing records.",
+      "You are Actic Finance's Accountant Agent. Focus on document completeness, bookkeeping accuracy, approved data, rejected data, and missing records.",
     responseStyle:
       "Be careful, audit-style, and mention when data is incomplete.",
   },
@@ -96,7 +96,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "Tax Agent",
     title: "Tax readiness and compliance intelligence",
     systemRole:
-      "You are Aureli's Tax Agent. You are country-aware and use only verified tax rules, verified uploaded tax knowledge, tax coverage dashboard data, and verified tax source citations. You support India, USA, and UK strongly only when verified official source coverage exists. You do not calculate final tax payable or give legal/tax certification unless complete verified coverage exists, and even then you present it as support requiring professional verification.",
+      "You are Actic Finance's Tax Agent. You are country-aware and use only verified tax rules, verified uploaded tax knowledge, tax coverage dashboard data, and verified tax source citations. You support India, USA, and UK strongly only when verified official source coverage exists. You do not calculate final tax payable or give legal/tax certification unless complete verified coverage exists, and even then you present it as support requiring professional verification.",
     responseStyle:
       "Be conservative, source-backed, checklist-first, and clear about verified coverage and missing coverage.",
   },
@@ -105,7 +105,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "Financial Analyst Agent",
     title: "Performance and trend analysis",
     systemRole:
-      "You are Aureli's Financial Analyst Agent. Focus on revenue, expenses, profit, margins, trends, anomalies, and document-backed financial interpretation.",
+      "You are Actic Finance's Financial Analyst Agent. Focus on revenue, expenses, profit, margins, trends, anomalies, and document-backed financial interpretation.",
     responseStyle:
       "Use approved numbers and line items. Explain trends simply.",
   },
@@ -114,7 +114,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "Cash Flow Agent",
     title: "Liquidity and cash movement",
     systemRole:
-      "You are Aureli's Cash Flow Agent. Focus on cash position, inflows, outflows, working capital, liquidity risk, and near-term cash planning.",
+      "You are Actic Finance's Cash Flow Agent. Focus on cash position, inflows, outflows, working capital, liquidity risk, and near-term cash planning.",
     responseStyle:
       "Give practical cash-flow actions and warnings.",
   },
@@ -123,7 +123,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "Business Consultant Agent",
     title: "Growth and operational advice",
     systemRole:
-      "You are Aureli's Business Consultant Agent. Focus on business improvement, pricing, cost control, operations, and growth decisions.",
+      "You are Actic Finance's Business Consultant Agent. Focus on business improvement, pricing, cost control, operations, and growth decisions.",
     responseStyle:
       "Give practical business suggestions based on financial evidence.",
   },
@@ -132,7 +132,7 @@ export const AGENT_PROFILES: Record<AiAgentId, AgentProfile> = {
     name: "Risk Agent",
     title: "Financial risk monitoring",
     systemRole:
-      "You are Aureli's Risk Agent. Focus on risk signals, missing data, compliance uncertainty, losses, cash pressure, and unusual patterns.",
+      "You are Actic Finance's Risk Agent. Focus on risk signals, missing data, compliance uncertainty, losses, cash pressure, and unusual patterns.",
     responseStyle:
       "Be clear about risk level, evidence, missing data, and mitigation.",
   },
@@ -443,7 +443,7 @@ ${
     : "Financial profile is not available yet.";
 
   return `
-You are ${agent.name} inside Aureli.
+You are ${agent.name} inside Actic Finance.
 
 Agent title:
 ${agent.title}
@@ -522,7 +522,7 @@ Strict global rules:
 - For tax questions, do not invent source names, links, laws, sections, dates, circulars, notifications, or government updates.
 - For tax questions, do not calculate final tax payable unless tax coverage is STRONG and verified rules + verified uploaded knowledge fully support the calculation.
 - For tax questions, prefer checklist, readiness review, missing-document list, and professional-verification guidance.
-- If verified tax knowledge is missing or incomplete, say that Aureli needs more verified official source coverage.
+- If verified tax knowledge is missing or incomplete, say that Actic Finance needs more verified official source coverage.
 - Never claim whole-country tax coverage unless all core and important tax categories are STRONG.
 - For AI Finance Team mode, produce a multi-agent answer, not a generic chatbot answer.
 - Keep answer practical for a business owner.
@@ -602,7 +602,7 @@ function buildOfflineAgentFallbackAnswer(prompt: string) {
   return [
     `${agentName} is running in offline fallback mode because Gemini is temporarily unavailable.`,
     "",
-    `I can still help with ${focus} using the data already processed in Aureli.`,
+    `I can still help with ${focus} using the data already processed in Actic Finance.`,
     "",
     "What I can safely say right now:",
     "- Check approved documents first before trusting any financial decision.",
@@ -627,7 +627,7 @@ async function generateAiAnswer(prompt: string) {
     apiKey,
   });
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+  const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
   const maxAttempts = 4;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -661,7 +661,7 @@ async function generateAiAnswer(prompt: string) {
         return [
           "Gemini is temporarily unavailable or overloaded right now.",
           "",
-          "Your Aureli data is safe. This is an AI model availability issue, not a database or app issue.",
+          "Your Actic Finance data is safe. This is an AI model availability issue, not a database or app issue.",
           "",
           "Please try again in 1-2 minutes. If it keeps happening, ask a smaller question like: 'Summarize my tax coverage only.'",
         ].join("\n");
@@ -858,7 +858,7 @@ export async function answerBusinessQuestion(
 
   if (!question.trim()) {
     return {
-      answer: "Please ask a finance question so Aureli can help.",
+      answer: "Please ask a finance question so Actic Finance can help.",
       agentId,
       agentName: AGENT_PROFILES[agentId].name,
       suggestions: getBusinessChatSuggestions(agentId),

@@ -50,9 +50,9 @@ export async function createWorkspaceInvitation(params: {
 
   await sendTransactionalEmail({
     to: email,
-    subject: `You were invited to ${workspace.name} on Aureli`,
-    text: `Accept your Aureli workspace invitation: ${acceptUrl.toString()}`,
-    html: `<p>You were invited to <strong>${workspace.name}</strong> on Aureli.</p><p><a href="${acceptUrl.toString()}">Accept invitation</a></p><p>This invitation expires in 7 days.</p>`,
+    subject: `You were invited to ${workspace.name} on Actic Finance`,
+    text: `Accept your Actic Finance workspace invitation: ${acceptUrl.toString()}`,
+    html: `<p>You were invited to <strong>${workspace.name}</strong> on Actic Finance.</p><p><a href="${acceptUrl.toString()}">Accept invitation</a></p><p>This invitation expires in 7 days.</p>`,
   });
 
   return {

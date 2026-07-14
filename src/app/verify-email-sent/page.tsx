@@ -15,7 +15,7 @@ export default function VerifyEmailSentPage() {
 
   async function resend(event: FormEvent) {
     event.preventDefault();
-    if (!email) return setMessage("Enter the email used for your Aureli account.");
+    if (!email) return setMessage("Enter the email used for your Actic Finance account.");
     setBusy(true);
     try {
       const result = await authClient.sendVerificationEmail({ email, callbackURL: "/onboarding" } as never);

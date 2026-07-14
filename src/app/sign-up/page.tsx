@@ -116,7 +116,7 @@ export default function SignUpPage() {
               >
                 <AureliLogo />
               </span>
-              Aureli
+              Actic Finance
             </Link>
 
             <p className="eyebrow" style={{ margin: "36px 0 0" }}>
@@ -145,7 +145,7 @@ export default function SignUpPage() {
               }}
             >
               Create your account, set up business profile, upload documents,
-              and let Aureli build your executive finance system.
+              and let Actic Finance build your executive finance system.
             </p>
           </div>
 
@@ -284,7 +284,7 @@ export default function SignUpPage() {
                     maxWidth: 330,
                   }}
                 >
-                  Build your Aureli workspace and start with business setup.
+                  Build your Actic Finance workspace and start with business setup.
                 </p>
               </div>
             </div>

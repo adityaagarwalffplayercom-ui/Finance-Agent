@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Aureli — AI Finance Workspace",
-    short_name: "Aureli",
+    name: "Actic Finance — AI Finance Workspace",
+    short_name: "Actic Finance",
     description:
-      "Aureli is an AI-powered finance workspace for smarter business decisions.",
+      "Actic Finance is an AI-powered finance workspace for smarter business decisions.",
     start_url: "/",
     scope: "/",
     display: "standalone",

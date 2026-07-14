@@ -1,4 +1,4 @@
-# Aureli production foundation
+# Actic Finance production foundation
 
 This release adds file signature validation, SHA-256 duplicate detection, persistent processing-job records, extraction versioning, production-safe debug routes, configurable email verification, security headers, structured logs, and CI.
 

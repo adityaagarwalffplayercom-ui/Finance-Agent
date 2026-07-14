@@ -310,7 +310,7 @@ ${chunk.content}
 Tax Agent instruction:
 - You may use these chunks as verified uploaded tax knowledge.
 - Do not go beyond the content shown above.
-- If the user asks for exact tax payable, filing, legal interpretation, or final compliance decision, explain that Aureli provides support only and professional verification is still needed.
+- If the user asks for exact tax payable, filing, legal interpretation, or final compliance decision, explain that Actic Finance provides support only and professional verification is still needed.
 `;
 }
 

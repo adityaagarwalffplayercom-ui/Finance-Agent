@@ -534,7 +534,7 @@ function buildExecutiveSummary(params: {
       ? `profit of ${formatMoney(params.profit, params.currency)}`
       : `loss of ${formatMoney(Math.abs(params.profit), params.currency)}`;
 
-  return `For ${params.monthLabel}, Aureli reviewed ${params.approvedDocumentsUsed} approved document(s). The business shows revenue of ${formatMoney(
+  return `For ${params.monthLabel}, Actic Finance reviewed ${params.approvedDocumentsUsed} approved document(s). The business shows revenue of ${formatMoney(
     params.revenue,
     params.currency,
   )}, expenses of ${formatMoney(
@@ -566,7 +566,7 @@ function getConfidence(params: {
 
 function buildAiPrompt(report: Omit<MonthlyFinanceReport, "aiNarrative">) {
   return `
-You are Aureli's CFO Agent. Write a monthly finance report for a small business owner.
+You are Actic Finance's CFO Agent. Write a monthly finance report for a small business owner.
 
 Rules:
 - Use only the data below.
@@ -660,7 +660,7 @@ async function generateAiNarrative(
   });
 
   const prompt = buildAiPrompt(report);
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+  const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
@@ -695,7 +695,7 @@ async function generateAiNarrative(
   return [
     report.executiveSummary,
     "",
-    "AI narrative fallback: Gemini was temporarily unavailable, so Aureli generated this report from approved document metrics only.",
+    "AI narrative fallback: Gemini was temporarily unavailable, so Actic Finance generated this report from approved document metrics only.",
   ].join("\n");
 }
 

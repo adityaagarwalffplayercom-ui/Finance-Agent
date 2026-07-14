@@ -919,7 +919,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
                 lineHeight: 1.6,
               }}
             >
-              Aureli hid inconsistent values instead of sending incorrect figures
+              Actic Finance hid inconsistent values instead of sending incorrect figures
               to the ledger and dashboard. Verify the original statement or retry
               extraction.
             </p>

@@ -554,7 +554,7 @@ export async function getBusinessRiskScore(
     context.counts
         .approvedFinancialEntries ===
       0
-      ? "Aureli cannot calculate a reliable financial risk position until approved ledger entries are available."
+      ? "Actic Finance cannot calculate a reliable financial risk position until approved ledger entries are available."
       : level === "CRITICAL"
         ? `Critical risk is visible in approved ledger movement. Revenue is ${formatLedgerMoney(
             revenue,

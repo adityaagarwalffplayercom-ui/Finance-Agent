@@ -643,7 +643,7 @@ export async function getAnomalyInsightsReport(
       ? "Anomaly analysis needs approved ledger entries."
       : highValueItems.length > 0 ||
           duplicateGroups.length > 0
-        ? `Aureli found ${highValueItems.length} high-value entr${
+        ? `Actic Finance found ${highValueItems.length} high-value entr${
             highValueItems.length === 1
               ? "y"
               : "ies"

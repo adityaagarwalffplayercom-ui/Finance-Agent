@@ -211,7 +211,7 @@ Blocked Tax Agent capabilities:
 ${jurisdiction.blockedCapabilities.map((item) => `- ${item}`).join("\n")}
 
 Required tax safety rule:
-If the user asks for exact tax payable, final filing decision, final tax regime selection, audit/legal interpretation, or official compliance decision, explain that Aureli can help prepare and review signals, but the user must verify with a ${jurisdiction.professionalReviewLabel}.
+If the user asks for exact tax payable, final filing decision, final tax regime selection, audit/legal interpretation, or official compliance decision, explain that Actic Finance can help prepare and review signals, but the user must verify with a ${jurisdiction.professionalReviewLabel}.
 `;
 }
 

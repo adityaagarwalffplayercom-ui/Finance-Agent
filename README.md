@@ -1,8 +1,8 @@
-# Aureli — AI Executive Finance Team for Small Businesses
+# Actic Finance — AI Executive Finance Team for Small Businesses
 
-Aureli is an AI-powered finance platform that helps small and medium businesses turn financial documents into trusted dashboards, insights, and business decisions.
+Actic Finance is an AI-powered finance platform that helps small and medium businesses turn financial documents into trusted dashboards, insights, and business decisions.
 
-Instead of showing only accounting reports, Aureli acts like an **AI Executive Finance Team** for the business owner. It can extract financial data from documents, detect real accounting units, allow the owner to approve trusted numbers, update the finance dashboard, and answer business questions using AI agents.
+Instead of showing only accounting reports, Actic Finance acts like an **AI Executive Finance Team** for the business owner. It can extract financial data from documents, detect real accounting units, allow the owner to approve trusted numbers, update the finance dashboard, and answer business questions using AI agents.
 
 ---
 
@@ -32,13 +32,13 @@ Traditional accounting software shows reports, but business owners still need to
 - What should I fix first?
 - What is my biggest financial risk?
 
-Aureli solves this by combining document AI, trusted review, dashboard intelligence, and AI finance agents.
+Actic Finance solves this by combining document AI, trusted review, dashboard intelligence, and AI finance agents.
 
 ---
 
 ## 💡 Solution
 
-Aureli allows a business owner to:
+Actic Finance allows a business owner to:
 
 1. Create an account and log in
 2. Upload financial documents
@@ -89,4 +89,4 @@ npm run verify:production
 npm run build
 ```
 
-No financial parser can guarantee a correct result for every source document. Aureli therefore preserves source evidence, blocks unreviewed posting, records extraction versions and requires human approval for financial dashboard impact.
+No financial parser can guarantee a correct result for every source document. Actic Finance therefore preserves source evidence, blocks unreviewed posting, records extraction versions and requires human approval for financial dashboard impact.

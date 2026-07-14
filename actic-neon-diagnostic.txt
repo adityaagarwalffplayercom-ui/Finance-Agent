@@ -1,0 +1,9 @@
+﻿Actic Finance Neon diagnostic
+Generated: 2026-07-14T12:37:13.6243465+05:30
+Pooled host: ep-winter-sound-ahj18y3j-pooler.c-3.us-east-1.aws.neon.tech
+Pooled TCP: True
+Pooled Prisma query: PRISMA_QUERY_OK [{"ok":1}] True
+Direct host: ep-winter-sound-ahj18y3j-pooler.c-3.us-east-1.aws.neon.tech
+Direct TCP: True
+Direct Prisma query: False
+Selected mode: POOLED

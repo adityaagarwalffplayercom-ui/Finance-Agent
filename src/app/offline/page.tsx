@@ -53,7 +53,7 @@ export default function OfflinePage() {
               lineHeight: 1.7,
             }}
           >
-            Aureli needs internet access to sync documents, dashboard insights,
+            Actic Finance needs internet access to sync documents, dashboard insights,
             AI chat, and CFO reports.
           </p>
         </div>

@@ -124,7 +124,7 @@ export function AureliLogo({
               textOverflow: "ellipsis",
             }}
           >
-            Aureli
+            Actic Finance
           </span>
 
           {tagline ? (

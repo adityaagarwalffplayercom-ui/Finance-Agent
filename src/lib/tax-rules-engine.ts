@@ -247,7 +247,7 @@ export async function buildTaxRulesPromptBlock(params: {
 
   if (rules.length === 0) {
     return `
-Verified tax rules available in Aureli database: NO
+Verified tax rules available in Actic Finance database: NO
 
 Tax Agent operating mode:
 - Checklist and document-review only.
@@ -256,7 +256,7 @@ Tax Agent operating mode:
 - Do not claim latest country-specific tax law.
 - Tell the user that verified ${country.countryName} tax rules for financial year ${
       params.financialYear || "Not set"
-    } are not available in Aureli's tax rules database yet.
+    } are not available in Actic Finance's tax rules database yet.
 - Recommend verification with a ${country.professionalLabel}.
 
 Expected official source families for this jurisdiction:
@@ -265,7 +265,7 @@ ${country.officialSources.map((source) => `- ${source}`).join("\n")}
   }
 
   return `
-Verified tax rules available in Aureli database: YES
+Verified tax rules available in Actic Finance database: YES
 
 Use these source-backed rules only:
 ${rules
@@ -286,6 +286,6 @@ ${rules
 Tax Agent rule:
 - You may use these VERIFIED rules for checklist and estimated indicators.
 - Do not go beyond these rules.
-- If the user asks something not covered by these verified rules, say that Aureli needs updated verified rules or professional review.
+- If the user asks something not covered by these verified rules, say that Actic Finance needs updated verified rules or professional review.
 `;
 }

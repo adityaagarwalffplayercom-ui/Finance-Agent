@@ -27,7 +27,7 @@ export async function startExtractionRun(params: {
       engineVersion: AURELI_ENGINE_VERSION,
       parserVersion: AURELI_PARSER_VERSION,
       promptVersion: AURELI_PROMPT_VERSION,
-      modelName: params.modelName ?? process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite",
+      modelName: params.modelName ?? process.env.GEMINI_MODEL ?? "gemini-3.1-flash-lite",
       sourceFileHash: params.sourceFileHash ?? null,
     },
   });

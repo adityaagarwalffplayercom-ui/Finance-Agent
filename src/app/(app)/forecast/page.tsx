@@ -671,7 +671,7 @@ export default async function ForecastPage() {
                 lineHeight: 1.15,
               }}
             >
-              How Aureli estimated the future
+              How Actic Finance estimated the future
             </h2>
           </div>
 

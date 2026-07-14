@@ -2,14 +2,14 @@ import type { Metadata, Viewport } from "next";
 import { PWARegister } from "@/components/PWARegister";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "Aureli — AI Finance Workspace",
+  title: "Actic Finance — AI Finance Workspace",
   description:
-    "Aureli is an AI-powered finance workspace for smarter business decisions.",
-  applicationName: "Aureli",
+    "Actic Finance is an AI-powered finance workspace for smarter business decisions.",
+  applicationName: "Actic Finance",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Aureli",
+    title: "Actic Finance",
     statusBarStyle: "black-translucent",
   },
   icons: {
@@ -31,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <body>
         <PWARegister />
         {children}
