@@ -174,7 +174,7 @@ export default async function BusinessProfilePage() {
               maxWidth: 760,
             }}
           >
-            Tell Ledger what kind of business this is. Your AI finance team can
+            Tell Actic Finance what kind of business this is. Your AI finance team can
             use this context for better dashboard interpretation, CFO reports,
             and chat answers.
           </p>
