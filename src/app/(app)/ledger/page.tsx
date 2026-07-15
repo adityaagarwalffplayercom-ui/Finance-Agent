@@ -358,7 +358,7 @@ export default async function LedgerPage({
           createdAt: "desc",
         },
       ],
-      take: 500,
+      take: 2000,
     }),
 
     prisma.ledgerEntry.count({

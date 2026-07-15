@@ -16,6 +16,7 @@ import {
   extractDocumentData,
   type ExtractedDocumentData,
 } from "@/lib/gemini";
+import { extractBankStatementDataFromText } from "@/lib/bank-statement-chunk-extraction";
 import { syncLedgerEntriesFromDocument } from "@/lib/transaction-ledger";
 import { buildFinancialSummaryText } from "@/lib/financial-text-chunks";
 import { backfillFinancialStatementSummary } from "@/lib/financial-summary-backfill";
@@ -193,6 +194,7 @@ async function saveProcessedDocument(params: {
       reportedUnit: params.extracted.reportedUnit ?? null,
       scaleMultiplier: params.extracted.scaleMultiplier ?? null,
       lineItemsCount: params.extracted.lineItems?.length ?? 0,
+      transactionsCount: params.extracted.transactions?.length ?? 0,
       deterministicRawLineItems: params.rawLineItemCount,
       chunkLineItems: params.chunkLineItemCount ?? 0,
       candidateChunks: params.candidateChunks ?? 0,
@@ -570,15 +572,21 @@ export async function POST(
         defaultCategory: document.category,
       });
 
-      extracted = await extractDocumentData({
-        fileName: document.fileName,
-        category: document.category,
-        content: {
-          kind: "text",
-          text: getTextForAi(text, summaryOnly),
-        },
-        summaryOnly,
-      });
+      extracted =
+        document.category === DocumentCategory.BANK_STATEMENT
+          ? await extractBankStatementDataFromText({
+              fileName: document.fileName,
+              text,
+            })
+          : await extractDocumentData({
+              fileName: document.fileName,
+              category: document.category,
+              content: {
+                kind: "text",
+                text: getTextForAi(text, summaryOnly),
+              },
+              summaryOnly,
+            });
     } else if (XLSX_MIME_TYPES.includes(document.mimeType)) {
       const workbook = XLSX.read(buffer, {
         type: "buffer",
@@ -601,15 +609,21 @@ export async function POST(
         .join("\n\n");
       sourceTextForSummary = csv;
 
-      extracted = await extractDocumentData({
-        fileName: document.fileName,
-        category: document.category,
-        content: {
-          kind: "text",
-          text: getTextForAi(csv, summaryOnly),
-        },
-        summaryOnly,
-      });
+      extracted =
+        document.category === DocumentCategory.BANK_STATEMENT
+          ? await extractBankStatementDataFromText({
+              fileName: document.fileName,
+              text: csv,
+            })
+          : await extractDocumentData({
+              fileName: document.fileName,
+              category: document.category,
+              content: {
+                kind: "text",
+                text: getTextForAi(csv, summaryOnly),
+              },
+              summaryOnly,
+            });
     } else if (PDF_MIME_TYPES.includes(document.mimeType)) {
       const isFinancialStatement =
         document.category === DocumentCategory.FINANCIAL_STATEMENT;
@@ -636,7 +650,15 @@ export async function POST(
           defaultCategory: document.category,
         });
 
-        if (pdfText.trim().length > 2000) {
+        if (
+          document.category === DocumentCategory.BANK_STATEMENT &&
+          pdfText.trim().length > 500
+        ) {
+          extracted = await extractBankStatementDataFromText({
+            fileName: document.fileName,
+            text: pdfText,
+          });
+        } else if (pdfText.trim().length > 2000) {
           extracted = await extractDocumentData({
             fileName: document.fileName,
             category: document.category,
