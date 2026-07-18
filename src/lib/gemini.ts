@@ -1,8 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { ensureExtractedLineItems } from "./extracted-line-items";
 import {
+  buildFinancialCandidateText,
   normalizeAndDedupeFinancialLineItems,
-  splitFinancialTextIntoChunks,
   type FinancialLineItem,
 } from "./financial-text-chunks";
 
@@ -11,52 +11,54 @@ const ai = new GoogleGenAI({
 });
 
 const PRIMARY_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.1-flash-lite";
-
 const CONFIGURED_FALLBACK_MODELS =
   process.env.GEMINI_FALLBACK_MODELS?.split(",")
     .map((model) => model.trim())
     .filter(Boolean) ?? [];
-
 const FALLBACK_MODELS = [PRIMARY_MODEL, ...CONFIGURED_FALLBACK_MODELS].filter(
   (model, index, models) => model && models.indexOf(model) === index,
 );
 
+const DEFAULT_CHUNK_TARGET_CHARS = 14_000;
+const DEFAULT_MAX_DOCUMENT_CHUNKS = 24;
+const ABSOLUTE_MAX_DOCUMENT_CHUNKS = 60;
+
+const lineItemSchema = {
+  type: "object",
+  properties: {
+    description: { type: "string" },
+    amount: {
+      type: "number",
+      description: "Actual full currency value after applying scaleMultiplier.",
+    },
+    category: { type: "string", nullable: true },
+    date: { type: "string", nullable: true },
+  },
+  required: ["description", "amount"],
+};
+
+const transactionSchema = {
+  type: "object",
+  properties: {
+    date: { type: "string" },
+    description: { type: "string" },
+    amount: { type: "number" },
+    direction: { type: "string", enum: ["credit", "debit"] },
+  },
+  required: ["date", "description", "amount", "direction"],
+};
+
 const EXTRACTION_SCHEMA = {
   type: "object",
   properties: {
-    summary: {
-      type: "string",
-      description:
-        "One or two plain-English sentences describing what this document is and its overall financial takeaway.",
-    },
-
-    documentDate: {
-      type: "string",
-      nullable: true,
-      description:
-        "Primary date on the document, ISO 8601 format YYYY-MM-DD if determinable.",
-    },
-
-    periodStart: {
-      type: "string",
-      nullable: true,
-      description:
-        "Statement period start date, ISO 8601 format YYYY-MM-DD if determinable.",
-    },
-
-    periodEnd: {
-      type: "string",
-      nullable: true,
-      description:
-        "Statement period end date, ISO 8601 format YYYY-MM-DD if determinable.",
-    },
-
-    currency: {
-      type: "string",
-      nullable: true,
-      description: "ISO currency code if identifiable, for example INR, USD.",
-    },
-
+    summary: { type: "string" },
+    documentDate: { type: "string", nullable: true },
+    periodStart: { type: "string", nullable: true },
+    periodEnd: { type: "string", nullable: true },
+    dueDate: { type: "string", nullable: true },
+    documentNumber: { type: "string", nullable: true },
+    referenceNumber: { type: "string", nullable: true },
+    currency: { type: "string", nullable: true },
     reportedUnit: {
       type: "string",
       nullable: true,
@@ -69,205 +71,48 @@ const EXTRACTION_SCHEMA = {
         "billions",
         "unknown",
       ],
-      description:
-        "The unit used by the document before conversion. Example: thousands, lakhs, crores, millions.",
     },
-
-    scaleMultiplier: {
-      type: "number",
-      nullable: true,
-      description:
-        "Multiplier applied to convert document-displayed amounts into actual full currency units. Example: thousands = 1000, lakhs = 100000, crores = 10000000, millions = 1000000.",
-    },
-
-    unitDetectionEvidence: {
-      type: "string",
-      nullable: true,
-      description:
-        "Short phrase from the document that explains the detected unit, for example 'Amounts in INR thousands'.",
-    },
-
-    vendorOrCounterparty: {
-      type: "string",
-      nullable: true,
-      description:
-        "The other party on the document — vendor, customer, utility company, bank, etc.",
-    },
-
-    totalAmount: {
-      type: "number",
-      nullable: true,
-      description:
-        "The single most important amount on the document, converted to actual full currency units.",
-    },
-
-    totalAmountLabel: {
-      type: "string",
-      nullable: true,
-      description:
-        "What totalAmount represents, for example Invoice total, Amount due, Ending balance.",
-    },
-
-    revenue: {
-      type: "number",
-      nullable: true,
-      description:
-        "Total revenue, sales, turnover, or operating income, converted to actual full currency units.",
-    },
-
-    totalRevenue: {
-      type: "number",
-      nullable: true,
-      description:
-        "Same as revenue when the document provides a total revenue figure, converted to actual full currency units.",
-    },
-
-    sales: {
-      type: "number",
-      nullable: true,
-      description:
-        "Sales value if separately identifiable, converted to actual full currency units.",
-    },
-
-    expenses: {
-      type: "number",
-      nullable: true,
-      description:
-        "Total expenses, total costs, or total expenditure, converted to actual full currency units.",
-    },
-
-    totalExpenses: {
-      type: "number",
-      nullable: true,
-      description:
-        "Same as expenses when the document provides a total expenses figure, converted to actual full currency units.",
-    },
-
-    profit: {
-      type: "number",
-      nullable: true,
-      description:
-        "Net profit if positive, converted to actual full currency units. Use null if document reports a loss.",
-    },
-
-    loss: {
-      type: "number",
-      nullable: true,
-      description:
-        "Net loss as a positive number if the document reports a loss, converted to actual full currency units.",
-    },
-
-    netIncome: {
-      type: "number",
-      nullable: true,
-      description:
-        "Net profit or loss for the period, converted to actual full currency units. Positive for profit, negative for loss.",
-    },
-
-    assets: {
-      type: "number",
-      nullable: true,
-      description:
-        "Total assets from the balance sheet, converted to actual full currency units.",
-    },
-
-    liabilities: {
-      type: "number",
-      nullable: true,
-      description:
-        "Total liabilities from the balance sheet, converted to actual full currency units.",
-    },
-
-    equity: {
-      type: "number",
-      nullable: true,
-      description:
-        "Shareholders' equity or net worth, converted to actual full currency units.",
-    },
-
-    cash: {
-      type: "number",
-      nullable: true,
-      description:
-        "Cash, bank balance, cash and cash equivalents, or closing balance, converted to actual full currency units.",
-    },
-
-    closingBalance: {
-      type: "number",
-      nullable: true,
-      description:
-        "Closing balance if available, converted to actual full currency units.",
-    },
-
-    openingBalance: {
-      type: "number",
-      nullable: true,
-      description:
-        "Opening balance if available, converted to actual full currency units.",
-    },
-
-    balance: {
-      type: "number",
-      nullable: true,
-      description:
-        "Balance amount if available, converted to actual full currency units.",
-    },
-
+    scaleMultiplier: { type: "number", nullable: true },
+    unitDetectionEvidence: { type: "string", nullable: true },
+    vendorOrCounterparty: { type: "string", nullable: true },
+    totalAmount: { type: "number", nullable: true },
+    totalAmountLabel: { type: "string", nullable: true },
+    subtotal: { type: "number", nullable: true },
+    taxAmount: { type: "number", nullable: true },
+    grossAmount: { type: "number", nullable: true },
+    netAmount: { type: "number", nullable: true },
+    revenue: { type: "number", nullable: true },
+    totalRevenue: { type: "number", nullable: true },
+    sales: { type: "number", nullable: true },
+    expenses: { type: "number", nullable: true },
+    totalExpenses: { type: "number", nullable: true },
+    profit: { type: "number", nullable: true },
+    loss: { type: "number", nullable: true },
+    netIncome: { type: "number", nullable: true },
+    assets: { type: "number", nullable: true },
+    liabilities: { type: "number", nullable: true },
+    equity: { type: "number", nullable: true },
+    cash: { type: "number", nullable: true },
+    closingBalance: { type: "number", nullable: true },
+    openingBalance: { type: "number", nullable: true },
+    balance: { type: "number", nullable: true },
+    principalAmount: { type: "number", nullable: true },
+    interestAmount: { type: "number", nullable: true },
+    outstandingBalance: { type: "number", nullable: true },
+    grossPay: { type: "number", nullable: true },
+    netPay: { type: "number", nullable: true },
+    employeeCount: { type: "number", nullable: true },
+    premiumAmount: { type: "number", nullable: true },
     lineItems: {
       type: "array",
       description:
-        "Every extracted row or financial statement line item that has a label/description and amount. Do not cap at 80. Return all readable rows available in the document content. All amount values must be actual full currency values after unit conversion.",
-      items: {
-        type: "object",
-        properties: {
-          description: {
-            type: "string",
-          },
-          amount: {
-            type: "number",
-            description:
-              "Actual full currency value after applying scaleMultiplier.",
-          },
-          category: {
-            type: "string",
-            nullable: true,
-            description:
-              "Best category for this line item, for example Revenue, Expense, Asset, Liability, Equity, Cash Flow, Tax, Finance Cost.",
-          },
-          date: {
-            type: "string",
-            nullable: true,
-            description:
-              "Date for this line item if available, ISO 8601 YYYY-MM-DD.",
-          },
-        },
-        required: ["description", "amount"],
-      },
+        "Every readable financial or commercial row with a description and amount. Return all rows, not only important rows.",
+      items: lineItemSchema,
     },
-
     transactions: {
       type: "array",
-      description:
-        "Individual transactions — mainly relevant for bank statements. Amount values must be actual full currency values.",
-      items: {
-        type: "object",
-        properties: {
-          date: {
-            type: "string",
-          },
-          description: {
-            type: "string",
-          },
-          amount: {
-            type: "number",
-          },
-          direction: {
-            type: "string",
-            enum: ["credit", "debit"],
-          },
-        },
-        required: ["date", "description", "amount", "direction"],
-      },
+      description: "Every individual posted bank transaction when applicable.",
+      items: transactionSchema,
     },
   },
   required: ["summary"],
@@ -287,18 +132,8 @@ const LINE_ITEM_ONLY_SCHEMA = {
   properties: {
     lineItems: {
       type: "array",
-      description:
-        "Every readable financial table row in this text chunk. Return each numeric period/column as its own item when a row contains multiple values.",
-      items: {
-        type: "object",
-        properties: {
-          description: { type: "string" },
-          amount: { type: "number" },
-          category: { type: "string", nullable: true },
-          date: { type: "string", nullable: true },
-        },
-        required: ["description", "amount"],
-      },
+      description: "Every readable row in this non-overlapping document chunk.",
+      items: lineItemSchema,
     },
   },
   required: ["lineItems"],
@@ -306,7 +141,6 @@ const LINE_ITEM_ONLY_SCHEMA = {
 
 export type ExtractedDocumentData = {
   summary: string;
-
   metricValidation?: {
     status: "verified" | "partial" | "needs_review";
     invalidatedFields: Array<
@@ -329,12 +163,13 @@ export type ExtractedDocumentData = {
     >;
     warnings: string[];
   } | null;
-
   documentDate?: string | null;
   periodStart?: string | null;
   periodEnd?: string | null;
+  dueDate?: string | null;
+  documentNumber?: string | null;
+  referenceNumber?: string | null;
   currency?: string | null;
-
   reportedUnit?:
     | "actual"
     | "thousands"
@@ -346,32 +181,35 @@ export type ExtractedDocumentData = {
     | null;
   scaleMultiplier?: number | null;
   unitDetectionEvidence?: string | null;
-
   vendorOrCounterparty?: string | null;
-
   totalAmount?: number | null;
   totalAmountLabel?: string | null;
-
+  subtotal?: number | null;
+  taxAmount?: number | null;
+  grossAmount?: number | null;
+  netAmount?: number | null;
   revenue?: number | null;
   totalRevenue?: number | null;
   sales?: number | null;
-
   expenses?: number | null;
   totalExpenses?: number | null;
-
   profit?: number | null;
   loss?: number | null;
   netIncome?: number | null;
-
   assets?: number | null;
   liabilities?: number | null;
   equity?: number | null;
-
   cash?: number | null;
   closingBalance?: number | null;
   openingBalance?: number | null;
   balance?: number | null;
-
+  principalAmount?: number | null;
+  interestAmount?: number | null;
+  outstandingBalance?: number | null;
+  grossPay?: number | null;
+  netPay?: number | null;
+  employeeCount?: number | null;
+  premiumAmount?: number | null;
   lineItems?: {
     description: string;
     amount: number;
@@ -392,7 +230,6 @@ export type ExtractedDocumentData = {
     isAggregate?: boolean | null;
     section?: string | null;
   }[];
-
   extractionDiagnostics?: {
     engine: string;
     confidence: number;
@@ -405,6 +242,9 @@ export type ExtractedDocumentData = {
     detectedSections?: string[];
     lineItemCount?: number;
     currentPeriod?: string | null;
+    candidateChunks?: number;
+    completedChunks?: number;
+    failedChunks?: number;
     warnings?: string[];
     checks?: {
       key: string;
@@ -415,7 +255,6 @@ export type ExtractedDocumentData = {
     enginesAttempted?: string[];
     conflicts?: string[];
   } | null;
-
   transactions?: {
     date: string;
     description: string;
@@ -426,212 +265,85 @@ export type ExtractedDocumentData = {
 
 const CATEGORY_GUIDANCE: Record<string, string> = {
   BANK_STATEMENT: `
-This is a bank statement.
-Extract every individual transaction with date, description, amount, and direction.
-Use "credit" for money in and "debit" for money out.
-Set totalAmount to the ending or closing balance.
-Set totalAmountLabel to "Ending balance".
-If opening balance and closing balance are available, extract both.
+This is a bank statement. Extract every posted transaction with date, full description, amount, and credit/debit direction. Set totalAmount to the ending balance and extract opening and closing balances.
 `,
-
-  SALES_INVOICE: `
-This is a sales invoice, meaning money owed TO the business.
-Extract invoice date, customer name, invoice total, taxes, and every readable line item.
-Set totalAmount to the invoice total.
-Set totalAmountLabel to "Invoice total".
-Set revenue to the invoice total or subtotal if appropriate.
-`,
-
-  PURCHASE_INVOICE: `
-This is a purchase invoice or vendor bill, meaning money the business owes.
-Extract vendor name, bill date, due amount, taxes, and every readable line item.
-Set totalAmount to the amount due.
-Set totalAmountLabel to "Amount due".
-Set expenses to the amount due or subtotal if appropriate.
-`,
-
-  PAYROLL: `
-This is a payroll or salary document.
-Set totalAmount to total net pay or total payroll cost if available.
-Set expenses to the total payroll cost if available.
-Extract every readable employee-level line item if present.
-`,
-
-  UTILITY_BILL: `
-This is a utility bill.
-Set totalAmount to the amount due.
-Set totalAmountLabel to "Amount due".
-Set expenses to the amount due or bill total.
-Extract every readable bill component as a line item.
-`,
-
   FINANCIAL_STATEMENT: `
-This is a financial statement, annual report, profit and loss statement, income statement, balance sheet, or cash flow statement.
-
-Extract these fields whenever available:
-- revenue
-- totalRevenue
-- sales
-- expenses
-- totalExpenses
-- profit
-- loss
-- netIncome
-- assets
-- liabilities
-- equity
-- cash
-- closingBalance
-- openingBalance
-
-For profit/loss statements:
-- revenue = total revenue / sales / turnover / income from operations
-- expenses = total expenses / total expenditure / total costs
-- netIncome = profit after tax or net loss
-- If the statement reports profit, set profit and set netIncome positive
-- If the statement reports loss, set loss as a positive number and set netIncome negative
-
-For balance sheets:
-- assets = total assets
-- liabilities = total liabilities
-- equity = shareholders' funds / net worth / equity
-- cash = cash and cash equivalents / bank balance where available
-
-Populate lineItems with every readable row from financial statement tables, including:
-- revenue rows
-- income rows
-- expense rows
-- asset rows
-- liability rows
-- equity rows
-- cash flow rows
-- tax rows
-- finance cost rows
-- subtotal rows
-- total rows
-
-Do not limit lineItems to the first 80 rows.
+This is a financial statement, annual report, profit and loss statement, balance sheet, or cash-flow statement. Extract revenue, expenses, net income, assets, liabilities, equity, cash, and every readable table row from every statement and note. Preserve current and comparative periods as separate line items.
 `,
-
+  SALES_INVOICE: `
+This is a sales invoice. Extract invoice number, invoice date, due date, customer, subtotal, tax, grand total, and every product/service line. Set revenue to the invoice subtotal or total as supported by the source.
+`,
+  PURCHASE_INVOICE: `
+This is a supplier bill or purchase invoice. Extract bill number, dates, vendor, subtotal, tax, amount due, and every product/service line. Set expenses to the supported invoice total or subtotal.
+`,
+  RECEIPT: `
+This is a receipt. Extract merchant, receipt number, date, subtotal, taxes, total paid, and every purchased item or charge.
+`,
+  CREDIT_NOTE: `
+This is a credit note. Extract document number, linked invoice/reference, date, counterparty, tax adjustment, total credit, and every credited or returned line.
+`,
+  DEBIT_NOTE: `
+This is a debit note. Extract document number, linked invoice/reference, date, counterparty, tax adjustment, total debit, and every additional charge line.
+`,
+  PAYROLL: `
+This is payroll. Extract payroll period, employee count, gross pay, deductions, employer contributions, taxes, net pay, and every employee-level or payroll-component row.
+`,
+  UTILITY_BILL: `
+This is a utility bill. Extract provider, account/reference number, billing period, due date, usage charges, taxes, arrears, adjustments, and amount due. Return every bill component.
+`,
+  TAX_DOCUMENT: `
+This is an income-tax or tax-computation document. Extract assessment period, reference number, taxable income, deductions, tax, surcharge, cess, credits, payments, refund or amount due, and every readable tax computation row.
+`,
+  GST_RETURN: `
+This is a GST return. Extract return period, GSTIN, outward supplies, inward supplies, taxable value, IGST, CGST, SGST/UTGST, cess, input tax credit, tax paid, balance, and every table row.
+`,
+  LOAN_STATEMENT: `
+This is a loan statement or repayment schedule. Extract account number, period, principal, interest, fees, EMI, repayments, opening balance, closing/outstanding balance, and every instalment or movement row.
+`,
+  RENT_LEASE: `
+This is a rent or lease document. Extract parties, property/reference, lease period, rent, deposit, escalation, maintenance, taxes, due dates, and every monetary clause or schedule row.
+`,
+  INSURANCE_DOCUMENT: `
+This is an insurance policy, premium notice, or claim document. Extract insurer, policy/reference number, coverage period, sum insured, premium, taxes, deductible, claim amount, and every coverage or charge row.
+`,
+  INVENTORY_REPORT: `
+This is an inventory report. Extract period/date, SKU or item descriptions, quantities where embedded in descriptions, unit values, stock value, opening/closing stock, movements, write-downs, and every item row with an amount.
+`,
+  PURCHASE_ORDER: `
+This is a purchase order. Extract order number, supplier, order date, expected date, subtotal, taxes, total commitment, and every ordered item or service line.
+`,
+  SALES_ORDER: `
+This is a sales order. Extract order number, customer, order date, expected date, subtotal, taxes, total order value, and every ordered item or service line.
+`,
   OTHER: `
-Extract whatever financial information is present as best you can using the schema.
-Extract every readable financial line item that has a label and amount.
+Extract every identifiable financial field and every readable row containing a meaningful description and amount. Do not stop at the first table.
 `,
 };
 
-function buildPrompt(
-  category: string,
-  fileName: string,
-  options: { summaryOnly?: boolean } = {},
-) {
-  const guidance = CATEGORY_GUIDANCE[category] ?? CATEGORY_GUIDANCE.OTHER;
-  const extractionModeGuidance = options.summaryOnly
-    ? `
-PRIMARY SUMMARY EXTRACTION MODE:
-- Return only document metadata and high-level financial totals.
-- Do not return lineItems or transactions in this response, even if earlier category guidance mentions them.
-- Detailed rows are extracted separately from deterministic PDF text and focused chunks.
-- Keep the JSON compact so it cannot be truncated.
-`
-    : `
-LINE ITEM EXTRACTION RULE:
-- Extract ALL readable financial rows, not only important rows.
-- Do not cap at 80 rows.
-- Do not stop after the first table.
-- Include totals, subtotals, section rows, statement rows, and note rows if they have a label and an amount.
-- If the document has multiple statements, include rows from profit/loss, balance sheet, cash flow, and notes where readable.
-- If a line item date is not available, use documentDate or periodEnd if appropriate.
-- If line item categories are not explicitly available, infer sensible categories like Revenue, Expense, Asset, Liability, Equity, Tax, Finance Cost, Cash Flow, or Other.
-`;
-
-  return `
-You are a financial document extraction assistant for a small business finance platform.
-
-Read the attached document with filename:
-"${fileName}"
-
-Document category:
-${category}
-
-Category-specific guidance:
-${guidance}
-
-CRITICAL REAL-LIFE ACCOUNTING UNIT RULE:
-Many financial statements do NOT show amounts in actual rupees/dollars directly.
-They may say:
-- "Amounts in thousands"
-- "Figures in INR thousands"
-- "Rs. in thousands"
-- "Amount in lakhs"
-- "Rs.  in lakhs"
-- "Rs. in crores"
-- "Amount in millions"
-- "USD in millions"
-- "All amounts are in Rs.  million unless otherwise stated"
-
-You MUST detect the reporting unit from the document text/header/notes/table caption.
-
-Then BEFORE returning JSON, convert every financial number into the actual full currency value.
-
-Use these scale rules:
-- actual / no scale mentioned = multiplier 1
-- thousands = multiplier 1000
-- lakhs = multiplier 100000
-- crores = multiplier 10000000
-- millions = multiplier 1000000
-- billions = multiplier 1000000000
-
-Examples:
-- If the document says values are in thousands, 22,700 means 22,700,000
-- If the document says values are in lakhs, 22.7 means 2,270,000
-- If the document says values are in crores, 22.7 means 227,000,000
-- If the document says values are in millions, 22.7 means 22,700,000
-- If no unit is mentioned, keep values as written
-
-Return:
-- reportedUnit: the detected unit
-- scaleMultiplier: the multiplier used
-- unitDetectionEvidence: the exact short phrase or reason used to detect scale
-
-VERY IMPORTANT:
-All numeric fields in the JSON must be actual full currency values AFTER conversion.
-This includes:
-totalAmount, revenue, totalRevenue, sales, expenses, totalExpenses, profit, loss, netIncome, assets, liabilities, equity, cash, balances, lineItems.amount, transactions.amount.
-
-${extractionModeGuidance}
-
-General rules:
-- Only report figures actually present in the document.
-- Never estimate or invent numbers.
-- If a field cannot be determined, omit it or use null.
-- Amounts must be plain numbers only, no currency symbols and no commas.
-- Dates should be ISO 8601 format YYYY-MM-DD where possible.
-- If the company reports a loss, netIncome must be negative.
-`;
-}
-
 type ExtractionContent =
-  | {
-      kind: "inline";
-      mimeType: string;
-      base64Data: string;
-    }
-  | {
-      kind: "text";
-      text: string;
-    };
+  | { kind: "inline"; mimeType: string; base64Data: string }
+  | { kind: "text"; text: string };
 
 type GenerateContentRequest = Parameters<typeof ai.models.generateContent>[0];
+
+type ChunkLineItemResponse = {
+  lineItems?: FinancialLineItem[];
+};
+
+export type ChunkedLineItemExtractionResult = {
+  lineItems: FinancialLineItem[];
+  candidateChunks: number;
+  completedChunks: number;
+  failedChunks: number;
+  warnings: string[];
+};
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function errorToText(error: unknown) {
-  if (error instanceof Error) {
-    return `${error.name}: ${error.message}`;
-  }
-
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
   try {
     return JSON.stringify(error);
   } catch {
@@ -641,47 +353,39 @@ function errorToText(error: unknown) {
 
 function isRetryableGeminiError(error: unknown) {
   const text = errorToText(error).toLowerCase();
-
-  return (
-    text.includes("503") ||
-    text.includes("500") ||
-    text.includes("502") ||
-    text.includes("504") ||
-    text.includes("unavailable") ||
-    text.includes("high demand") ||
-    text.includes("overloaded") ||
-    text.includes("temporarily") ||
-    text.includes("resource_exhausted") ||
-    text.includes("429") ||
-    text.includes("quota") ||
-    text.includes("rate limit")
-  );
+  return [
+    "503",
+    "500",
+    "502",
+    "504",
+    "unavailable",
+    "high demand",
+    "overloaded",
+    "temporarily",
+    "resource_exhausted",
+    "429",
+    "quota",
+    "rate limit",
+  ].some((value) => text.includes(value));
 }
 
 function isQuotaLikeError(error: unknown) {
   const text = errorToText(error).toLowerCase();
-
-  return (
-    text.includes("429") ||
-    text.includes("resource_exhausted") ||
-    text.includes("quota") ||
-    text.includes("rate limit")
+  return ["429", "resource_exhausted", "quota", "rate limit"].some((value) =>
+    text.includes(value),
   );
 }
 
 function getRetryDelayMs(error: unknown, attempt: number) {
   const text = errorToText(error);
-
   const retryInMatch = text.match(/retry in\s+([\d.]+)s/i);
   const retryDelayMatch = text.match(/"retryDelay"\s*:\s*"([\d.]+)s"/i);
-
   const secondsText = retryInMatch?.[1] ?? retryDelayMatch?.[1];
 
   if (secondsText) {
     const seconds = Number(secondsText);
-
     if (Number.isFinite(seconds) && seconds > 0) {
-      return Math.ceil(seconds * 1000) + 1500;
+      return Math.ceil(seconds * 1000) + 1_500;
     }
   }
 
@@ -692,10 +396,7 @@ function buildRequestWithModel(
   request: GenerateContentRequest,
   model: string,
 ): GenerateContentRequest {
-  return {
-    ...request,
-    model,
-  };
+  return { ...request, model };
 }
 
 async function generateContentWithRetry(request: GenerateContentRequest) {
@@ -708,46 +409,19 @@ async function generateContentWithRetry(request: GenerateContentRequest) {
 
     for (let attempt = 1; attempt <= maxAttemptsPerModel; attempt += 1) {
       try {
-        return await ai.models.generateContent(
-          buildRequestWithModel(request, model),
-        );
+        return await ai.models.generateContent(buildRequestWithModel(request, model));
       } catch (error) {
         lastError = error;
-
         const retryable = isRetryableGeminiError(error);
         const quotaLike = isQuotaLikeError(error);
-        const isLastAttemptForModel = attempt === maxAttemptsPerModel;
 
         console.warn(
-          `Gemini extraction failed on model ${model}, attempt ${attempt}/${maxAttemptsPerModel}: ${errorToText(
-            error,
-          )}`,
+          `Gemini extraction failed on ${model}, attempt ${attempt}/${maxAttemptsPerModel}: ${errorToText(error)}`,
         );
 
-        if (!retryable) {
-          throw error;
-        }
-
-        if (isLastAttemptForModel) {
-          console.warn(
-            `Moving to next Gemini fallback model after ${model} failed.`,
-          );
-          break;
-        }
-
-        const delayMs = getRetryDelayMs(error, attempt);
-
-        console.warn(
-          `Retrying Gemini extraction with ${model} after ${Math.round(
-            delayMs / 1000,
-          )}s...`,
-        );
-
-        await sleep(delayMs);
-
-        if (quotaLike && attempt >= 2) {
-          break;
-        }
+        if (!retryable) throw error;
+        if (attempt === maxAttemptsPerModel || (quotaLike && attempt >= 2)) break;
+        await sleep(getRetryDelayMs(error, attempt));
       }
     }
   }
@@ -755,8 +429,6 @@ async function generateContentWithRetry(request: GenerateContentRequest) {
   throw new Error(
     [
       "Gemini extraction is temporarily unavailable due to model demand or quota pressure.",
-      "Click Retry analysis after a short wait. If this keeps happening, use a billing-enabled Gemini API key or try a smaller document.",
-      "",
       `Tried models: ${FALLBACK_MODELS.join(", ")}`,
       `Last model: ${lastModel}`,
       `Original error: ${errorToText(lastError)}`,
@@ -775,10 +447,7 @@ function stripJsonCodeFence(text: string) {
 
 function findBalancedJsonObject(text: string) {
   const start = text.indexOf("{");
-
-  if (start < 0) {
-    return null;
-  }
+  if (start < 0) return null;
 
   let depth = 0;
   let inString = false;
@@ -788,30 +457,17 @@ function findBalancedJsonObject(text: string) {
     const char = text[index];
 
     if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === "\\") {
-        escaped = true;
-      } else if (char === '"') {
-        inString = false;
-      }
-
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
       continue;
     }
 
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
-
-    if (char === "{") {
-      depth += 1;
-    } else if (char === "}") {
+    if (char === '"') inString = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}") {
       depth -= 1;
-
-      if (depth === 0) {
-        return text.slice(start, index + 1);
-      }
+      if (depth === 0) return text.slice(start, index + 1);
     }
   }
 
@@ -820,10 +476,7 @@ function findBalancedJsonObject(text: string) {
 
 function repairTruncatedJsonObject(text: string) {
   const start = text.indexOf("{");
-
-  if (start < 0) {
-    return null;
-  }
+  if (start < 0) return null;
 
   let candidate = text.slice(start).trim();
   const stack: string[] = [];
@@ -832,38 +485,21 @@ function repairTruncatedJsonObject(text: string) {
 
   for (const char of candidate) {
     if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === "\\") {
-        escaped = true;
-      } else if (char === '"') {
-        inString = false;
-      }
-
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
       continue;
     }
 
-    if (char === '"') {
-      inString = true;
-    } else if (char === "{") {
-      stack.push("}");
-    } else if (char === "[") {
-      stack.push("]");
-    } else if (char === "}" || char === "]") {
-      if (stack[stack.length - 1] === char) {
-        stack.pop();
-      }
-    }
+    if (char === '"') inString = true;
+    else if (char === "{") stack.push("}");
+    else if (char === "[") stack.push("]");
+    else if ((char === "}" || char === "]") && stack.at(-1) === char) stack.pop();
   }
 
-  if (inString) {
-    candidate += '"';
-  }
-
+  if (inString) candidate += '"';
   candidate = candidate.replace(/,\s*$/, "");
-  candidate += stack.reverse().join("");
-
-  return candidate;
+  return candidate + stack.reverse().join("");
 }
 
 function safeJsonParse<T>(text: string): T {
@@ -881,7 +517,7 @@ function safeJsonParse<T>(text: string): T {
       try {
         return JSON.parse(candidate.replace(/,\s*([}\]])/g, "$1")) as T;
       } catch {
-        // Try the next recovery strategy.
+        // Try next repair strategy.
       }
     }
   }
@@ -889,13 +525,177 @@ function safeJsonParse<T>(text: string): T {
   throw new Error("Gemini returned invalid JSON.");
 }
 
-function normalizeExtractedData(
-  data: ExtractedDocumentData,
-): ExtractedDocumentData {
-  return ensureExtractedLineItems(data);
+function configuredMaxDocumentChunks() {
+  const configured = Number(
+    process.env.GEMINI_MAX_DOCUMENT_CHUNKS ??
+      process.env.GEMINI_MAX_PDF_CHUNKS ??
+      DEFAULT_MAX_DOCUMENT_CHUNKS,
+  );
+
+  if (!Number.isFinite(configured)) return DEFAULT_MAX_DOCUMENT_CHUNKS;
+  return Math.min(
+    ABSOLUTE_MAX_DOCUMENT_CHUNKS,
+    Math.max(1, Math.trunc(configured)),
+  );
 }
 
-export async function extractDocumentData(params: {
+function normalizeSourceText(text: string) {
+  return text.replace(/\u0000/g, " ").replace(/\r\n/g, "\n").trim();
+}
+
+function buildDocumentChunkSource(category: string, text: string) {
+  if (category === "FINANCIAL_STATEMENT") {
+    return buildFinancialCandidateText(text) || text;
+  }
+  return text;
+}
+
+function splitCompleteTextIntoChunks(text: string) {
+  const normalized = normalizeSourceText(text);
+  if (!normalized) return [];
+
+  const maxChunks = configuredMaxDocumentChunks();
+  const desiredChunks = Math.max(
+    1,
+    Math.ceil(normalized.length / DEFAULT_CHUNK_TARGET_CHARS),
+  );
+  const plannedChunks = Math.min(maxChunks, desiredChunks);
+  const targetChars = Math.max(
+    DEFAULT_CHUNK_TARGET_CHARS,
+    Math.ceil(normalized.length / plannedChunks) + 1_000,
+  );
+
+  const chunks: string[] = [];
+  let current: string[] = [];
+  let currentLength = 0;
+
+  for (const line of normalized.split("\n")) {
+    const nextLength = currentLength + line.length + 1;
+
+    if (
+      current.length > 0 &&
+      nextLength > targetChars &&
+      chunks.length < plannedChunks - 1
+    ) {
+      chunks.push(current.join("\n"));
+      current = current.slice(-3);
+      currentLength = current.reduce((sum, item) => sum + item.length + 1, 0);
+    }
+
+    current.push(line);
+    currentLength += line.length + 1;
+  }
+
+  if (current.length > 0) chunks.push(current.join("\n"));
+  return chunks.filter((chunk) => chunk.trim().length > 0);
+}
+
+function buildHeaderContext(text: string) {
+  const lines = normalizeSourceText(text).split("\n");
+  const selected = new Set<number>();
+
+  for (let index = 0; index < Math.min(lines.length, 40); index += 1) {
+    if (lines[index].trim()) selected.add(index);
+  }
+
+  const contextPattern =
+    /(amounts?|figures?).*(thousand|lakh|crore|million|billion)|gstin|invoice|statement period|for the year|as at|account number|policy number/i;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (contextPattern.test(lines[index])) selected.add(index);
+  }
+
+  return [...selected]
+    .sort((a, b) => a - b)
+    .map((index) => lines[index])
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 8_000);
+}
+
+function buildPrompt(
+  category: string,
+  fileName: string,
+  options: { summaryOnly?: boolean } = {},
+) {
+  const guidance = CATEGORY_GUIDANCE[category] ?? CATEGORY_GUIDANCE.OTHER;
+  const mode = options.summaryOnly
+    ? `
+SUMMARY MODE:
+- Return metadata and high-level totals only.
+- Do not return lineItems or transactions.
+- Keep the response compact and source-grounded.
+`
+    : `
+FULL MODE:
+- Extract every readable row, not only headline figures.
+- Do not cap rows and do not stop at the first table.
+- Preserve subtotals, totals, adjustments, comparative periods, and detail rows.
+`;
+
+  return `
+You are the full-document extraction engine for Actic Finance.
+
+Filename: "${fileName}"
+Category: ${category}
+
+CATEGORY RULES:
+${guidance}
+
+UNIT RULES:
+- Detect actual, thousands, lakhs, crores, millions, or billions from the source.
+- Return reportedUnit, scaleMultiplier, and short unitDetectionEvidence.
+- Convert every returned monetary number to actual full currency units.
+- Never invent a number. Use null or omit a field when unsupported.
+- Preserve losses as negative netIncome and as a positive loss field.
+- Dates should use YYYY-MM-DD when determinable.
+- Numbers must not contain currency symbols or commas.
+
+${mode}
+`.trim();
+}
+
+function buildLineItemChunkPrompt(params: {
+  fileName: string;
+  category: string;
+  chunkIndex: number;
+  chunkCount: number;
+  headerContext: string;
+  reportedUnit?: string | null;
+  scaleMultiplier?: number | null;
+  documentDate?: string | null;
+}) {
+  const multiplier =
+    typeof params.scaleMultiplier === "number" &&
+    Number.isFinite(params.scaleMultiplier) &&
+    params.scaleMultiplier > 0
+      ? params.scaleMultiplier
+      : 1;
+
+  return `
+You are extracting detail rows from non-overlapping chunk ${params.chunkIndex + 1} of ${params.chunkCount} of "${params.fileName}".
+Document category: ${params.category}
+Reported unit: ${params.reportedUnit ?? "unknown"}
+Scale multiplier: ${multiplier}
+Fallback date: ${params.documentDate ?? "unknown"}
+
+HEADER CONTEXT (context only; do not duplicate rows from it):
+${params.headerContext || "Unavailable"}
+
+Return JSON containing lineItems only.
+
+MANDATORY RULES:
+- Extract EVERY readable commercial or financial row in the chunk that has a meaningful description and monetary amount.
+- Include product/service lines, employees, taxes, deductions, instalments, stock rows, charges, adjustments, subtotals, and totals where present.
+- For financial statements include every statement/note row and return comparative columns as separate items with the period in the description.
+- Apply scale multiplier ${multiplier} before returning amount.
+- Preserve negative values shown with minus signs or parentheses.
+- Ignore page numbers, percentages without money, bare years, note-reference numbers, and narrative prose.
+- Do not invent missing rows.
+`.trim();
+}
+
+async function extractDocumentDataOnce(params: {
   fileName: string;
   category: string;
   content: ExtractionContent;
@@ -915,9 +715,7 @@ export async function extractDocumentData(params: {
             data: content.base64Data,
           },
         }
-      : {
-          text: `Document contents:\n\n${content.text}`,
-        };
+      : { text: `Document contents:\n\n${content.text}` };
 
   const response = await generateContentWithRetry({
     model: PRIMARY_MODEL,
@@ -935,74 +733,17 @@ export async function extractDocumentData(params: {
       responseSchema: summaryOnly
         ? SUMMARY_EXTRACTION_SCHEMA
         : EXTRACTION_SCHEMA,
-      temperature: 0.1,
-      maxOutputTokens: summaryOnly ? 4096 : 8192,
+      temperature: 0.05,
+      maxOutputTokens: summaryOnly ? 4_096 : 8_192,
     },
   });
 
-  const text = response.text;
-
-  if (!text) {
-    throw new Error("Gemini returned an empty response.");
-  }
-
-  return normalizeExtractedData(safeJsonParse<ExtractedDocumentData>(text));
+  if (!response.text) throw new Error("Gemini returned an empty response.");
+  return ensureExtractedLineItems(
+    safeJsonParse<ExtractedDocumentData>(response.text),
+  );
 }
 
-type ChunkLineItemResponse = {
-  lineItems?: FinancialLineItem[];
-};
-
-export type ChunkedLineItemExtractionResult = {
-  lineItems: FinancialLineItem[];
-  candidateChunks: number;
-  completedChunks: number;
-  failedChunks: number;
-};
-
-function buildLineItemChunkPrompt(params: {
-  fileName: string;
-  category: string;
-  chunkIndex: number;
-  chunkCount: number;
-  reportedUnit?: string | null;
-  scaleMultiplier?: number | null;
-  documentDate?: string | null;
-}) {
-  const multiplier =
-    typeof params.scaleMultiplier === "number" &&
-    Number.isFinite(params.scaleMultiplier) &&
-    params.scaleMultiplier > 0
-      ? params.scaleMultiplier
-      : 1;
-
-  return `
-You are extracting individual financial table rows from chunk ${params.chunkIndex + 1} of ${params.chunkCount} of "${params.fileName}".
-
-Document category: ${params.category}
-Whole-document reported unit: ${params.reportedUnit ?? "unknown"}
-Whole-document scale multiplier: ${multiplier}
-Fallback document date: ${params.documentDate ?? "unknown"}
-
-Return JSON containing lineItems only. Do not summarize the document.
-
-Rules:
-- Extract EVERY readable row in this chunk that has a label and a financial amount.
-- Include detail rows, subtotals, totals, assets, liabilities, equity, revenue, expenses, tax, finance cost, and cash-flow rows.
-- When one row contains current-year and previous-year amounts, return a separate item for each value and include the visible column header or period in the description.
-- Apply the whole-document scale multiplier ${multiplier} to displayed amounts before returning them.
-- Preserve negative values shown with a minus sign or parentheses.
-- Do not invent missing rows or numbers.
-- Ignore page numbers, note reference numbers, percentages, years used only as headings, and narrative prose.
-- Infer a concise category such as Revenue, Expense, Asset, Liability, Equity, Tax, Finance Cost, Cash Flow, or Other.
-`;
-}
-
-/**
- * Extracts detailed statement rows in multiple focused calls. The normal
- * whole-document extraction remains responsible for summary metrics; these
- * rows are merged as non-posting audit details by the ledger layer.
- */
 export async function extractDocumentLineItemsFromTextChunks(params: {
   fileName: string;
   category: string;
@@ -1015,12 +756,11 @@ export async function extractDocumentLineItemsFromTextChunks(params: {
     throw new Error("GEMINI_API_KEY is not configured.");
   }
 
-  const configuredMaxChunks = Number(process.env.GEMINI_MAX_PDF_CHUNKS ?? "3");
-  const maxChunks = Number.isFinite(configuredMaxChunks)
-    ? Math.min(4, Math.max(1, Math.trunc(configuredMaxChunks)))
-    : 3;
-  const chunks = splitFinancialTextIntoChunks(params.text, { maxChunks });
+  const source = buildDocumentChunkSource(params.category, params.text);
+  const chunks = splitCompleteTextIntoChunks(source);
+  const headerContext = buildHeaderContext(params.text);
   const collected: FinancialLineItem[] = [];
+  const warnings: string[] = [];
   let completedChunks = 0;
   let failedChunks = 0;
 
@@ -1035,11 +775,12 @@ export async function extractDocumentLineItemsFromTextChunks(params: {
               {
                 text: buildLineItemChunkPrompt({
                   ...params,
+                  headerContext,
                   chunkIndex: index,
                   chunkCount: chunks.length,
                 }),
               },
-              { text: `Financial table text chunk:\n\n${chunks[index]}` },
+              { text: `CHUNK BODY:\n\n${chunks[index]}` },
             ],
           },
         ],
@@ -1047,31 +788,35 @@ export async function extractDocumentLineItemsFromTextChunks(params: {
           responseMimeType: "application/json",
           responseSchema: LINE_ITEM_ONLY_SCHEMA,
           temperature: 0,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8_192,
         },
       });
 
       if (!response.text) {
         failedChunks += 1;
+        warnings.push(`Chunk ${index + 1} returned an empty response.`);
         continue;
       }
 
       const parsed = safeJsonParse<ChunkLineItemResponse>(response.text);
-      const normalized = normalizeAndDedupeFinancialLineItems(
-        Array.isArray(parsed.lineItems) ? parsed.lineItems : [],
+      collected.push(
+        ...normalizeAndDedupeFinancialLineItems(
+          Array.isArray(parsed.lineItems) ? parsed.lineItems : [],
+        ),
       );
-
-      collected.push(...normalized);
       completedChunks += 1;
     } catch (error) {
       failedChunks += 1;
-      console.warn(
-        `Financial line-item chunk ${index + 1}/${chunks.length} failed: ${errorToText(error)}`,
-      );
+      warnings.push(`Chunk ${index + 1}: ${errorToText(error)}`);
 
-      // Quota failures are unlikely to recover on every remaining chunk and
-      // would only create unnecessary retries. Keep rows already collected.
       if (isQuotaLikeError(error)) {
+        const remaining = chunks.length - index - 1;
+        failedChunks += remaining;
+        if (remaining > 0) {
+          warnings.push(
+            `${remaining} remaining chunk${remaining === 1 ? "" : "s"} skipped after quota exhaustion.`,
+          );
+        }
         break;
       }
     }
@@ -1082,5 +827,97 @@ export async function extractDocumentLineItemsFromTextChunks(params: {
     candidateChunks: chunks.length,
     completedChunks,
     failedChunks,
+    warnings,
   };
+}
+
+/**
+ * Full extraction entrypoint.
+ *
+ * Text documents always use a compact whole-document summary pass followed by
+ * complete chunk-by-chunk detail extraction. Inline images/PDFs use one vision
+ * pass because a page-level text layer is not available here. Bank statement
+ * text is already split by bank-statement-chunk-extraction.ts and therefore
+ * intentionally stays as one request per supplied transaction chunk.
+ */
+export async function extractDocumentData(params: {
+  fileName: string;
+  category: string;
+  content: ExtractionContent;
+  summaryOnly?: boolean;
+}): Promise<ExtractedDocumentData> {
+  const { fileName, category, content } = params;
+
+  if (content.kind === "inline" || category === "BANK_STATEMENT") {
+    return extractDocumentDataOnce(params);
+  }
+
+  const normalizedText = normalizeSourceText(content.text);
+  if (!normalizedText) {
+    throw new Error("No readable document text was available for extraction.");
+  }
+
+  const summary = await extractDocumentDataOnce({
+    fileName,
+    category,
+    content: { kind: "text", text: normalizedText },
+    summaryOnly: true,
+  });
+
+  const chunks = await extractDocumentLineItemsFromTextChunks({
+    fileName,
+    category,
+    text: normalizedText,
+    reportedUnit: summary.reportedUnit,
+    scaleMultiplier: summary.scaleMultiplier,
+    documentDate:
+      summary.documentDate ?? summary.periodEnd ?? summary.periodStart ?? null,
+  });
+
+  const complete =
+    chunks.candidateChunks > 0 &&
+    chunks.completedChunks === chunks.candidateChunks &&
+    chunks.failedChunks === 0;
+  const lineItems = normalizeAndDedupeFinancialLineItems([
+    ...(summary.lineItems ?? []),
+    ...chunks.lineItems,
+  ]);
+  const confidence = complete
+    ? lineItems.length > 0
+      ? 0.94
+      : 0.82
+    : lineItems.length > 0
+      ? 0.72
+      : 0.45;
+
+  return ensureExtractedLineItems({
+    ...summary,
+    lineItems,
+    transactions: Array.isArray(summary.transactions) ? summary.transactions : [],
+    extractionDiagnostics: {
+      engine: "gemini-summary-plus-complete-chunks-v2",
+      confidence,
+      quality: confidence >= 0.9 ? "high" : confidence >= 0.7 ? "medium" : "low",
+      requiresReview: !complete,
+      textLayerAvailable: true,
+      likelyScanned: false,
+      selectedScope: "complete-document-detail-rows",
+      detectedSections: Array.from(
+        { length: chunks.completedChunks },
+        (_, index) => `chunk-${index + 1}`,
+      ),
+      lineItemCount: lineItems.length,
+      currentPeriod:
+        summary.periodEnd ?? summary.documentDate ?? summary.periodStart ?? null,
+      candidateChunks: chunks.candidateChunks,
+      completedChunks: chunks.completedChunks,
+      failedChunks: chunks.failedChunks,
+      warnings: chunks.warnings,
+      enginesAttempted: [
+        "gemini-whole-document-summary",
+        "gemini-complete-chunk-detail-extraction",
+      ],
+      conflicts: [],
+    },
+  });
 }
