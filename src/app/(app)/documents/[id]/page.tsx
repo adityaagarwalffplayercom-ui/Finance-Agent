@@ -9,6 +9,7 @@ import { DocumentTimeline } from "../components/DocumentTimeline";
 import { DocumentReviewPanel } from "./DocumentReviewPanel";
 import { DocumentCorrectionPanel } from "./DocumentCorrectionPanel";
 import { DocumentStatusAutoRefresh } from "./DocumentStatusAutoRefresh";
+import { BankTransactionsPanel } from "./BankTransactionsPanel";
 
 type PageProps = {
   params: Promise<{
@@ -541,6 +542,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
   const extracted = document.extractedData as ExtractedDocumentData | null;
   const currency = getStringValue(extracted, ["currency"]) ?? "INR";
   const lineItems = getLineItems(extracted);
+  const isBankStatement = document.category === "BANK_STATEMENT";
 
   const summary = getStringValue(extracted, ["summary"]);
   const reportedUnit = getStringValue(extracted, ["reportedUnit"]);
@@ -745,7 +747,7 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
 
         <div
           style={{
-            display: "grid",
+            display: isBankStatement ? "none" : "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 12,
           }}
@@ -972,7 +974,14 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
         )}
       </section>
 
-      {document.status === "PROCESSED" && (
+      {isBankStatement && (
+        <BankTransactionsPanel
+          extractedData={extracted}
+          currency={currency}
+        />
+      )}
+
+      {document.status === "PROCESSED" && !isBankStatement && (
         <DocumentCorrectionPanel
           documentId={document.id}
           currency={currency}
@@ -1128,7 +1137,9 @@ export default async function DocumentDetailsPage({ params }: PageProps) {
               fontSize: 14,
             }}
           >
-            No line items were extracted from this document.
+            {isBankStatement
+              ? "Bank statement rows are stored as transactions and are shown in the transaction table above."
+              : "No line items were extracted from this document."}
           </div>
         ) : (
           <div
